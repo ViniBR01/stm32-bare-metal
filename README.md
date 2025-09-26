@@ -60,14 +60,15 @@ This repository contains toolchain setup and bare-metal programming examples for
 
 3. **In another terminal, flash using GDB:**
    ```sh
-   arm-none-eabi-gdb blink_led.elf
+   arm-none-eabi-gdb
    ```
    Then in GDB:
    ```
    target remote localhost:3333
-   load
    monitor reset init
-   continue
+   monitor flash write_image erase blink_led.elf
+   monitor reset init
+   monitor resume
    ```
 
 ## File Structure
@@ -76,7 +77,7 @@ This repository contains toolchain setup and bare-metal programming examples for
 - `stm32f411_startup.c` - Startup code and vector table
 - `stm32_ls.ld` - Linker script
 - `Makefile` - Build instructions
-- `board/st_nucleo_f4.cfg` - OpenOCD configuration
+- `board/st_nucleo_f4.cfg` - OpenOCD configuration (part of OpenOCD installation)
 
 ## License
 
