@@ -39,7 +39,11 @@ This repository contains toolchain setup and bare-metal programming examples for
    ```sh
    make
    ```
-   This will produce two binaries:
+   or
+   ```
+   make EXAMPLE=<your_example>
+   ```
+   This will produce the selected binary:
    - `blink_led_simple.elf` (LED blink example)
    - `push_button_simple.elf` (Push button example)
 
@@ -63,6 +67,7 @@ This repository contains toolchain setup and bare-metal programming examples for
 
 3. **In another terminal, flash using GDB:**
    ```sh
+   cd build/
    arm-none-eabi-gdb
    ```
    Then in GDB:
@@ -76,12 +81,16 @@ This repository contains toolchain setup and bare-metal programming examples for
 
 ## File Structure
 
-- `blink_led_simple.c` - Blink LED example source
-- `push_button_simple.c` - Push button example source
-- `stm32f411_startup.c` - Startup code and vector table
-- `stm32_ls.ld` - Linker script
-- `Makefile` - Build instructions
-- `board/st_nucleo_f4.cfg` - OpenOCD configuration (part of OpenOCD installation)
+- `drivers/inc/` - Header files for low-level drivers (GPIO, etc.)
+- `drivers/src/` - Source files for low-level drivers
+- `examples/basic/blink_led_simple.c` - Blink LED example source
+- `examples/basic/push_button_simple.c` - Push button example source
+- `startup/stm32f411_startup.c` - Startup code and vector table
+- `linker/stm32_ls.ld` - Linker script for STM32F411RE
+- `chip_headers/` - CMSIS and device header files
+- `build/` - Output directory for compiled binaries and map files (created after build)
+- `Makefile` - Build instructions for all examples
+- `board/st_nucleo_f4.cfg` - OpenOCD configuration file
 
 ## License
 
