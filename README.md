@@ -6,9 +6,10 @@ This repository contains toolchain setup and bare-metal programming examples for
 
 - **Direct register access:** No vendor libraries or HAL; all peripheral access is via memory-mapped registers.
 - **Blink LED example:** Minimal example toggling the onboard LED (PA5).
+- **Push Button example:** Reads the user button and toggles the LED accordingly.
 - **Custom linker script:** Simple linker script for STM32F411RE.
 - **Startup code:** Custom startup file with vector table and reset handler.
-- **Makefile-based build:** Easy build and clean commands.
+- **Makefile-based build:** Easy build and clean commands for multiple examples.
 - **OpenOCD integration:** Flash and debug support via OpenOCD.
 
 ## Prerequisites
@@ -38,7 +39,9 @@ This repository contains toolchain setup and bare-metal programming examples for
    ```sh
    make
    ```
-   This will produce `blink_led.elf`, the main firmware binary.
+   This will produce two binaries:
+   - `blink_led_simple.elf` (LED blink example)
+   - `push_button_simple.elf` (Push button example)
 
 3. **Clean build files:**
    ```sh
@@ -66,14 +69,15 @@ This repository contains toolchain setup and bare-metal programming examples for
    ```
    target remote localhost:3333
    monitor reset init
-   monitor flash write_image erase blink_led.elf
+   monitor flash write_image erase <your_example>.elf
    monitor reset init
    monitor resume
    ```
 
 ## File Structure
 
-- `main.c` - Main application (LED blink example)
+- `blink_led_simple.c` - Blink LED example source
+- `push_button_simple.c` - Push button example source
 - `stm32f411_startup.c` - Startup code and vector table
 - `stm32_ls.ld` - Linker script
 - `Makefile` - Build instructions
