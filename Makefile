@@ -64,7 +64,7 @@ LDFLAGS := $(MCU_FLAGS) -nostdlib -T $(LDSCRIPT) -Wl,-Map=$(BUILD_DIR)/$(TARGET)
 OBJS := $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
 OBJS += $(addprefix $(BUILD_DIR)/,$(notdir $(S_SOURCES:.c=.o)))
 
-.PHONY: all clean flash
+.PHONY: all clean openocd
 
 all: $(BUILD_DIR)/$(TARGET).bin
 
@@ -101,6 +101,6 @@ clean:
 	@rm -rf $(BUILD_DIR)
 	@echo "Cleaned build directory."
 
-flash: all
-	@echo "Flashing with OpenOCD..."
-	openocd -f board/st_nucleo_f4.cfg -c "program $(BUILD_DIR)/$(TARGET).elf verify reset exit"
+openocd: all
+	@echo "Starting OpenOCD on localhost port 3333..."
+	openocd -f board/st_nucleo_f4.cfg
