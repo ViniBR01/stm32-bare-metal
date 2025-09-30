@@ -1,4 +1,5 @@
 #include "led2.h"
+#include "systick.h"
 
 int main(void)
 {
@@ -7,6 +8,6 @@ int main(void)
     while(1)
     {
         led2_toggle();
-        for(int i = 0; i < 2000000; i++) {}
+	    systick_delay_ms(500);
     }
 }

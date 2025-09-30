@@ -18,38 +18,42 @@ __max_stack_size = 0x400;
 /*Sections*/
 SECTIONS
 {
-     /*first section of output file*/
-	.text :
-	{
-	  . = ALIGN(4);
-	  *(.isr_vector_tbl)  /*merge all .isr_vector_tbl sections of input files*/
-	  *(.text)             /*merge all .text sections of input files*/
-	  *(.rodata)           /*merge all .rodata sections of input files*/
-	  . = ALIGN(4);
-	 _etext = .;          /*Create a global symbol to hold end of text section*/
-	}>FLASH
-	    
+    /* Vector table at the very start of FLASH */
+    .isr_vector_tbl :
+    {
+        . = ALIGN(4);
+        KEEP(*(.isr_vector_tbl))
+        . = ALIGN(4);
+    } > FLASH
 
-    /*second section of output file*/
+    /* Code and read-only data */
+    .text :
+    {
+        . = ALIGN(4);
+        *(.text)
+        *(.rodata)
+        . = ALIGN(4);
+        _etext = .;
+    } > FLASH
 
-	.data :
-	{
-	 . = ALIGN(4);
-	_sdata = .;   /*Create a global symbol to hold start of data section*/
-	  *(.data)
-	 . = ALIGN(4);
-	_edata = .;   /*Create a global symbol to hold end of data section*/
-	} > SRAM AT> FLASH  /*>(vma) AT> (lma)*/
-	
-	
-	/*third section of output file*/
-	.bss :
-	{
-	 . = ALIGN(4);
-	_sbss = .;  /*Create a global symbol to hold start of bss section*/
-	*(.bss)  /*merge all .bss sections of input files*/
-	 . = ALIGN(4);
-	_ebss = .;  /*Create a global symbol to hold end of bss section*/
-	}> SRAM
-	
+    /* Initialized data */
+    .data :
+    {
+        . = ALIGN(4);
+        _sdata = .;
+        *(.data)
+        . = ALIGN(4);
+        _edata = .;
+    } > SRAM AT> FLASH
+
+    /* Uninitialized data */
+    .bss :
+    {
+        . = ALIGN(4);
+        _sbss = .;
+        *(.bss)
+        . = ALIGN(4);
+        _ebss = .;
+    } > SRAM
+
 }

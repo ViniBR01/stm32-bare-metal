@@ -74,7 +74,7 @@ This repository contains toolchain setup and bare-metal programming examples for
    ```
    target remote localhost:3333
    monitor reset init
-   monitor flash write_image erase <your_example>.elf
+   monitor flash write_image erase blink_led_simple.elf
    monitor reset init
    monitor resume
    ```
