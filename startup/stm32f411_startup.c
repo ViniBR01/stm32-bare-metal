@@ -200,8 +200,8 @@ void Default_Handler(void)
 void Reset_Handler(void)
 {
 	// Calculate the sizes of the .data and .bss sections
-	uint32_t data_mem_size =  (uint32_t)&_edata - (uint32_t)&_sdata;
-	uint32_t bss_mem_size  =   (uint32_t)&_ebss - (uint32_t)&_sbss;
+	uint32_t data_mem_size =  ((uint32_t)&_edata - (uint32_t)&_sdata + 3)/4; // Round up to the nearest word
+	uint32_t bss_mem_size  =   ((uint32_t)&_ebss - (uint32_t)&_sbss + 3)/4;
     
 	// Initialize pointers to the source and destination of the .data section
 	uint32_t *p_src_mem =  (uint32_t *)&_etext;
