@@ -104,3 +104,10 @@ clean:
 openocd: all
 	@echo "Starting OpenOCD on localhost port 3333..."
 	openocd -f board/st_nucleo_f4.cfg
+
+flash: $(BUILD_DIR)/$(TARGET).elf
+	@echo "Flashing $(TARGET).elf to target using OpenOCD..."
+	openocd -f board/st_nucleo_f4.cfg -c "program $(BUILD_DIR)/$(TARGET).elf verify reset exit"
+
+debug: $(BUILD_DIR)/$(TARGET).elf
+	./debug.sh $(BUILD_DIR)/$(TARGET).elf
