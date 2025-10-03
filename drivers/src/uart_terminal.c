@@ -1,5 +1,6 @@
 #include <stdint.h>
 
+#include "stm32f4xx.h"
 #include "uart_terminal.h"
 
 #define GPIOAEN                (1U<<0)
@@ -15,9 +16,11 @@
 static void uart_set_baudrate(uint32_t peripheral_clock, uint32_t baudrate);
 static void uart_write(int ch);
 
-int __io_putchar(int ch) {
-    uart_write(ch);
-    return ch;
+int _write(int file, char *ptr, int len) {
+    for (int i = 0; i < len; i++) {
+        uart_write(ptr[i]);
+    }
+    return len;
 }
 
 void uart_terminal_init(void) {
@@ -46,8 +49,39 @@ static void uart_set_baudrate(uint32_t peripheral_clock, uint32_t baudrate) {
 }
 
 static void uart_write(int ch) {
+    /* If sending a newline, transmit a carriage return first so terminals
+       that don't auto-map LF->CRLF will move the cursor to column 0. */
+    if (ch == '\n') {
+        while (!(USART2->SR & SR_TXE));
+        USART2->DR = ('\r' & 0xFF);
+    }
     /* Wait until transmit data register is empty */
     while (!(USART2->SR & SR_TXE));
     /* Write character to transmit data register */
     USART2->DR = (ch & 0xFF);
+}
+
+/* Minimal stdio hooks to satisfy linker when using printf / puts
+   These forward to the UART transmit routine above. */
+int puts(const char *s) {
+    const char *p = s;
+    int len = 0;
+    while (p && *p) {
+        uart_write(*p++);
+        len++;
+    }
+    /* puts appends a newline (uart_write will convert to CR+LF) */
+    uart_write('\n');
+    return len + 1;
+}
+
+int fputs(const char *s, void *stream) {
+    (void)stream;
+    const char *p = s;
+    int len = 0;
+    while (p && *p) {
+        uart_write(*p++);
+        len++;
+    }
+    return len;
 }
