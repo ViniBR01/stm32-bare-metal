@@ -46,6 +46,7 @@ This repository contains toolchain setup and bare-metal programming examples for
    This will produce the selected binary:
    - `blink_led_simple.elf` (LED blink example)
    - `push_button_simple.elf` (Push button example)
+   - `serial_debug.elf` (Serial UART debug example)
 
 3. **Clean build files:**
    ```sh
@@ -85,6 +86,7 @@ This repository contains toolchain setup and bare-metal programming examples for
 - `drivers/src/` - Source files for low-level drivers
 - `examples/basic/blink_led_simple.c` - Blink LED example source
 - `examples/basic/push_button_simple.c` - Push button example source
+- `examples/basic/serial_debug.c` - UART terminal example source
 - `startup/stm32f411_startup.c` - Startup code and vector table
 - `linker/stm32_ls.ld` - Linker script for STM32F411RE
 - `chip_headers/` - CMSIS and device header files
