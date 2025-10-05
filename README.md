@@ -47,6 +47,7 @@ This repository contains toolchain setup and bare-metal programming examples for
    - `blink_led_simple.elf` (LED blink example)
    - `push_button_simple.elf` (Push button example)
    - `serial_debug.elf` (Serial UART debug example)
+   - `sleep_button.elf` (Sleep mode with EXTI wakeup example)
 
 3. **Clean build files:**
    ```sh
@@ -79,6 +80,19 @@ This repository contains toolchain setup and bare-metal programming examples for
    monitor reset init
    monitor resume
    ```
+4. **Alternatively, flash directly using OpenOCD:**
+   ```sh
+   make flash EXAMPLE=<your_example>
+   ```
+
+## Open a TTY terminal in the host PC
+
+1. **Connect and flash you NUCLEO board with an example containing serial debug.**
+
+2. **In a host PC's terminal, run the command:**
+  ```sh
+  picocom -b 115300 /dev/tty* # Use the device name which is created when the board gets connected
+  ```
 
 ## File Structure
 
