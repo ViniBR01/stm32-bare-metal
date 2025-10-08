@@ -41,10 +41,10 @@ static void uart_set_baudrate(uint32_t periph_clk, uint32_t baudrate);
 
 char uart_data_buffer[UART_DATA_BUFF_SIZE];
 
-uint8_t g_rx_cmplt;
-uint8_t g_tx_cmplt;
+volatile uint8_t g_rx_cmplt;
+volatile uint8_t g_tx_cmplt;
 
-uint8_t g_uart_cmplt;
+volatile uint8_t g_uart_cmplt;
 
 void uart2_rxtx_init(void)
 {
@@ -124,7 +124,7 @@ void dma1_stream5_uart_rx_config(void)
 	DMA1_Stream5->M0AR = (uint32_t)(&uart_data_buffer);
 
 	/*Set number of transfer*/
-	DMA1_Stream5->NDTR = (uint16_t)UART_DATA_BUFF_SIZE;
+	DMA1_Stream5->NDTR = (uint16_t)UART_DATA_BUFF_SIZE - 1;
 
 	/*Select Channel 4*/
 	DMA1_Stream5->CR &= ~(1u<<25);
@@ -136,9 +136,6 @@ void dma1_stream5_uart_rx_config(void)
 
 	/*Enable transfer complete interrupt*/
 	DMA1_Stream5->CR |= DMA_SCR_TCIE;
-
-	/*Enable Circular mode*/
-	DMA1_Stream5->CR |=DMA_SCR_CIRC;
 
 	/*Set transfer direction : Periph to Mem*/
 	DMA1_Stream5->CR &=~(1U<<6);
@@ -190,6 +187,12 @@ void dma1_stream6_uart_tx_config(uint32_t msg_to_snd, uint32_t msg_len)
 	DMA1_Stream6->CR |= DMA_SCR_EN;
 }
 
+void clear_uart_data_buffer(void) {
+    for (int i = 0; i < UART_DATA_BUFF_SIZE; i++) {
+        uart_data_buffer[i] = '\0';
+    }
+}
+
 static uint16_t compute_uart_bd(uint32_t periph_clk, uint32_t baudrate)
 {
 	return ((periph_clk +( baudrate/2U ))/baudrate);
@@ -215,10 +218,8 @@ void DMA1_Stream5_IRQHandler(void)
 {
 	if((DMA1->HISR) & HIFSR_TCIF5)
 	{
-
 		g_rx_cmplt = 1;
-
-
+		uart_data_buffer[UART_DATA_BUFF_SIZE] = '\0';
 		/*Clear the flag*/
 		DMA1->HIFCR |= HIFCR_CTCIF5;
 	}
