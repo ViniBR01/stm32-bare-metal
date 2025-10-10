@@ -3,7 +3,7 @@
 #==============================================================================
 # To build a specific example, run: make EXAMPLE=<example_name>
 # For example: make EXAMPLE=push_button_simple
-EXAMPLE ?= blink_led_simple
+EXAMPLE ?= blink_simple
 TARGET = $(EXAMPLE)
 
 #==============================================================================

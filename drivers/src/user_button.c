@@ -1,22 +1,17 @@
 #include "user_button.h"
+#include "gpio_handler.h"
 
-/* Bit mask for enabling GPIOC (bit 2) */
-#define GPIOCEN       (1U<<2)
-/* Bit mask for GPIOC pin 13 */
-#define PIN13         (1U<<13)
-/* Alias for PIN13 representing B1 User */
-#define B1_USER       PIN13
+#define BUTTON_PORT (GPIO_PORT_C)
+#define BUTTON_PIN  (13)
+#define BUTTON_MODE (GPIO_MODE_INPUT)
 
 void user_button_init(void)
 {
-    /* Enable clock access to GPIOC */
-    RCC->AHB1ENR |= GPIOCEN;
-    /* Set PC13 to input mode */
-    GPIOC->MODER &= ~(1U<<26); // Set bit 26 to 0
-    GPIOC->MODER &= ~(1U<<27); // Set bit 27 to 0
+    gpio_clock_enable(BUTTON_PORT);
+    gpio_configure_pin(BUTTON_PORT, BUTTON_PIN, BUTTON_MODE);
 }
 
-int user_button_get_state(void)
+uint8_t user_button_get_state(void)
 {
-    return (GPIOC->IDR & B1_USER) ? 1 : 0;
+    return gpio_read_pin(BUTTON_PORT, BUTTON_PIN);
 }
