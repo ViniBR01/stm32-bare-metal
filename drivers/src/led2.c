@@ -1,37 +1,32 @@
 #include "led2.h"
+#include "gpio_handler.h"
 
-/* Bit mask for enabling GPIOA (bit 0) */
-#define GPIOAEN       (1U<<0)
-/* Bit mask for GPIOA pin 5 */
-#define PIN5          (1U<<5)
-/* Alias for PIN5 representing LED pin */
-#define LED_PIN       PIN5
+#define LED2PORT   (GPIO_PORT_A)
+#define LED2PIN    (5U)
+#define LED2MODE   (GPIO_MODE_OUTPUT)
 
 void led2_init(void)
 {
-    /* Enable clock access to GPIOA */
-    RCC->AHB1ENR |= GPIOAEN;
-    /* Set PA5 to output mode */
-    GPIOA->MODER |= (1U<<10);  // Set bit 10 to 1
-    GPIOA->MODER &= ~(1U<<11); // Set bit 11 to 0
+    gpio_clock_enable(LED2PORT);
+    gpio_configure_pin(LED2PORT, LED2PIN, LED2MODE);
 }
 
 void led2_on(void)
 {
-    GPIOA->ODR |= LED_PIN;
+    gpio_set_pin(LED2PORT, LED2PIN);
 }
 
 void led2_off(void)
 {
-    GPIOA->ODR &= ~LED_PIN;
+    gpio_clear_pin(LED2PORT, LED2PIN);
 }
 
 void led2_toggle(void)
 {
-    GPIOA->ODR ^= LED_PIN;
+    gpio_toggle_pin(LED2PORT, LED2PIN);
 }
 
-int led2_get_state(void)
+uint8_t led2_get_state(void)
 {
-    return (GPIOA->IDR & LED_PIN) ? 1 : 0;
+    return gpio_read_pin(LED2PORT, LED2PIN);
 }
