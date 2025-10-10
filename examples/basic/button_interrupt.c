@@ -1,15 +1,20 @@
 #include <stdio.h>
 
+#include "exti_handler.h"
 #include "led2.h"
 #include "uart_terminal.h"
-#include "pc13_exti.h"
 
-uint8_t g_btn_press;
+volatile uint8_t g_btn_press;
 
 int main(void) {
     led2_init();
     uart_terminal_init();
-    pc13_exti_init();
+    int res = exti_configure_gpio_interrupt(GPIO_PORT_C, 13, 
+        EXTI_TRIGGER_FALLING, EXTI_MODE_INTERRUPT);
+    if (res) {
+        printf("Error to configure gpio interrupt.\r\n");
+        // Do something to recover!
+    }
 
     printf("Starting button press example.\n");
     
