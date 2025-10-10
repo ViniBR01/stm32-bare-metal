@@ -21,6 +21,9 @@ int exti_configure_gpio_interrupt(gpio_port_t port, uint8_t pin_num,
         return -1;
     }
 
+    /* __get_PRIMASK() returns 0 if interrupts are enabled, non-zero if disabled */
+    bool interrupts_enabled = (__get_PRIMASK() == 0);
+
     /* Disable global interrupts during configuration */
     __disable_irq();
 
@@ -68,8 +71,10 @@ int exti_configure_gpio_interrupt(gpio_port_t port, uint8_t pin_num,
         NVIC_EnableIRQ(irq_num);
     }
 
-    /* Re-enable global interrupts */
-    __enable_irq();
+    /* Restore the original global interrupt state */
+    if (interrupts_enabled) {
+        __enable_irq();
+    }
 
     return 0;
 }
