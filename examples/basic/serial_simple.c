@@ -1,8 +1,8 @@
 #include <stdio.h>
 
 #include "led2.h"
-#include "uart_terminal.h"
 #include "systick.h"
+#include "uart_terminal.h"
 
 int main(void) {
     uart_terminal_init();
