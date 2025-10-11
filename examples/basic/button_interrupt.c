@@ -1,15 +1,22 @@
 #include <stdio.h>
 
+#include "exti_handler.h"
 #include "led2.h"
 #include "uart_terminal.h"
-#include "pc13_exti.h"
 
-uint8_t g_btn_press;
+#define BUTTON_PIN (13)
+
+volatile uint8_t g_btn_press;
 
 int main(void) {
     led2_init();
     uart_terminal_init();
-    pc13_exti_init();
+    int res = exti_configure_gpio_interrupt(GPIO_PORT_C, BUTTON_PIN, 
+        EXTI_TRIGGER_FALLING, EXTI_MODE_INTERRUPT);
+    if (res) {
+        printf("Error to configure gpio interrupt.\r\n");
+        // Do something to recover!
+    }
 
     printf("Starting button press example.\n");
     
@@ -27,8 +34,8 @@ static void exti_callback(void) {
 }
 
 void EXTI15_10_IRQHandler(void) {
-    if (EXTI->PR & (1U<<13)) { // Check if pending bit for line 13 is set
-        EXTI->PR |= (1U<<13);  // Clear pending bit by writing 1
-        exti_callback();        // Call the callback function
+    if (exti_is_pending(BUTTON_PIN)) { // Check if pending bit is set
+        exti_clear_pending(BUTTON_PIN);  // Clear pending bit
+        exti_callback();
     }
 }
