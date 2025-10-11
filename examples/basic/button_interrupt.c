@@ -29,13 +29,9 @@ int main(void) {
     }
 }
 
-static void exti_callback(void) {
-    g_btn_press = 1;
-}
-
 void EXTI15_10_IRQHandler(void) {
     if (exti_is_pending(BUTTON_PIN)) { // Check if pending bit is set
         exti_clear_pending(BUTTON_PIN);  // Clear pending bit
-        exti_callback();
+        g_btn_press = 1;
     }
 }
