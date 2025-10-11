@@ -33,6 +33,7 @@ This repository contains toolchain setup and bare-metal programming examples for
    ```sh
    git clone https://github.com/vinibr01/stm32-bare-metal.git
    cd stm32-bare-metal
+   git submodule update --init --recursive
    ```
 
 2. **Build the firmware:**
