@@ -2,6 +2,7 @@
 #define EXTI_HANDLER_H_
 
 #include <stdint.h>
+
 #include "gpio_handler.h"  // For gpio_port_t enum
 
 /**
