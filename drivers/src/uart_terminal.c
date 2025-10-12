@@ -14,14 +14,6 @@
 #define SR_TXE                 (1U<<7)
 
 static void uart_set_baudrate(uint32_t peripheral_clock, uint32_t baudrate);
-static void uart_write(int ch);
-
-int _write(int file, char *ptr, int len) {
-    for (int i = 0; i < len; i++) {
-        uart_write(ptr[i]);
-    }
-    return len;
-}
 
 void uart_terminal_init(void) {
     /* Enable GPIOA clock */
@@ -44,10 +36,16 @@ void uart_terminal_init(void) {
     USART2->CR1 |= CR1_UE;
 }
 
-static void uart_set_baudrate(uint32_t peripheral_clock, uint32_t baudrate) {
-    USART2->BRR = peripheral_clock / baudrate;
+static uint16_t compute_uart_bd(uint32_t peripheral_clock, uint32_t baudrate) {
+	return ((peripheral_clock +( baudrate/2U ))/baudrate);
 }
 
+static void uart_set_baudrate(uint32_t peripheral_clock, uint32_t baudrate) {
+	USART2->BRR  = compute_uart_bd(peripheral_clock, baudrate);
+}
+
+/* Make uart_write visible to other functions in this compilation unit
+    (and to the _putchar wrapper below). */
 static void uart_write(int ch) {
     /* If sending a newline, transmit a carriage return first so terminals
        that don't auto-map LF->CRLF will move the cursor to column 0. */
@@ -61,27 +59,9 @@ static void uart_write(int ch) {
     USART2->DR = (ch & 0xFF);
 }
 
-/* Minimal stdio hooks to satisfy linker when using printf / puts
-   These forward to the UART transmit routine above. */
-int puts(const char *s) {
-    const char *p = s;
-    int len = 0;
-    while (p && *p) {
-        uart_write(*p++);
-        len++;
-    }
-    /* puts appends a newline (uart_write will convert to CR+LF) */
-    uart_write('\n');
-    return len + 1;
-}
-
-int fputs(const char *s, void *stream) {
-    (void)stream;
-    const char *p = s;
-    int len = 0;
-    while (p && *p) {
-        uart_write(*p++);
-        len++;
-    }
-    return len;
+/* Adapter required by the 3rd-party printf implementation. The
+   printf library expects a function named _putchar(char). We forward
+   to uart_write which already handles CR/LF behavior and TXE polling. */
+void _putchar(char character) {
+    uart_write((int)character);
 }

@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 #include "exti_handler.h"
 #include "gpio_handler.h" 
 #include "stm32f4xx.h"
@@ -22,7 +24,7 @@ int exti_configure_gpio_interrupt(gpio_port_t port, uint8_t pin_num,
     }
 
     /* __get_PRIMASK() returns 0 if interrupts are enabled, non-zero if disabled */
-    bool interrupts_enabled = (__get_PRIMASK() == 0);
+    uint32_t interrupts_enabled = (__get_PRIMASK() == 0);
 
     /* Disable global interrupts during configuration */
     __disable_irq();
