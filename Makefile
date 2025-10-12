@@ -40,7 +40,8 @@ S_SOURCES := $(STARTUP_DIR)/stm32f411_startup.c
 C_INCLUDES := \
 -I$(DRIVERS_DIR)/inc \
 -I./chip_headers/CMSIS/Include \
--I./chip_headers/CMSIS/Device/ST/STM32F4xx/Include
+-I./chip_headers/CMSIS/Device/ST/STM32F4xx/Include \
+-I./3rd_party/printf
 
 #==============================================================================
 # Compiler and Linker Flags
@@ -64,6 +65,10 @@ LDFLAGS := $(MCU_FLAGS) -nostdlib -T $(LDSCRIPT) -Wl,-Map=$(BUILD_DIR)/$(TARGET)
 OBJS := $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
 OBJS += $(addprefix $(BUILD_DIR)/,$(notdir $(S_SOURCES:.c=.o)))
 
+# Add the static printf library archive to the link inputs. The archive
+# will be created from 3rd_party/printf/printf.c into $(BUILD_DIR)/libprintf.a
+OBJS += $(BUILD_DIR)/libprintf.a
+
 .PHONY: all clean openocd
 
 all: $(BUILD_DIR)/$(TARGET).bin
@@ -84,6 +89,20 @@ $(BUILD_DIR)/stm32f411_startup.o: $(STARTUP_DIR)/stm32f411_startup.c
 	@mkdir -p $(@D)
 	@echo "Compiling $<"
 	$(CC) $(CFLAGS) -o $@ $<
+
+# Compile the 3rd-party printf source into an object inside the build dir
+# Build with flags to disable floating point, exponential and long-long support
+CFLAGS_PRINTF := -DPRINTF_DISABLE_SUPPORT_FLOAT -DPRINTF_DISABLE_SUPPORT_EXPONENTIAL -DPRINTF_DISABLE_SUPPORT_LONG_LONG
+$(BUILD_DIR)/printf.o: $(ROOT_DIR)/3rd_party/printf/printf.c
+	@mkdir -p $(@D)
+	@echo "Compiling 3rd-party printf (no float/exp/long long): $<"
+	$(CC) $(CFLAGS) $(CFLAGS_PRINTF) -o $@ $<
+
+# Archive the printf object into a static library
+$(BUILD_DIR)/libprintf.a: $(BUILD_DIR)/printf.o
+	@mkdir -p $(@D)
+	@echo "Archiving $^ -> $@"
+	@$(AR) rcs $@ $^
 
 # Rule to link the executable
 $(BUILD_DIR)/$(TARGET).elf: $(OBJS)
