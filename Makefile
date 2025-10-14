@@ -23,6 +23,7 @@ CC      := arm-none-eabi-gcc
 CP      := arm-none-eabi-objcopy
 OD      := arm-none-eabi-objdump
 SZ      := arm-none-eabi-size
+AR      := arm-none-eabi-ar
 
 #==============================================================================
 # Source Files
@@ -41,7 +42,8 @@ C_INCLUDES := \
 -I$(DRIVERS_DIR)/inc \
 -I./chip_headers/CMSIS/Include \
 -I./chip_headers/CMSIS/Device/ST/STM32F4xx/Include \
--I./3rd_party/printf
+-I./3rd_party/printf \
+-I./3rd_party/log_c/src
 
 #==============================================================================
 # Compiler and Linker Flags
@@ -65,6 +67,9 @@ LDFLAGS := $(MCU_FLAGS) -nostdlib -T $(LDSCRIPT) -Wl,-Map=$(BUILD_DIR)/$(TARGET)
 OBJS := $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
 OBJS += $(addprefix $(BUILD_DIR)/,$(notdir $(S_SOURCES:.c=.o)))
 
+# Add the 3rd-party log_c static library archive to link inputs. It will be
+# created from 3rd_party/log_c/src/log_c.c into $(BUILD_DIR)/liblog_c.a
+OBJS += $(BUILD_DIR)/liblog_c.a
 # Add the static printf library archive to the link inputs. The archive
 # will be created from 3rd_party/printf/printf.c into $(BUILD_DIR)/libprintf.a
 OBJS += $(BUILD_DIR)/libprintf.a
@@ -100,6 +105,18 @@ $(BUILD_DIR)/printf.o: $(ROOT_DIR)/3rd_party/printf/printf.c
 
 # Archive the printf object into a static library
 $(BUILD_DIR)/libprintf.a: $(BUILD_DIR)/printf.o
+	@mkdir -p $(@D)
+	@echo "Archiving $^ -> $@"
+	@$(AR) rcs $@ $^
+
+# Compile the 3rd-party log_c source into an object inside the build dir
+$(BUILD_DIR)/log_c.o: $(ROOT_DIR)/3rd_party/log_c/src/log_c.c
+	@mkdir -p $(@D)
+	@echo "Compiling 3rd-party log_c: $<"
+	$(CC) $(CFLAGS) -o $@ $<
+
+# Archive the log_c object into a static library
+$(BUILD_DIR)/liblog_c.a: $(BUILD_DIR)/log_c.o
 	@mkdir -p $(@D)
 	@echo "Archiving $^ -> $@"
 	@$(AR) rcs $@ $^

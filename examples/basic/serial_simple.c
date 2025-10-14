@@ -1,13 +1,13 @@
-#include <printf.h>
-
 #include "led2.h"
+#include "log_c.h"
 #include "systick.h"
 #include "uart_terminal.h"
 
 int main(void) {
     uart_terminal_init();
+    logc_set_putchar(uart_write);
     led2_init();
-    printf("Hello, UART Terminal!\n");
+    loginfo("Hello, UART Terminal!\n");
 
     uint32_t count = 0;
     while (1) {
@@ -16,9 +16,9 @@ int main(void) {
         led2_on();
         systick_delay_ms(800);
         if (++count < 10) {
-            printf("Tick... count=%lu\n", count);
+            loginfo("Tick... count=%lu", count);
         } else if (count % 10 == 0) {
-            printf("Tick... count=%lu\n", count);
+            loginfo("Tick... count=%lu", count);
         }
     }
 }

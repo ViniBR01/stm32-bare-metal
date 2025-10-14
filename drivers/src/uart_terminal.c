@@ -46,7 +46,7 @@ static void uart_set_baudrate(uint32_t peripheral_clock, uint32_t baudrate) {
 
 /* Make uart_write visible to other functions in this compilation unit
     (and to the _putchar wrapper below). */
-static void uart_write(int ch) {
+void uart_write(char ch) {
     /* If sending a newline, transmit a carriage return first so terminals
        that don't auto-map LF->CRLF will move the cursor to column 0. */
     if (ch == '\n') {
