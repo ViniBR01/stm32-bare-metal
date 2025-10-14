@@ -1,3 +1,6 @@
 [submodule "3rd_party/printf"]
 	path = 3rd_party/printf
 	url = git@github.com:ViniBR01/printf.git
+[submodule "3rd_party/log_c"]
+	path = 3rd_party/log_c
+	url = git@github.com:ViniBR01/log-c.git
