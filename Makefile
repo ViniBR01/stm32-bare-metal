@@ -52,7 +52,7 @@ C_INCLUDES := \
 MCU_FLAGS := -mcpu=cortex-m4 -mthumb
 
 # C flags
-CFLAGS := $(MCU_FLAGS) -c -std=gnu11 -Wall -g -O0 $(C_INCLUDES) -DSTM32F411xE
+CFLAGS := $(MCU_FLAGS) -c -std=gnu11 -Wall -g -O0 $(C_INCLUDES) -DSTM32F411xE -ffunction-sections -fdata-sections
 
 # Linker script
 LDSCRIPT := $(LINKER_DIR)/stm32_ls.ld
