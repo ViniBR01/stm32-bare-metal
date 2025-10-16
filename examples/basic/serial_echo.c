@@ -3,16 +3,39 @@
 
 #define MAX_CMD_SIZE 32
 
+typedef struct {
+    char data[MAX_CMD_SIZE];
+    uint8_t size;
+    // void (*execute)(void);
+} command_t;
+
 static uint8_t buf[MAX_CMD_SIZE];
 static uint32_t buf_size = 0;
 
-void send_command() {
-    for (uint32_t i = 0; i < buf_size; i++) {
-        uart_echo_write(buf[i]);
+void echo_back(command_t* cmd) {
+    // For now, echo back the command received
+    for (uint32_t i = 0; i < cmd->size; i++) {
+        uart_echo_write(cmd->data[i]);
     }
-    if (buf_size > 0) {
+    if (cmd->size > 0) {
         uart_echo_write('\n');
+    }
+}
+
+void command_invoker() {
+    // Build command from buffer and send to receiver
+    // TODO: should use the factory patter to crate different commands
+    // based on the input received: cmd = factory.get_command(buf);
+    // Then, execute the command: cmd->execute();
+    // For now, just echo back the buffer as is
+    if (buf_size > 0) {
+        command_t cmd;
+        for (uint32_t i = 0; i < buf_size; i++) {
+            cmd.data[i] = buf[i];
+        }
+        cmd.size = buf_size;
         buf_size = 0; // flush the buffer!
+        echo_back(&cmd);
     }
 }
 
@@ -29,7 +52,7 @@ void handle_input(char c) {
         case '\n':
             c = '\n';
             uart_echo_write(c);
-            send_command();
+            command_invoker();
             break;
         default:
             /* Check if the character is a printable ascii */
