@@ -46,6 +46,8 @@ void command_invoker(cli_t* CLI) {
     }
 }
 
+//TODO: implement history in cli, with navigation via arrow keys (up/down)
+//TODO: implement tab autocomplete based on the current commands available in cli
 void handle_input(char c, cli_t* CLI) {
     switch(c) {
         case '\b':
@@ -90,6 +92,7 @@ command_t get_command_led(cli_t* cli, uint8_t* buf, uint32_t buf_size) {
     return cmd;
 }
 
+// TODO: generate the help message automatically from the commands registered in the CLI
 void print_help(void) {
     const char* help_msg = "\nAvailable commands:\n"
                            "set_led     - Turn on LED2\n"
@@ -104,6 +107,7 @@ void print_help(void) {
 cli_t* cli_init(void) {
     my_cli.get_command = get_command_led;
     // Create commands and store in my_cli.operations
+    // TODO: refactor to allow dynamic registration of commands
     strcpy((char*)my_cli.operations[0].op_name, "set_led");
     my_cli.operations[0].op_callback = led2_on; // set_led_callback;
     strcpy((char*)my_cli.operations[1].op_name, "reset_led");
