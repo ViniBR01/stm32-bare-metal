@@ -124,7 +124,7 @@ $(BUILD_DIR)/liblog_c.a: $(BUILD_DIR)/log_c.o
 # Rule to link the executable
 $(BUILD_DIR)/$(TARGET).elf: $(OBJS)
 	@echo "Linking..."
-	$(CC) $(LDFLAGS) -o $@ $(OBJS)
+	$(CC) $(LDFLAGS) -o $@ $(OBJS) -lc -lm
 	@echo "Linking complete."
 
 # Rule to create the binary file
