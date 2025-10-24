@@ -18,7 +18,7 @@ EXAMPLE ?= blink_simple
 #==============================================================================
 # Subdirectories with makefiles
 #==============================================================================
-SUBDIRS := startup drivers 3rd_party examples
+SUBDIRS := startup utils drivers 3rd_party examples
 
 #==============================================================================
 # All examples list (for 'all' target)
@@ -47,7 +47,7 @@ all:
 #==============================================================================
 # Build specific example
 #==============================================================================
-$(EXAMPLE): startup drivers 3rd_party
+$(EXAMPLE): startup utils drivers 3rd_party
 	@echo "Building example: $(EXAMPLE)"
 	$(MAKE) -C examples EXAMPLE=$(EXAMPLE)
 
@@ -63,7 +63,10 @@ drivers:
 3rd_party:
 	$(MAKE) -C 3rd_party
 
-examples: startup drivers 3rd_party
+utils: 3rd_party
+	$(MAKE) -C utils
+
+examples: startup utils drivers 3rd_party
 	$(MAKE) -C examples EXAMPLE=$(EXAMPLE)
 
 #==============================================================================

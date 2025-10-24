@@ -27,6 +27,7 @@ STARTUP_DIR   := $(ROOT_DIR)/startup
 LINKER_DIR    := $(ROOT_DIR)/linker
 BUILD_DIR     := $(ROOT_DIR)/build
 THIRD_PARTY_DIR := $(ROOT_DIR)/3rd_party
+UTILS_DIR     := $(ROOT_DIR)/utils
 
 #==============================================================================
 # MCU-specific flags
@@ -45,7 +46,8 @@ COMMON_INCLUDES := \
 	-I$(ROOT_DIR)/chip_headers/CMSIS/Include \
 	-I$(ROOT_DIR)/chip_headers/CMSIS/Device/ST/STM32F4xx/Include \
 	-I$(THIRD_PARTY_DIR)/printf \
-	-I$(THIRD_PARTY_DIR)/log_c/src
+	-I$(THIRD_PARTY_DIR)/log_c/src \
+	-I$(UTILS_DIR)/inc
 
 # Full C flags
 CFLAGS := $(CFLAGS_BASE) $(COMMON_INCLUDES)
@@ -66,6 +68,7 @@ DRIVERS_LIB := $(BUILD_DIR)/drivers/libdrivers.a
 STARTUP_OBJ := $(BUILD_DIR)/startup/stm32f411_startup.o
 PRINTF_LIB := $(BUILD_DIR)/3rd_party/libprintf.a
 LOG_C_LIB := $(BUILD_DIR)/3rd_party/liblog_c.a
+UTILS_LIB := $(BUILD_DIR)/utils/libutils.a
 
 #==============================================================================
 # Common build rules
@@ -114,4 +117,4 @@ clean-module:
 export CC CP OD SZ AR
 export MCU_FLAGS CFLAGS LDFLAGS LDSCRIPT
 export ROOT_DIR BUILD_DIR
-export DRIVERS_LIB STARTUP_OBJ PRINTF_LIB LOG_C_LIB
+export DRIVERS_LIB STARTUP_OBJ PRINTF_LIB LOG_C_LIB UTILS_LIB

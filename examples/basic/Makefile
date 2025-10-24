@@ -29,7 +29,7 @@ blink_simple_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
 button_interrupt_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(PRINTF_LIB)
 button_simple_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
 button_sleep_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(PRINTF_LIB)
-serial_echo_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(PRINTF_LIB) $(LOG_C_LIB)
+serial_echo_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(PRINTF_LIB) $(LOG_C_LIB) $(UTILS_LIB)
 serial_simple_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(PRINTF_LIB) $(LOG_C_LIB)
 
 #==============================================================================
