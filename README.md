@@ -1,15 +1,20 @@
 # stm32-bare-metal
 
-This repository contains toolchain setup and bare-metal programming examples for the STM32 NUCLEO-F411RE evaluation board. It demonstrates direct register-level programming without using vendor libraries or HAL, providing a minimal and educational approach to embedded development.
+This repository contains toolchain setup and bare-metal programming examples for the STM32 NUCLEO-F411RE evaluation board. It demonstrates direct register-level programming without using vendor libraries, HAL or IDE, providing a minimal and educational approach to embedded development.
 
 ## Features
 
 - **Direct register access:** No vendor libraries or HAL; all peripheral access is via memory-mapped registers.
-- **Blink LED example:** Minimal example toggling the onboard LED (PA5).
-- **Push Button example:** Reads the user button and toggles the LED accordingly.
+- **Multiple examples:**
+  - LED blinking (simple)
+  - Button polling and interrupt-based handling
+  - UART serial communication (simple output and echo)
+  - Sleep mode with button wake-up
+- **Modular build system:** Organized Makefile structure with common definitions and per-module builds.
+- **Third-party libraries:** Integrated printf and logging capabilities.
+- **Utility functions:** String manipulation utilities for embedded use.
 - **Custom linker script:** Simple linker script for STM32F411RE.
 - **Startup code:** Custom startup file with vector table and reset handler.
-- **Makefile-based build:** Easy build and clean commands for multiple examples.
 - **OpenOCD integration:** Flash and debug support via OpenOCD.
 
 ## Prerequisites
@@ -40,26 +45,53 @@ This repository contains toolchain setup and bare-metal programming examples for
    ```sh
    make
    ```
-   or
+   This builds the default example (`blink_simple`).
+   
+   To build a specific example:
+   ```sh
+   make EXAMPLE=<example_name>
    ```
-   make EXAMPLE=<your_example>
+   
+   To build all examples:
+   ```sh
+   make all
    ```
-   This will produce the selected binary:
-   - `blink_led_simple.elf` (LED blink example)
-   - `push_button_simple.elf` (Push button example)
-   - `serial_debug.elf` (Serial UART debug example)
-   - `sleep_button.elf` (Sleep mode with EXTI wakeup example)
+   
+   Available examples:
+   - `blink_simple` - LED blink example
+   - `button_simple` - Push button polling example
+   - `button_interrupt` - Push button with interrupt handling
+   - `button_sleep` - Sleep mode with EXTI wakeup
+   - `serial_simple` - UART serial output example  
+   - `serial_echo` - UART echo example
 
 3. **Clean build files:**
    ```sh
    make clean
    ```
 
+4. **Get help:**
+   ```sh
+   make help
+   ```
+   This displays all available make targets and examples.
+
 ## Flashing and Debugging
 
 1. **Connect your NUCLEO board via USB.**
 
-2. **Start OpenOCD:**
+2. **Flash directly using OpenOCD:**
+   ```sh
+   make flash EXAMPLE=<example_name>
+   ```
+   Or flash the default example:
+   ```sh
+   make flash
+   ```
+
+3. **Alternatively, flash using GDB:**
+
+   a. **Start OpenOCD:**
    ```sh
    make openocd
    ```
@@ -68,46 +100,83 @@ This repository contains toolchain setup and bare-metal programming examples for
    openocd -f board/st_nucleo_f4.cfg
    ```
 
-3. **In another terminal, flash using GDB:**
+   b. **In another terminal, use GDB:**
    ```sh
-   cd build/
-   arm-none-eabi-gdb
+   cd build/examples/basic/<example_name>/
+   arm-none-eabi-gdb <example_name>.elf
    ```
    Then in GDB:
    ```
    target remote localhost:3333
    monitor reset init
-   monitor flash write_image erase blink_led_simple.elf
+   monitor flash write_image erase <example_name>.elf
    monitor reset init
    monitor resume
    ```
-4. **Alternatively, flash directly using OpenOCD:**
+
+## Debugging
+
+The project includes a convenient debug script for GDB debugging:
+
+```sh
+make debug EXAMPLE=<example_name>
+```
+
+This will:
+- Start OpenOCD in the background
+- Launch GDB with the specified example
+- Automatically connect to the target
+- Load the symbol table
+
+## Serial Communication
+
+1. **Connect and flash your NUCLEO board with a serial example:**
    ```sh
-   make flash EXAMPLE=<your_example>
+   make flash EXAMPLE=serial_simple  # For output only
+   # or
+   make flash EXAMPLE=serial_echo    # For echo functionality
    ```
 
-## Open a TTY terminal in the host PC
+2. **Open a terminal on the host PC:**
+   ```sh
+   picocom -b 115200 /dev/tty*  # Use the device name created when the board is connected
+   ```
 
-1. **Connect and flash you NUCLEO board with an example containing serial debug.**
+## Dependencies
 
-2. **In a host PC's terminal, run the command:**
-  ```sh
-  picocom -b 115300 /dev/tty* # Use the device name which is created when the board gets connected
-  ```
+The project includes the following third-party components:
 
-## File Structure
+### Core Dependencies
+- **CMSIS** (Cortex Microcontroller Software Interface Standard)
+  - ARM's standardized hardware abstraction layer for Cortex-M processors
+  - Provides core CPU definitions, peripheral access, and startup code templates
+  - Located in `chip_headers/CMSIS/`
 
-- `drivers/inc/` - Header files for low-level drivers (GPIO, etc.)
-- `drivers/src/` - Source files for low-level drivers
-- `examples/basic/blink_led_simple.c` - Blink LED example source
-- `examples/basic/push_button_simple.c` - Push button example source
-- `examples/basic/serial_debug.c` - UART terminal example source
-- `startup/stm32f411_startup.c` - Startup code and vector table
-- `linker/stm32_ls.ld` - Linker script for STM32F411RE
-- `chip_headers/` - CMSIS and device header files
-- `build/` - Output directory for compiled binaries and map files (created after build)
-- `Makefile` - Build instructions for all examples
-- `board/st_nucleo_f4.cfg` - OpenOCD configuration file
+- **STM32F4xx Device Headers**
+  - ST Microelectronics' device-specific register definitions for STM32F4 series
+  - Memory-mapped register addresses and bit field definitions
+  - Located in `chip_headers/CMSIS/Device/ST/STM32F4xx/`
+
+### Third-Party Libraries
+- **printf** ([mpaland/printf](https://github.com/mpaland/printf))
+  - Lightweight printf/sprintf implementation for embedded systems
+  - No dependencies on standard C library
+  - Configurable features to minimize code size
+  - Located in `3rd_party/printf/`
+
+- **log_c**
+  - Minimal logging library for embedded C applications
+  - Multiple log levels (critical, error, warning, info, debug)
+  - Compile-time filtering and custom backend support
+  - Located in `3rd_party/log_c/`
+
+### Internal Libraries
+- **String Utilities**
+  - Custom string manipulation functions optimized for embedded use
+  - Includes safe string operations and formatting helpers
+  - Located in `utils/`
+
+All dependencies are included in the repository or fetched via git submodules during the initial setup.
 
 ## License
 

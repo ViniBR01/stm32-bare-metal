@@ -19,4 +19,4 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-gdb-multiarch -q -ex "target remote localhost:3333" -ex "monitor reset init" "$1"
+arm-none-eabi-gdb -q -ex "target remote localhost:3333" -ex "monitor reset init" "$1"
