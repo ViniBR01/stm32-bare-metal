@@ -1,5 +1,5 @@
 #include <stddef.h>
-#include <string.h>
+#include "string_utils.h"
 
 #include "led2.h"
 #include "uart_echo.h"
