@@ -1,15 +1,14 @@
-#include <stdio.h>
-
 #include "led2.h"
-#include "pc13_exti.h"
+#include "exti_handler.h"
 #include "sleep_mode.h"
 #include "uart_terminal.h"
+#include "printf.h"
 
 uint8_t g_btn_press;
 
 int main(void) {
     led2_init();
-    pc13_exti_init();
+    exti_configure_gpio_interrupt(GPIO_PORT_C, 13, EXTI_TRIGGER_FALLING, EXTI_MODE_INTERRUPT);
     uart_terminal_init();
     sleep_mode_init();
 
@@ -30,8 +29,8 @@ static void exti_callback(void) {
 }
 
 void EXTI15_10_IRQHandler(void) {
-    if (EXTI->PR & (1U<<13)) { // Check if pending bit for line 13 is set
-        EXTI->PR |= (1U<<13);  // Clear pending bit by writing 1
+    if (exti_is_pending(13)) { // Check if pending bit for line 13 is set
+        exti_clear_pending(13);  // Clear pending bit
         exti_callback();        // Call the callback function
     }
 }
