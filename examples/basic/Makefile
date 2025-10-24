@@ -5,8 +5,12 @@
 # Module name for identification
 MODULE_NAME := basic_examples
 
-# Default target
-.DEFAULT_GOAL := all
+# Default target - build specific example if EXAMPLE is set, otherwise show help
+ifdef EXAMPLE
+.DEFAULT_GOAL := $(EXAMPLE)
+else
+.DEFAULT_GOAL := help
+endif
 
 # Include common definitions
 include ../../Makefile.common
@@ -35,16 +39,22 @@ serial_simple_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(PRINTF_LIB) $(LOG_C_LIB)
 #==============================================================================
 # Build rules
 #==============================================================================
-.PHONY: all clean $(EXAMPLES)
+.PHONY: all clean help $(EXAMPLES)
+
+# Help target - show available examples
+help:
+	@echo "Usage: make EXAMPLE=<example_name>"
+	@echo "       make all                 # Build all examples"
+	@echo ""
+	@echo "Available examples:"
+	@for example in $(EXAMPLES); do \
+		echo "  - $$example"; \
+	done
+	@echo ""
+	@echo "Example: make EXAMPLE=blink_simple"
 
 # Build all examples
 all: $(EXAMPLES)
-
-# Build specific example if EXAMPLE is set
-ifdef EXAMPLE
-$(EXAMPLE): $(LOCAL_BUILD_DIR)/$(EXAMPLE)/$(EXAMPLE).bin
-	@echo "Example $(EXAMPLE) built successfully!"
-endif
 
 # Pattern rule for building examples
 define build-example
