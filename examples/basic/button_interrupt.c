@@ -1,8 +1,7 @@
-#include <stdio.h>
-
 #include "exti_handler.h"
 #include "led2.h"
 #include "uart_terminal.h"
+#include "printf.h"
 
 #define BUTTON_PIN (13)
 
