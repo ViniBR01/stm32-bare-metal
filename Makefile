@@ -51,6 +51,11 @@ $(EXAMPLE): startup utils drivers 3rd_party
 	@echo "Building example: $(EXAMPLE)"
 	$(MAKE) -C examples EXAMPLE=$(EXAMPLE)
 
+# Individual example targets
+$(ALL_EXAMPLES): startup utils drivers 3rd_party
+	@echo "Building example: $@"
+	$(MAKE) -C examples EXAMPLE=$@
+
 #==============================================================================
 # Build subdirectories
 #==============================================================================
