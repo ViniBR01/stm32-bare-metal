@@ -1,0 +1,117 @@
+#==============================================================================
+# Common Makefile Variables and Rules
+# This file is included by all module makefiles
+#==============================================================================
+
+#==============================================================================
+# Toolchain
+#==============================================================================
+CC      := arm-none-eabi-gcc
+CP      := arm-none-eabi-objcopy
+OD      := arm-none-eabi-objdump
+SZ      := arm-none-eabi-size
+AR      := arm-none-eabi-ar
+
+#==============================================================================
+# Root directories (relative to including makefile)
+#==============================================================================
+# Get the directory of this Makefile.common
+COMMON_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
+# Root directory is the parent of Makefile.common
+ROOT_DIR := $(realpath $(COMMON_DIR))
+
+# Main directories
+DRIVERS_DIR   := $(ROOT_DIR)/drivers
+EXAMPLES_DIR  := $(ROOT_DIR)/examples
+STARTUP_DIR   := $(ROOT_DIR)/startup
+LINKER_DIR    := $(ROOT_DIR)/linker
+BUILD_DIR     := $(ROOT_DIR)/build
+THIRD_PARTY_DIR := $(ROOT_DIR)/3rd_party
+
+#==============================================================================
+# MCU-specific flags
+#==============================================================================
+MCU_FLAGS := -mcpu=cortex-m4 -mthumb
+
+#==============================================================================
+# Compiler flags
+#==============================================================================
+# Base C flags
+CFLAGS_BASE := $(MCU_FLAGS) -c -std=gnu11 -Wall -g -O0 -DSTM32F411xE -ffunction-sections -fdata-sections
+
+# Common include paths
+COMMON_INCLUDES := \
+	-I$(DRIVERS_DIR)/inc \
+	-I$(ROOT_DIR)/chip_headers/CMSIS/Include \
+	-I$(ROOT_DIR)/chip_headers/CMSIS/Device/ST/STM32F4xx/Include \
+	-I$(THIRD_PARTY_DIR)/printf \
+	-I$(THIRD_PARTY_DIR)/log_c/src
+
+# Full C flags
+CFLAGS := $(CFLAGS_BASE) $(COMMON_INCLUDES)
+
+#==============================================================================
+# Linker configuration
+#==============================================================================
+# Linker script
+LDSCRIPT := $(LINKER_DIR)/stm32_ls.ld
+
+# Linker flags
+LDFLAGS := $(MCU_FLAGS) -nostdlib -T $(LDSCRIPT) -Wl,--gc-sections
+
+#==============================================================================
+# Library paths
+#==============================================================================
+DRIVERS_LIB := $(BUILD_DIR)/drivers/libdrivers.a
+STARTUP_OBJ := $(BUILD_DIR)/startup/stm32f411_startup.o
+PRINTF_LIB := $(BUILD_DIR)/3rd_party/libprintf.a
+LOG_C_LIB := $(BUILD_DIR)/3rd_party/liblog_c.a
+
+#==============================================================================
+# Common build rules
+#==============================================================================
+# Rule to create directories
+define make-build-dir
+	@mkdir -p $(dir $@)
+endef
+
+# Generic rule for compiling C files
+%.o: %.c
+	$(make-build-dir)
+	@echo "Compiling $<"
+	$(CC) $(CFLAGS) -o $@ $<
+
+# Generic rule for creating static libraries
+%.a:
+	$(make-build-dir)
+	@echo "Archiving $^ -> $@"
+	$(AR) rcs $@ $^
+
+# Generic rule for linking ELF files
+%.elf:
+	$(make-build-dir)
+	@echo "Linking $@..."
+	$(CC) $(LDFLAGS) -o $@ $^ -lc -lm
+	@echo "Linking complete."
+
+# Generic rule for creating binary files
+%.bin: %.elf
+	$(CP) -O binary $< $@
+	@echo "Created $@"
+	@$(SZ) $<
+
+#==============================================================================
+# Common utility targets
+#==============================================================================
+.PHONY: clean-module
+clean-module:
+	@echo "Cleaning $(MODULE_NAME)..."
+	@rm -rf $(LOCAL_BUILD_DIR)
+
+#==============================================================================
+# Export variables for sub-makes
+#==============================================================================
+export CC CP OD SZ AR
+export MCU_FLAGS CFLAGS LDFLAGS LDSCRIPT
+export ROOT_DIR BUILD_DIR
+export DRIVERS_LIB STARTUP_OBJ PRINTF_LIB LOG_C_LIB
