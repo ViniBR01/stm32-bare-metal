@@ -1,149 +1,124 @@
 #==============================================================================
-# Project Name & Target
+# Root Makefile - STM32 Bare Metal Project
+#==============================================================================
+
+# Include common definitions
+include Makefile.common
+
+#==============================================================================
+# Default target
 #==============================================================================
 # To build a specific example, run: make EXAMPLE=<example_name>
-# For example: make EXAMPLE=push_button_simple
+# For example: make EXAMPLE=blink_simple
 EXAMPLE ?= blink_simple
-TARGET = $(EXAMPLE)
+
+# Default goal
+.DEFAULT_GOAL := $(EXAMPLE)
 
 #==============================================================================
-# Directories
+# Subdirectories with makefiles
 #==============================================================================
-ROOT_DIR      := .
-DRIVERS_DIR   := $(ROOT_DIR)/drivers
-EXAMPLES_DIR  := $(ROOT_DIR)/examples
-STARTUP_DIR   := $(ROOT_DIR)/startup
-LINKER_DIR    := $(ROOT_DIR)/linker
-BUILD_DIR     := $(ROOT_DIR)/build
+SUBDIRS := startup utils drivers 3rd_party examples
 
 #==============================================================================
-# Toolchain
+# All examples list (for 'all' target)
 #==============================================================================
-CC      := arm-none-eabi-gcc
-CP      := arm-none-eabi-objcopy
-OD      := arm-none-eabi-objdump
-SZ      := arm-none-eabi-size
-AR      := arm-none-eabi-ar
+ALL_EXAMPLES := blink_simple button_interrupt button_simple button_sleep serial_echo serial_simple
 
 #==============================================================================
-# Source Files
+# Phony targets
 #==============================================================================
-# C source files from drivers and the selected example
-C_SOURCES := $(wildcard $(DRIVERS_DIR)/src/*.c)
-C_SOURCES += $(EXAMPLES_DIR)/basic/$(EXAMPLE).c
-
-# Assembly/startup source files
-S_SOURCES := $(STARTUP_DIR)/stm32f411_startup.c
+.PHONY: all clean $(SUBDIRS) flash debug openocd help $(EXAMPLE) $(ALL_EXAMPLES)
 
 #==============================================================================
-# Include Directories
+# Build all examples
 #==============================================================================
-C_INCLUDES := \
--I$(DRIVERS_DIR)/inc \
--I./chip_headers/CMSIS/Include \
--I./chip_headers/CMSIS/Device/ST/STM32F4xx/Include \
--I./3rd_party/printf \
--I./3rd_party/log_c/src
-
-#==============================================================================
-# Compiler and Linker Flags
-#==============================================================================
-# MCU-specific flags
-MCU_FLAGS := -mcpu=cortex-m4 -mthumb
-
-# C flags
-CFLAGS := $(MCU_FLAGS) -c -std=gnu11 -Wall -g -O0 $(C_INCLUDES) -DSTM32F411xE -ffunction-sections -fdata-sections
-
-# Linker script
-LDSCRIPT := $(LINKER_DIR)/stm32_ls.ld
-
-# Linker flags
-LDFLAGS := $(MCU_FLAGS) -nostdlib -T $(LDSCRIPT) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map,--cref -Wl,--gc-sections
+all:
+	@echo "Building all examples..."
+	@for example in $(ALL_EXAMPLES); do \
+		echo "========================================"; \
+		echo "Building $$example..."; \
+		echo "========================================"; \
+		$(MAKE) EXAMPLE=$$example || exit 1; \
+	done
+	@echo "========================================";
+	@echo "All examples built successfully!"
 
 #==============================================================================
-# Build Rules
+# Build specific example
 #==============================================================================
-# Object files
-OBJS := $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
-OBJS += $(addprefix $(BUILD_DIR)/,$(notdir $(S_SOURCES:.c=.o)))
+$(EXAMPLE): startup utils drivers 3rd_party
+	@echo "Building example: $(EXAMPLE)"
+	$(MAKE) -C examples EXAMPLE=$(EXAMPLE)
 
-# Add the 3rd-party log_c static library archive to link inputs. It will be
-# created from 3rd_party/log_c/src/log_c.c into $(BUILD_DIR)/liblog_c.a
-OBJS += $(BUILD_DIR)/liblog_c.a
-# Add the static printf library archive to the link inputs. The archive
-# will be created from 3rd_party/printf/printf.c into $(BUILD_DIR)/libprintf.a
-OBJS += $(BUILD_DIR)/libprintf.a
+# Individual example targets
+$(ALL_EXAMPLES): startup utils drivers 3rd_party
+	@echo "Building example: $@"
+	$(MAKE) -C examples EXAMPLE=$@
 
-.PHONY: all clean openocd
+#==============================================================================
+# Build subdirectories
+#==============================================================================
+startup:
+	$(MAKE) -C startup
 
-all: $(BUILD_DIR)/$(TARGET).bin
+drivers:
+	$(MAKE) -C drivers
 
-# Rule to build object files from C sources
-$(BUILD_DIR)/%.o: $(DRIVERS_DIR)/src/%.c
-	@mkdir -p $(@D)
-	@echo "Compiling $<"
-	$(CC) $(CFLAGS) -o $@ $<
+3rd_party:
+	$(MAKE) -C 3rd_party
 
-$(BUILD_DIR)/%.o: $(EXAMPLES_DIR)/basic/%.c
-	@mkdir -p $(@D)
-	@echo "Compiling $<"
-	$(CC) $(CFLAGS) -o $@ $<
+utils: 3rd_party
+	$(MAKE) -C utils
 
-# Rule to build object files from startup file
-$(BUILD_DIR)/stm32f411_startup.o: $(STARTUP_DIR)/stm32f411_startup.c
-	@mkdir -p $(@D)
-	@echo "Compiling $<"
-	$(CC) $(CFLAGS) -o $@ $<
+examples: startup utils drivers 3rd_party
+	$(MAKE) -C examples EXAMPLE=$(EXAMPLE)
 
-# Compile the 3rd-party printf source into an object inside the build dir
-# Build with flags to disable floating point, exponential and long-long support
-CFLAGS_PRINTF := -DPRINTF_DISABLE_SUPPORT_FLOAT -DPRINTF_DISABLE_SUPPORT_EXPONENTIAL -DPRINTF_DISABLE_SUPPORT_LONG_LONG
-$(BUILD_DIR)/printf.o: $(ROOT_DIR)/3rd_party/printf/printf.c
-	@mkdir -p $(@D)
-	@echo "Compiling 3rd-party printf (no float/exp/long long): $<"
-	$(CC) $(CFLAGS) $(CFLAGS_PRINTF) -o $@ $<
-
-# Archive the printf object into a static library
-$(BUILD_DIR)/libprintf.a: $(BUILD_DIR)/printf.o
-	@mkdir -p $(@D)
-	@echo "Archiving $^ -> $@"
-	@$(AR) rcs $@ $^
-
-# Compile the 3rd-party log_c source into an object inside the build dir
-$(BUILD_DIR)/log_c.o: $(ROOT_DIR)/3rd_party/log_c/src/log_c.c
-	@mkdir -p $(@D)
-	@echo "Compiling 3rd-party log_c: $<"
-	$(CC) $(CFLAGS) -o $@ $<
-
-# Archive the log_c object into a static library
-$(BUILD_DIR)/liblog_c.a: $(BUILD_DIR)/log_c.o
-	@mkdir -p $(@D)
-	@echo "Archiving $^ -> $@"
-	@$(AR) rcs $@ $^
-
-# Rule to link the executable
-$(BUILD_DIR)/$(TARGET).elf: $(OBJS)
-	@echo "Linking..."
-	$(CC) $(LDFLAGS) -o $@ $(OBJS) -lc -lm
-	@echo "Linking complete."
-
-# Rule to create the binary file
-$(BUILD_DIR)/$(TARGET).bin: $(BUILD_DIR)/$(TARGET).elf
-	$(CP) -O binary $< $@
-	@echo "Created $(TARGET).bin"
-	@$(SZ) $<
-
+#==============================================================================
+# Clean all build artifacts
+#==============================================================================
 clean:
+	@echo "Cleaning all build artifacts..."
 	@rm -rf $(BUILD_DIR)
-	@echo "Cleaned build directory."
+	@echo "Clean complete."
 
-openocd: all
+#==============================================================================
+# Flash target (delegates to examples)
+#==============================================================================
+flash: $(EXAMPLE)
+	@echo "Flashing $(EXAMPLE).elf to target using OpenOCD..."
+	openocd -f board/st_nucleo_f4.cfg -c "program $(BUILD_DIR)/examples/basic/$(EXAMPLE)/$(EXAMPLE).elf verify reset exit"
+
+#==============================================================================
+# Debug target
+#==============================================================================
+debug: $(EXAMPLE)
+	./debug.sh $(BUILD_DIR)/examples/basic/$(EXAMPLE)/$(EXAMPLE).elf
+
+#==============================================================================
+# OpenOCD target
+#==============================================================================
+openocd:
 	@echo "Starting OpenOCD on localhost port 3333..."
 	openocd -f board/st_nucleo_f4.cfg
 
-flash: $(BUILD_DIR)/$(TARGET).elf
-	@echo "Flashing $(TARGET).elf to target using OpenOCD..."
-	openocd -f board/st_nucleo_f4.cfg -c "program $(BUILD_DIR)/$(TARGET).elf verify reset exit"
-
-debug: $(BUILD_DIR)/$(TARGET).elf
-	./debug.sh $(BUILD_DIR)/$(TARGET).elf
+#==============================================================================
+# Help target
+#==============================================================================
+help:
+	@echo "STM32 Bare Metal Build System"
+	@echo "============================="
+	@echo ""
+	@echo "Usage:"
+	@echo "  make                    - Build default example (blink_simple)"
+	@echo "  make EXAMPLE=<name>     - Build specific example"
+	@echo "  make all                - Build all examples"
+	@echo "  make clean              - Clean all build artifacts"
+	@echo "  make flash              - Flash current example to target"
+	@echo "  make debug              - Debug current example"
+	@echo "  make openocd            - Start OpenOCD server"
+	@echo ""
+	@echo "Available examples:"
+	@for example in $(ALL_EXAMPLES); do \
+		echo "  - $$example"; \
+	done
