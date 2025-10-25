@@ -12,7 +12,7 @@
 typedef struct {
     const char* name;           // Command name
     const char* description;    // Brief description for help
-    void (*handler)(void);      // Command handler function
+    int (*handler)(void);       // Command handler function (returns 0 on success, non-zero on error)
 } cli_command_t;
 
 // CLI context structure
@@ -27,10 +27,10 @@ typedef struct {
 cli_context_t g_cli;
 
 // Forward declarations
-static void cmd_led_on(void);
-static void cmd_led_off(void);
-static void cmd_led_toggle(void);
-static void cmd_help(void);
+static int cmd_led_on(void);
+static int cmd_led_off(void);
+static int cmd_led_toggle(void);
+static int cmd_help(void);
 
 // CLI function declarations
 void cli_init(cli_context_t* ctx, const cli_command_t* commands, size_t num_commands);
@@ -38,23 +38,27 @@ void cli_process_char(cli_context_t* ctx, char c);
 void cli_print_help(const cli_context_t* ctx);
 
 // Command implementations
-static void cmd_led_on(void) {
+static int cmd_led_on(void) {
     led2_on();
     printf("LED2 turned on\n");
+    return 0;  // Success
 }
 
-static void cmd_led_off(void) {
+static int cmd_led_off(void) {
     led2_off();
     printf("LED2 turned off\n");
+    return 0;  // Success
 }
 
-static void cmd_led_toggle(void) {
+static int cmd_led_toggle(void) {
     led2_toggle();
     printf("LED2 toggled\n");
+    return 0;  // Success
 }
 
-static void cmd_help(void) {
+static int cmd_help(void) {
     cli_print_help(&g_cli);
+    return 0;  // Success
 }
 
 // Command table
@@ -91,15 +95,22 @@ static void cli_execute_command(cli_context_t* ctx) {
     for (size_t i = 0; i < ctx->num_commands; i++) {
         if (strlen(ctx->commands[i].name) == ctx->buffer_pos &&
             strncmp(ctx->buffer, ctx->commands[i].name, ctx->buffer_pos) == 0) {
-            // Found matching command
-            ctx->commands[i].handler();
+            // Found matching command - execute it and check return code
+            int result = ctx->commands[i].handler();
+            
+            if (result == 0) {
+                printf("[OK]\n");
+            } else {
+                printf("[ERROR] Command '%s' failed with error code: %d\n", 
+                       ctx->commands[i].name, result);
+            }
             return;
         }
     }
     
     // No matching command found
     if (ctx->buffer_pos > 0) {
-        printf("Unknown command: %s\n", ctx->buffer);
+        printf("[ERROR] Unknown command: %s\n", ctx->buffer);
     }
 }
 
