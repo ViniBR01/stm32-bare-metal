@@ -1,41 +1,21 @@
 #include <stddef.h>
 
+#include "cli.h"
 #include "led2.h"
 #include "printf.h"
-#include "string_utils.h"
 #include "uart_echo.h"
 #include "uart_terminal.h"
 
 #define MAX_CMD_SIZE 32
 
-// Command definition structure
-typedef struct {
-    const char* name;           // Command name
-    const char* description;    // Brief description for help
-    int (*handler)(void);       // Command handler function (returns 0 on success, non-zero on error)
-} cli_command_t;
-
-// CLI context structure
-typedef struct {
-    const cli_command_t* commands;  // Array of registered commands
-    size_t num_commands;            // Number of registered commands
-    char buffer[MAX_CMD_SIZE];      // Input buffer
-    size_t buffer_pos;              // Current position in buffer
-} cli_context_t;
-
-// Global CLI context
+// Global CLI context and buffer
 cli_context_t g_cli;
+char g_cmd_buffer[MAX_CMD_SIZE];
 
 // Forward declarations
 static int cmd_led_on(void);
 static int cmd_led_off(void);
 static int cmd_led_toggle(void);
-static int cmd_help(void);
-
-// CLI function declarations
-void cli_init(cli_context_t* ctx, const cli_command_t* commands, size_t num_commands);
-void cli_process_char(cli_context_t* ctx, char c);
-void cli_print_help(const cli_context_t* ctx);
 
 // Command implementations
 static int cmd_led_on(void) {
@@ -56,90 +36,12 @@ static int cmd_led_toggle(void) {
     return 0;  // Success
 }
 
-static int cmd_help(void) {
-    cli_print_help(&g_cli);
-    return 0;  // Success
-}
-
-// Command table
+// Command table (help command is automatically added by CLI library)
 static const cli_command_t commands[] = {
     {"led_on",     "Turn on LED2",      cmd_led_on},
     {"led_off",    "Turn off LED2",     cmd_led_off},
     {"led_toggle", "Toggle LED2 state", cmd_led_toggle},
-    {"help",       "Show this help",    cmd_help},
 };
-
-// CLI implementation functions
-void cli_init(cli_context_t* ctx, const cli_command_t* commands, size_t num_commands) {
-    ctx->commands = commands;
-    ctx->num_commands = num_commands;
-    ctx->buffer_pos = 0;
-    // Clear the buffer
-    for (size_t i = 0; i < MAX_CMD_SIZE; i++) {
-        ctx->buffer[i] = '\0';
-    }
-}
-
-void cli_print_help(const cli_context_t* ctx) {
-    printf("\nAvailable commands:\n");
-    for (size_t i = 0; i < ctx->num_commands; i++) {
-        printf("%-12s - %s\n", ctx->commands[i].name, ctx->commands[i].description);
-    }
-}
-
-static void cli_execute_command(cli_context_t* ctx) {
-    // Null-terminate the buffer
-    ctx->buffer[ctx->buffer_pos] = '\0';
-    
-    // Search for matching command
-    for (size_t i = 0; i < ctx->num_commands; i++) {
-        if (strlen(ctx->commands[i].name) == ctx->buffer_pos &&
-            strncmp(ctx->buffer, ctx->commands[i].name, ctx->buffer_pos) == 0) {
-            // Found matching command - execute it and check return code
-            int result = ctx->commands[i].handler();
-            
-            if (result == 0) {
-                printf("[OK]\n");
-            } else {
-                printf("[ERROR] Command '%s' failed with error code: %d\n", 
-                       ctx->commands[i].name, result);
-            }
-            return;
-        }
-    }
-    
-    // No matching command found
-    if (ctx->buffer_pos > 0) {
-        printf("[ERROR] Unknown command: %s\n", ctx->buffer);
-    }
-}
-
-void cli_process_char(cli_context_t* ctx, char c) {
-    switch(c) {
-        case '\b':
-        case 127: // Handle DEL as backspace
-            if (ctx->buffer_pos > 0) {
-                printf("\b \b");
-                ctx->buffer_pos--;
-            }
-            break;
-            
-        case '\r': // Handle carriage return as newline
-        case '\n':
-            uart_echo_write('\n');
-            cli_execute_command(ctx);
-            ctx->buffer_pos = 0; // Reset buffer
-            break;
-            
-        default:
-            // Check if the character is a printable ascii
-            if (c >= 32 && c <= 126 && ctx->buffer_pos < MAX_CMD_SIZE - 1) {
-                ctx->buffer[ctx->buffer_pos++] = c;
-                uart_echo_write(c);
-            }
-            break;
-    }
-}
 
 int main(void) {
     // Initialize hardware
@@ -148,16 +50,16 @@ int main(void) {
     uart_terminal_init(); // Initialize UART for printf output
     
     // Initialize CLI
-    cli_init(&g_cli, commands, sizeof(commands)/sizeof(commands[0]));
+    cli_init(&g_cli, commands, sizeof(commands)/sizeof(commands[0]), 
+             g_cmd_buffer, MAX_CMD_SIZE);
     
-    // Print welcome message and help
-    printf("\n=== STM32 CLI Example ===\n");
-    cli_print_help(&g_cli);
+    // Print welcome message
+    cli_print_welcome("\n=== STM32 CLI Example ===");
     printf("\n> ");
 
     while (1) {
         char c = uart_echo_read();
-        cli_process_char(&g_cli, c);
+        cli_process_char(&g_cli, c, uart_echo_write);
         
         // Print prompt after command execution
         if (c == '\n' || c == '\r') {
