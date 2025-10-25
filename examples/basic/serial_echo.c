@@ -1,8 +1,10 @@
 #include <stddef.h>
-#include "string_utils.h"
 
 #include "led2.h"
+#include "printf.h"
+#include "string_utils.h"
 #include "uart_echo.h"
+#include "uart_terminal.h"
 
 #define MAX_CMD_SIZE 32
 
@@ -36,10 +38,7 @@ void command_invoker(cli_t* CLI) {
         if (cmd.size > 0 && cmd.execute != NULL) {
             cmd.execute();
         } else {
-            uart_echo_write('N');
-            uart_echo_write('/');
-            uart_echo_write('A');
-            uart_echo_write('\n');
+            printf("N/A\n");
         }
 
         buf_size = 0; // flush the buffer
@@ -52,9 +51,7 @@ void handle_input(char c, cli_t* CLI) {
     switch(c) {
         case '\b':
         case 127: // Handle DEL as backspace
-            uart_echo_write('\b');
-            uart_echo_write(' ');
-            uart_echo_write('\b');
+            printf("\b \b");
             buf_size = (buf_size > 0) ? buf_size - 1 : 0;
             break;
         case '\r': // Handle carriage return as newline
@@ -99,9 +96,7 @@ void print_help(void) {
                            "reset_led   - Turn off LED2\n"
                            "toggle_led  - Toggle LED2 state\n"
                            "help        - Show this help message\n";
-    for (size_t i = 0; i < strlen(help_msg); i++) {
-        uart_echo_write(help_msg[i]);
-    }
+    printf("%s", help_msg);
 }
 
 cli_t* cli_init(void) {
@@ -124,6 +119,7 @@ int main(void) {
     buf_size = 0; // Initialize buffer size
     led2_init();
     uart_echo_init();
+    uart_terminal_init(); // Initialize UART for printf output
     cli_t* CLI = cli_init();
 
     // CLI->print_welcome_message(); // TODO!
