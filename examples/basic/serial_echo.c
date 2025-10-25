@@ -8,125 +8,149 @@
 
 #define MAX_CMD_SIZE 32
 
+// Command definition structure
 typedef struct {
-    char data[MAX_CMD_SIZE];
-    uint8_t size;
-    void (*execute)(void);
-} command_t;
+    const char* name;           // Command name
+    const char* description;    // Brief description for help
+    void (*handler)(void);      // Command handler function
+} cli_command_t;
 
+// CLI context structure
 typedef struct {
-    uint8_t op_name[MAX_CMD_SIZE];
-    void (*op_callback)();
-} ops_t;
+    const cli_command_t* commands;  // Array of registered commands
+    size_t num_commands;            // Number of registered commands
+    char buffer[MAX_CMD_SIZE];      // Input buffer
+    size_t buffer_pos;              // Current position in buffer
+} cli_context_t;
 
-typedef struct cli_t_ cli_t;
-struct cli_t_ {
-    ops_t operations[5];
-    uint32_t num_operations;
-    command_t (*get_command)(cli_t* cli, uint8_t* buf, uint32_t buf_size);
+// Global CLI context
+cli_context_t g_cli;
+
+// Forward declarations
+static void cmd_led_on(void);
+static void cmd_led_off(void);
+static void cmd_led_toggle(void);
+static void cmd_help(void);
+
+// CLI function declarations
+void cli_init(cli_context_t* ctx, const cli_command_t* commands, size_t num_commands);
+void cli_process_char(cli_context_t* ctx, char c);
+void cli_print_help(const cli_context_t* ctx);
+
+// Command implementations
+static void cmd_led_on(void) {
+    led2_on();
+    printf("LED2 turned on\n");
+}
+
+static void cmd_led_off(void) {
+    led2_off();
+    printf("LED2 turned off\n");
+}
+
+static void cmd_led_toggle(void) {
+    led2_toggle();
+    printf("LED2 toggled\n");
+}
+
+static void cmd_help(void) {
+    cli_print_help(&g_cli);
+}
+
+// Command table
+static const cli_command_t commands[] = {
+    {"led_on",     "Turn on LED2",      cmd_led_on},
+    {"led_off",    "Turn off LED2",     cmd_led_off},
+    {"led_toggle", "Toggle LED2 state", cmd_led_toggle},
+    {"help",       "Show this help",    cmd_help},
 };
 
-
-static uint8_t buf[MAX_CMD_SIZE];
-static uint32_t buf_size = 0;
-cli_t my_cli;
-
-void command_invoker(cli_t* CLI) {
-    // Build command from buffer and send to receiver
-    if (buf_size > 0) {
-        command_t cmd = CLI->get_command(CLI, buf, buf_size);
-        if (cmd.size > 0 && cmd.execute != NULL) {
-            cmd.execute();
-        } else {
-            printf("N/A\n");
-        }
-
-        buf_size = 0; // flush the buffer
+// CLI implementation functions
+void cli_init(cli_context_t* ctx, const cli_command_t* commands, size_t num_commands) {
+    ctx->commands = commands;
+    ctx->num_commands = num_commands;
+    ctx->buffer_pos = 0;
+    // Clear the buffer
+    for (size_t i = 0; i < MAX_CMD_SIZE; i++) {
+        ctx->buffer[i] = '\0';
     }
 }
 
-//TODO: implement history in cli, with navigation via arrow keys (up/down)
-//TODO: implement tab autocomplete based on the current commands available in cli
-void handle_input(char c, cli_t* CLI) {
+void cli_print_help(const cli_context_t* ctx) {
+    printf("\nAvailable commands:\n");
+    for (size_t i = 0; i < ctx->num_commands; i++) {
+        printf("%-12s - %s\n", ctx->commands[i].name, ctx->commands[i].description);
+    }
+}
+
+static void cli_execute_command(cli_context_t* ctx) {
+    // Null-terminate the buffer
+    ctx->buffer[ctx->buffer_pos] = '\0';
+    
+    // Search for matching command
+    for (size_t i = 0; i < ctx->num_commands; i++) {
+        if (strlen(ctx->commands[i].name) == ctx->buffer_pos &&
+            strncmp(ctx->buffer, ctx->commands[i].name, ctx->buffer_pos) == 0) {
+            // Found matching command
+            ctx->commands[i].handler();
+            return;
+        }
+    }
+    
+    // No matching command found
+    if (ctx->buffer_pos > 0) {
+        printf("Unknown command: %s\n", ctx->buffer);
+    }
+}
+
+void cli_process_char(cli_context_t* ctx, char c) {
     switch(c) {
         case '\b':
         case 127: // Handle DEL as backspace
-            printf("\b \b");
-            buf_size = (buf_size > 0) ? buf_size - 1 : 0;
+            if (ctx->buffer_pos > 0) {
+                printf("\b \b");
+                ctx->buffer_pos--;
+            }
             break;
+            
         case '\r': // Handle carriage return as newline
         case '\n':
-            c = '\n';
-            uart_echo_write(c);
-            command_invoker(CLI);
+            uart_echo_write('\n');
+            cli_execute_command(ctx);
+            ctx->buffer_pos = 0; // Reset buffer
             break;
+            
         default:
-            /* Check if the character is a printable ascii */
-            if (c >= 32 && buf_size < sizeof(buf) - 1) {
-                buf[buf_size++] = c;
+            // Check if the character is a printable ascii
+            if (c >= 32 && c <= 126 && ctx->buffer_pos < MAX_CMD_SIZE - 1) {
+                ctx->buffer[ctx->buffer_pos++] = c;
                 uart_echo_write(c);
             }
             break;
     }
 }
 
-command_t get_command_led(cli_t* cli, uint8_t* buf, uint32_t buf_size) {
-    command_t cmd;
-    for (uint32_t i = 0; i < cli->num_operations; i++) {
-        if (buf_size == strlen((char*)cli->operations[i].op_name) &&
-            strncmp((char*)buf, (char*)cli->operations[i].op_name, buf_size) == 0) {
-            // Match found
-            cmd.size = buf_size;
-            memcpy(cmd.data, buf, buf_size);
-            // Assign the callback function to the command (if needed)
-            cmd.execute = cli->operations[i].op_callback;
-            return cmd;
-        } else {
-            cmd.size = 0;
-            cmd.execute = NULL;
-        }
-    }
-    return cmd;
-}
-
-// TODO: generate the help message automatically from the commands registered in the CLI
-void print_help(void) {
-    const char* help_msg = "\nAvailable commands:\n"
-                           "set_led     - Turn on LED2\n"
-                           "reset_led   - Turn off LED2\n"
-                           "toggle_led  - Toggle LED2 state\n"
-                           "help        - Show this help message\n";
-    printf("%s", help_msg);
-}
-
-cli_t* cli_init(void) {
-    my_cli.get_command = get_command_led;
-    // Create commands and store in my_cli.operations
-    // TODO: refactor to allow dynamic registration of commands
-    strcpy((char*)my_cli.operations[0].op_name, "set_led");
-    my_cli.operations[0].op_callback = led2_on; // set_led_callback;
-    strcpy((char*)my_cli.operations[1].op_name, "reset_led");
-    my_cli.operations[1].op_callback = led2_off; // reset_led_callback;
-    strcpy((char*)my_cli.operations[2].op_name, "toggle_led");
-    my_cli.operations[2].op_callback = led2_toggle; // toggle_led_callback;
-    strcpy((char*)my_cli.operations[3].op_name, "help");
-    my_cli.operations[3].op_callback = print_help; // help_callback;
-    my_cli.num_operations = 4;
-    return &my_cli;
-}
-
 int main(void) {
-    buf_size = 0; // Initialize buffer size
+    // Initialize hardware
     led2_init();
     uart_echo_init();
     uart_terminal_init(); // Initialize UART for printf output
-    cli_t* CLI = cli_init();
-
-    // CLI->print_welcome_message(); // TODO!
-    print_help();
+    
+    // Initialize CLI
+    cli_init(&g_cli, commands, sizeof(commands)/sizeof(commands[0]));
+    
+    // Print welcome message and help
+    printf("\n=== STM32 CLI Example ===\n");
+    cli_print_help(&g_cli);
+    printf("\n> ");
 
     while (1) {
         char c = uart_echo_read();
-        handle_input(c, CLI);
+        cli_process_char(&g_cli, c);
+        
+        // Print prompt after command execution
+        if (c == '\n' || c == '\r') {
+            printf("> ");
+        }
     }
 }
