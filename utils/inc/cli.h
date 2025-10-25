@@ -47,8 +47,10 @@ void cli_init(cli_context_t* ctx, const cli_command_t* commands, size_t num_comm
 /**
  * @brief Process a single character of input
  * 
- * Handles character input including printable characters, backspace, and newline.
+ * Handles character input including printable characters, backspace, TAB, and newline.
  * When a newline is received, the command is executed automatically.
+ * TAB key triggers auto-completion: finds the longest common prefix among all
+ * commands matching the current input and auto-completes to that point.
  * 
  * @param ctx Pointer to the CLI context structure
  * @param c Character to process
