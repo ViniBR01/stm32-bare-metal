@@ -69,7 +69,7 @@ $(LOCAL_BUILD_DIR)/$(1)/$(1).o: $(1).c
 $(LOCAL_BUILD_DIR)/$(1)/$(1).elf: $(LOCAL_BUILD_DIR)/$(1)/$(1).o $$($(1)_DEPS)
 	$$(make-build-dir)
 	@echo "Linking $(1)..."
-	$$(CC) $$(LDFLAGS) -Wl,-Map=$(LOCAL_BUILD_DIR)/$(1)/$(1).map,--cref -o $$@ $$^
+	$$(CC) $$(LDFLAGS) -Wl,-Map=$(LOCAL_BUILD_DIR)/$(1)/$(1).map,--cref -o $$@ $(LOCAL_BUILD_DIR)/$(1)/$(1).o -Wl,--start-group $$($(1)_DEPS) -Wl,--end-group
 	@echo "Linking complete."
 
 $(LOCAL_BUILD_DIR)/$(1)/$(1).bin: $(LOCAL_BUILD_DIR)/$(1)/$(1).elf
