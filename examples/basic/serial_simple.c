@@ -1,10 +1,10 @@
 #include "led2.h"
 #include "log_c.h"
 #include "systick.h"
-#include "uart_terminal.h"
+#include "uart.h"
 
 int main(void) {
-    uart_terminal_init();
+    uart_init();
     logc_set_putchar(uart_write);
     led2_init();
     loginfo("Hello, UART Terminal!\n");

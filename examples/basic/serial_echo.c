@@ -3,8 +3,7 @@
 #include "cli.h"
 #include "led2.h"
 #include "printf.h"
-#include "uart_echo.h"
-#include "uart_terminal.h"
+#include "uart.h"
 
 #define MAX_CMD_SIZE 32
 
@@ -43,11 +42,14 @@ static const cli_command_t commands[] = {
     {"led_toggle", "Toggle LED2 state", cmd_led_toggle},
 };
 
+void _putchar(char character) {
+    uart_write(character);
+}
+
 int main(void) {
     // Initialize hardware
     led2_init();
-    uart_echo_init();
-    uart_terminal_init(); // Initialize UART for printf output
+    uart_init();
     
     // Initialize CLI
     cli_init(&g_cli, commands, sizeof(commands)/sizeof(commands[0]), 
@@ -58,8 +60,8 @@ int main(void) {
     printf("\n> ");
 
     while (1) {
-        char c = uart_echo_read();
-        cli_process_char(&g_cli, c, uart_echo_write);
+        char c = uart_read();
+        cli_process_char(&g_cli, c, uart_write);
         
         // Print prompt after command execution
         if (c == '\n' || c == '\r') {

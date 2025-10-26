@@ -1,15 +1,19 @@
 #include "led2.h"
 #include "exti_handler.h"
 #include "sleep_mode.h"
-#include "uart_terminal.h"
+#include "uart.h"
 #include "printf.h"
 
 uint8_t g_btn_press;
 
+void _putchar(char character) {
+    uart_write(character);
+}
+
 int main(void) {
     led2_init();
     exti_configure_gpio_interrupt(GPIO_PORT_C, 13, EXTI_TRIGGER_FALLING, EXTI_MODE_INTERRUPT);
-    uart_terminal_init();
+    uart_init();
     sleep_mode_init();
 
     printf("Starting sleep mode example.\n");
