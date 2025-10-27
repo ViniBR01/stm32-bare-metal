@@ -75,5 +75,14 @@ void cli_print_help(const cli_context_t* ctx);
  */
 void cli_print_welcome(const char* message);
 
+/**
+ * @brief Execute the command currently in the buffer
+ * 
+ * This function can be called from main loop to execute commands in non-ISR context.
+ * 
+ * @param ctx Pointer to the CLI context structure
+ */
+void cli_execute_command(cli_context_t* ctx);
+
 #endif /* CLI_H */
 

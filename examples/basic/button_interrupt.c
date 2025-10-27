@@ -1,15 +1,19 @@
 #include "exti_handler.h"
 #include "led2.h"
-#include "uart_terminal.h"
+#include "uart.h"
 #include "printf.h"
 
 #define BUTTON_PIN (13)
 
 volatile uint8_t g_btn_press;
 
+void _putchar(char character) {
+    uart_write(character);
+}
+
 int main(void) {
     led2_init();
-    uart_terminal_init();
+    uart_init();
     int res = exti_configure_gpio_interrupt(GPIO_PORT_C, BUTTON_PIN, 
         EXTI_TRIGGER_FALLING, EXTI_MODE_INTERRUPT);
     if (res) {

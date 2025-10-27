@@ -22,7 +22,7 @@ static int cli_builtin_help_handler(void) {
  * 
  * @param ctx Pointer to the CLI context structure
  */
-static void cli_execute_command(cli_context_t* ctx) {
+void cli_execute_command(cli_context_t* ctx) {
     // Null-terminate the buffer
     ctx->buffer[ctx->buffer_pos] = '\0';
     
@@ -30,22 +30,15 @@ static void cli_execute_command(cli_context_t* ctx) {
     for (size_t i = 0; i < ctx->num_commands; i++) {
         if (strlen(ctx->command_list[i].name) == ctx->buffer_pos &&
             strncmp(ctx->buffer, ctx->command_list[i].name, ctx->buffer_pos) == 0) {
-            // Found matching command - execute it and check return code
-            int result = ctx->command_list[i].handler();
-            
-            if (result == 0) {
-                printf("[OK]\n");
-            } else {
-                printf("[ERROR] Command '%s' failed with error code: %d\n", 
-                       ctx->command_list[i].name, result);
-            }
+            // Found matching command - execute it
+            ctx->command_list[i].handler();
             return;
         }
     }
     
     // No matching command found
     if (ctx->buffer_pos > 0) {
-        printf("[ERROR] Unknown command: %s\n", ctx->buffer);
+        printf("Unknown command: %s\n", ctx->buffer);
     }
 }
 
@@ -212,8 +205,9 @@ void cli_process_char(cli_context_t* ctx, char c, void (*echo_fn)(char)) {
             if (echo_fn) {
                 echo_fn('\n');
             }
-            cli_execute_command(ctx);
-            ctx->buffer_pos = 0; // Reset buffer
+            // Note: Command execution is not triggered here anymore.
+            // The caller should check if Enter was pressed and call
+            // cli_execute_command() from main loop context.
             break;
             
         default:
