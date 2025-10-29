@@ -87,8 +87,7 @@ clean:
 #==============================================================================
 flash: $(EXAMPLE)
 	@echo "Flashing $(EXAMPLE).elf to target using OpenOCD..."
-	openocd -f board/st_nucleo_f4.cfg -c "program $(BUILD_DIR)/examples/basic/$(EXAMPLE)/$(EXAMPLE).elf verify reset exit"
-
+	openocd -f board/st_nucleo_f4.cfg -c "program $(shell find $(BUILD_DIR)/examples -name $(EXAMPLE).elf) verify reset exit"
 #==============================================================================
 # Debug target
 #==============================================================================

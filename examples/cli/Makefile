@@ -26,6 +26,13 @@ LOCAL_BUILD_DIR := $(BUILD_DIR)/examples/cli
 EXAMPLES := cli_simple
 
 #==============================================================================
+# Source files for multi-file examples
+#==============================================================================
+# cli_simple is a multi-file example with all .c files in this directory
+CLI_SRCS := $(wildcard *.c)
+CLI_OBJS := $(patsubst %.c,$(LOCAL_BUILD_DIR)/cli_simple/%.o,$(CLI_SRCS))
+
+#==============================================================================
 # Dependencies for each example
 #==============================================================================
 # Define explicit dependencies for each example
@@ -51,30 +58,28 @@ help:
 # Build all examples
 all: $(EXAMPLES)
 
-# Pattern rule for building examples
-define build-example
-$(1): $(LOCAL_BUILD_DIR)/$(1)/$(1).bin
-	@echo "Example $(1) built successfully!"
+# Pattern rule for building the cli_simple example (multi-file)
+cli_simple: $(LOCAL_BUILD_DIR)/cli_simple/cli_simple.bin
+	@echo "Example cli_simple built successfully!"
 
-$(LOCAL_BUILD_DIR)/$(1)/$(1).o: $(1).c
-	$$(make-build-dir)
-	@echo "Compiling example: $(1).c"
-	$$(CC) $$(CFLAGS) -o $$@ $$<
+# Compile each .c file in this directory into an object file
+$(LOCAL_BUILD_DIR)/cli_simple/%.o: %.c
+	$(make-build-dir)
+	@echo "Compiling: $<"
+	$(CC) $(CFLAGS) -I. -o $@ $<
 
-$(LOCAL_BUILD_DIR)/$(1)/$(1).elf: $(LOCAL_BUILD_DIR)/$(1)/$(1).o $$($(1)_DEPS)
-	$$(make-build-dir)
-	@echo "Linking $(1)..."
-	$$(CC) $$(LDFLAGS) -Wl,-Map=$(LOCAL_BUILD_DIR)/$(1)/$(1).map,--cref -o $$@ $(LOCAL_BUILD_DIR)/$(1)/$(1).o -Wl,--start-group $$($(1)_DEPS) -Wl,--end-group
+# Link all object files together
+$(LOCAL_BUILD_DIR)/cli_simple/cli_simple.elf: $(CLI_OBJS) $(cli_simple_DEPS)
+	$(make-build-dir)
+	@echo "Linking cli_simple..."
+	$(CC) $(LDFLAGS) -Wl,-Map=$(LOCAL_BUILD_DIR)/cli_simple/cli_simple.map,--cref -o $@ $(CLI_OBJS) -Wl,--start-group $(cli_simple_DEPS) -Wl,--end-group
 	@echo "Linking complete."
 
-$(LOCAL_BUILD_DIR)/$(1)/$(1).bin: $(LOCAL_BUILD_DIR)/$(1)/$(1).elf
-	$$(CP) -O binary $$< $$@
-	@echo "Created $(1).bin"
-	@$$(SZ) $$<
-endef
-
-# Generate build rules for each example
-$(foreach example,$(EXAMPLES),$(eval $(call build-example,$(example))))
+# Create binary from ELF
+$(LOCAL_BUILD_DIR)/cli_simple/cli_simple.bin: $(LOCAL_BUILD_DIR)/cli_simple/cli_simple.elf
+	$(CP) -O binary $< $@
+	@echo "Created cli_simple.bin"
+	@$(SZ) $<
 
 # Clean all build artifacts
 clean:
