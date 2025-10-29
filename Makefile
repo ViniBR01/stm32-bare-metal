@@ -23,7 +23,13 @@ SUBDIRS := startup utils drivers 3rd_party examples
 #==============================================================================
 # All examples list (for 'all' target)
 #==============================================================================
-ALL_EXAMPLES := blink_simple button_interrupt button_simple button_sleep serial_echo serial_simple
+ALL_EXAMPLES := \
+	blink_simple \
+	button_interrupt \
+	button_simple \
+	button_sleep \
+	serial_simple \
+	cli_simple
 
 #==============================================================================
 # Phony targets
@@ -92,7 +98,7 @@ flash: $(EXAMPLE)
 # Debug target
 #==============================================================================
 debug: $(EXAMPLE)
-	./debug.sh $(BUILD_DIR)/examples/basic/$(EXAMPLE)/$(EXAMPLE).elf
+	./debug.sh $(shell find $(BUILD_DIR)/examples -name $(EXAMPLE).elf)
 
 #==============================================================================
 # OpenOCD target
