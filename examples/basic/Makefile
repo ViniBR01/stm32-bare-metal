@@ -23,12 +23,20 @@ LOCAL_BUILD_DIR := $(BUILD_DIR)/examples/basic
 #==============================================================================
 # All examples in this directory
 #==============================================================================
-EXAMPLES := blink_simple button_interrupt button_simple button_sleep serial_echo serial_simple timer_interrupt
+EXAMPLES := blink_pwm \
+			blink_simple \
+			button_interrupt \
+			button_simple \
+			button_sleep \
+			serial_echo \
+			serial_simple \
+			timer_interrupt
 
 #==============================================================================
 # Dependencies for each example
 #==============================================================================
 # Define explicit dependencies for each example
+blink_pwm_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
 blink_simple_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
 button_interrupt_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(PRINTF_LIB)
 button_simple_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
