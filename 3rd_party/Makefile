@@ -34,6 +34,8 @@ LOG_C_OBJ := $(LOCAL_BUILD_DIR)/log_c.o
 #==============================================================================
 # Target libraries
 #==============================================================================
+# Note: printf library is kept for CLI and other direct printf usage,
+# but log_c no longer depends on it
 TARGETS := $(PRINTF_LIB) $(LOG_C_LIB)
 
 #==============================================================================
@@ -43,7 +45,7 @@ TARGETS := $(PRINTF_LIB) $(LOG_C_LIB)
 
 all: $(TARGETS)
 
-# Build printf library
+# Build printf library (for CLI and direct printf usage)
 $(PRINTF_LIB): $(PRINTF_OBJ)
 	$(make-build-dir)
 	@echo "Creating printf library..."
@@ -55,16 +57,16 @@ $(PRINTF_OBJ): $(PRINTF_SRC)
 	@echo "Compiling 3rd-party printf (no float/exp/long long): $<"
 	$(CC) $(CFLAGS) $(PRINTF_FLAGS) -o $@ $<
 
-# Build log_c library
+# Build log_c library (now self-contained, no printf dependency)
 $(LOG_C_LIB): $(LOG_C_OBJ)
 	$(make-build-dir)
-	@echo "Creating log_c library..."
+	@echo "Creating log_c library (self-contained)..."
 	$(AR) rcs $@ $^
 	@echo "Log_c library created: $@"
 
 $(LOG_C_OBJ): $(LOG_C_SRC)
 	$(make-build-dir)
-	@echo "Compiling 3rd-party log_c: $<"
+	@echo "Compiling 3rd-party log_c (no dependencies): $<"
 	$(CC) $(CFLAGS) -o $@ $<
 
 # Clean all 3rd party build artifacts

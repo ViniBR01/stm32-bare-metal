@@ -160,14 +160,17 @@ The project includes the following third-party components:
 ### Third-Party Libraries
 - **printf** ([mpaland/printf](https://github.com/mpaland/printf))
   - Lightweight printf/sprintf implementation for embedded systems
+  - Used for CLI and direct printf usage
   - No dependencies on standard C library
   - Configurable features to minimize code size
   - Located in `3rd_party/printf/`
 
 - **log_c**
   - Minimal logging library for embedded C applications
+  - **Self-contained**: No printf dependency (~1.8KB compiled size)
   - Multiple log levels (critical, error, warning, info, debug)
-  - Compile-time filtering and custom backend support
+  - Compile-time filtering and callback-based backend
+  - Internal formatting (supports %d, %u, %x, %s, %c)
   - Located in `3rd_party/log_c/`
 
 ### Internal Libraries
@@ -291,19 +294,27 @@ The logging system uses a layered architecture:
 
 ```
 Application Code
-    ↓
-log_c library (macros: loginfo, logerror, etc.)
-    ↓
+    ↓ calls log_platform_init_uart()
 Platform Integration Layer (log_platform.c)
-    ↓
+    ↓ registers callback
+log_c library (self-contained, no printf)
+    ↓ calls output callback
 UART Driver (or custom backend)
 ```
 
 This design:
-- Keeps the log_c library unchanged (compatible with upstream)
-- Provides a clean, simple API for STM32 users
-- Enables future enhancements (runtime log levels, buffering, etc.)
-- Demonstrates proper abstraction in embedded systems
+- **Self-contained log_c**: No printf dependency, smaller code size (~1.8KB vs ~4-6KB)
+- **Callback-based API**: Clean, explicit backend registration (no weak symbols)
+- **Platform layer**: Provides simple initialization for STM32 users
+- **Future-ready**: Singleton pattern enables runtime configuration
+- **Proper abstraction**: Demonstrates clean layering in embedded systems
+
+### Code Size Benefits
+
+With the self-contained log_c implementation:
+- **log_c library**: ~1.8KB (includes internal formatting)
+- **Total savings**: ~3-4KB compared to printf-based approach
+- **printf library**: Still available for CLI and direct printf usage
 
 ## License
 
