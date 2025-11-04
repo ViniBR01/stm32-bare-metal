@@ -40,6 +40,13 @@ MCU_FLAGS := -mcpu=cortex-m4 -mthumb
 # Base C flags
 CFLAGS_BASE := $(MCU_FLAGS) -c -std=gnu11 -Wall -g -O0 -DSTM32F411xE -ffunction-sections -fdata-sections
 
+# Log level configuration (controls compile-time log filtering)
+# Valid values: LOG_LEVEL_OFF, LOG_LEVEL_CRITICAL, LOG_LEVEL_ERROR, 
+#               LOG_LEVEL_WARNING, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG
+# Higher levels include all lower levels (e.g., INFO includes WARNING, ERROR, CRITICAL)
+# Set via: make EXAMPLE=serial_simple LOG_LEVEL=LOG_LEVEL_DEBUG
+LOG_LEVEL ?= LOG_LEVEL_INFO
+
 # Common include paths
 COMMON_INCLUDES := \
 	-I$(DRIVERS_DIR)/inc \
@@ -49,8 +56,8 @@ COMMON_INCLUDES := \
 	-I$(THIRD_PARTY_DIR)/log_c/src \
 	-I$(UTILS_DIR)/inc
 
-# Full C flags
-CFLAGS := $(CFLAGS_BASE) $(COMMON_INCLUDES)
+# Full C flags (includes LOG_LEVEL definition)
+CFLAGS := $(CFLAGS_BASE) $(COMMON_INCLUDES) -DLOG_LEVEL=$(LOG_LEVEL)
 
 #==============================================================================
 # Linker configuration

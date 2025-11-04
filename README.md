@@ -178,6 +178,133 @@ The project includes the following third-party components:
 
 All dependencies are included in the repository or fetched via git submodules during the initial setup.
 
+## Logging System
+
+The project uses the `log_c` library for structured logging, with a custom platform integration layer that makes it easy to use on STM32.
+
+### Quick Start
+
+```c
+#include "log_platform.h"
+#include "log_c.h"
+
+int main(void) {
+    // Initialize logging with UART backend (one line!)
+    log_platform_init_uart();
+    
+    // Use logging macros
+    loginfo("System initialized");
+    logdebug("Debug information");
+    logerror("Error occurred");
+    
+    // ... rest of your code
+}
+```
+
+### Log Levels
+
+The library supports five log levels (plus OFF):
+- `logcritical()` - Unrecoverable errors
+- `logerror()` - Error conditions
+- `logwarning()` - Warning conditions
+- `loginfo()` - Informational messages (default level)
+- `logdebug()` - Debug-level messages
+
+### Compile-Time Log Level Configuration
+
+Control which log levels are compiled into your binary using the `LOG_LEVEL` build variable:
+
+```sh
+# Build with default level (INFO - includes critical, error, warning, info)
+make EXAMPLE=serial_simple
+
+# Build with DEBUG level (includes all messages)
+make EXAMPLE=serial_simple LOG_LEVEL=LOG_LEVEL_DEBUG
+
+# Build with only critical and error messages
+make EXAMPLE=serial_simple LOG_LEVEL=LOG_LEVEL_ERROR
+```
+
+Valid values:
+- `LOG_LEVEL_OFF` - Disable all logging
+- `LOG_LEVEL_CRITICAL` - Only critical messages
+- `LOG_LEVEL_ERROR` - Critical and error messages
+- `LOG_LEVEL_WARNING` - Critical, error, and warning messages
+- `LOG_LEVEL_INFO` - All except debug (default)
+- `LOG_LEVEL_DEBUG` - All messages
+
+Higher levels include all lower levels. Messages above the compile-time level are completely eliminated from the binary, saving code space.
+
+### Thread and Interrupt Safety
+
+The logging system is designed to be safe for use in both main code and interrupt handlers:
+
+- **Thread-safe**: The platform layer uses a singleton pattern with static allocation
+- **Interrupt-safe**: UART writes are atomic and blocking
+- **No dynamic allocation**: All state is statically allocated
+- **Reentrant**: Safe to call from multiple contexts
+
+You can safely call logging functions from:
+- Main application code
+- RTOS tasks (if using an RTOS)
+- Interrupt handlers (though excessive logging in ISRs is not recommended)
+
+### Custom Backends
+
+For advanced use cases, you can redirect log output to custom destinations:
+
+```c
+#include "log_platform.h"
+
+void my_custom_putchar(char c) {
+    // Send to SPI, I2C, flash, network, etc.
+    spi_send_byte(c);
+}
+
+int main(void) {
+    // Initialize with custom backend
+    log_platform_init_custom(my_custom_putchar);
+    
+    // Logs now go to your custom function
+    loginfo("This goes to SPI");
+}
+```
+
+### Logging vs Printf
+
+**When to use logging macros** (`loginfo`, `logerror`, etc.):
+- Application-level informational messages
+- Error reporting and diagnostics
+- Debug traces during development
+- Messages that should be filtered by level
+
+**When to use printf directly**:
+- User interface output (CLI prompts, menus)
+- Data output that must always appear regardless of log level
+- Formatted data dumps
+
+The `serial_simple` example demonstrates proper logging usage.
+
+### Platform Integration Architecture
+
+The logging system uses a layered architecture:
+
+```
+Application Code
+    ↓
+log_c library (macros: loginfo, logerror, etc.)
+    ↓
+Platform Integration Layer (log_platform.c)
+    ↓
+UART Driver (or custom backend)
+```
+
+This design:
+- Keeps the log_c library unchanged (compatible with upstream)
+- Provides a clean, simple API for STM32 users
+- Enables future enhancements (runtime log levels, buffering, etc.)
+- Demonstrates proper abstraction in embedded systems
+
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
