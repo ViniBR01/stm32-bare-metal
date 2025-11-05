@@ -49,9 +49,9 @@ int main(void) {
         
         /* Log every tick for first 10, then every 10th tick */
         if (++count < 10) {
-            loginfo("Tick... count=%lu", count);
+            loginfo("Tick... count=%u", count);
         } else if (count % 10 == 0) {
-            loginfo("Tick... count=%lu", count);
+            loginfo("Tick... count=%u", count);
         }
     }
 }
