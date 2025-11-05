@@ -104,3 +104,11 @@ void log_platform_init_custom(void (*putchar_fn)(char)) {
 bool log_platform_is_initialized(void) {
     return g_log_ctx.initialized;
 }
+
+void log_platform_set_level(log_level_e level) {
+    log_set_level(level);
+}
+
+log_level_e log_platform_get_level(void) {
+    return log_get_level();
+}
