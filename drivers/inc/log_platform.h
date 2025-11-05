@@ -2,6 +2,7 @@
 #define LOG_PLATFORM_H_
 
 #include <stdbool.h>
+#include "log_c.h"  /* For log_level_e type */
 
 /**
  * @file log_platform.h
@@ -103,6 +104,53 @@ void log_platform_init_custom(void (*putchar_fn)(char));
  * Thread Safety: Safe to call from any context (main or interrupt)
  */
 bool log_platform_is_initialized(void);
+
+/**
+ * @brief Set the runtime log level
+ * 
+ * This is a convenience wrapper around log_set_level() from log_c.
+ * Allows dynamic control of log verbosity without recompilation.
+ * 
+ * The runtime level filters messages within the compile-time maximum.
+ * For example, if you compiled with LOG_LEVEL_DEBUG, you can suppress
+ * debug messages at runtime by setting the level to LOG_LEVEL_INFO.
+ * 
+ * This is useful for:
+ * - Debugging issues without reflashing firmware
+ * - Reducing log output in production mode
+ * - Interactive control via CLI commands
+ * - Reducing verbosity after initialization
+ * 
+ * Example:
+ * @code
+ * log_platform_init_uart();
+ * 
+ * loginfo("System starting");
+ * logdebug("Debug enabled");  // Prints if compiled with DEBUG
+ * 
+ * // Suppress debug logs
+ * log_platform_set_level(LOG_LEVEL_INFO);
+ * logdebug("This won't print");  // Suppressed at runtime
+ * 
+ * // Re-enable for debugging
+ * log_platform_set_level(LOG_LEVEL_DEBUG);
+ * logdebug("Now prints again");  // ✓
+ * @endcode
+ * 
+ * @param level New runtime log level (will be clamped to compile-time max)
+ * 
+ * Thread Safety: Safe to call from main code
+ */
+void log_platform_set_level(log_level_e level);
+
+/**
+ * @brief Get the current runtime log level
+ * 
+ * @return Current runtime log level
+ * 
+ * Thread Safety: Safe to call from any context
+ */
+log_level_e log_platform_get_level(void);
 
 #endif /* LOG_PLATFORM_H_ */
 

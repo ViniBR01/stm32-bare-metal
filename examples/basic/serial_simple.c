@@ -12,7 +12,6 @@
  * 
  * Key features demonstrated:
  * - Simple one-function initialization (log_platform_init_uart)
- * - No manual _putchar() implementation needed
  * - Safe to use from main loop (and interrupts, though not shown here)
  * - Structured logging with log levels (loginfo, logdebug, etc.)
  * 
@@ -42,10 +41,8 @@ int main(void) {
     /* Main loop - blink LED and log periodically */
     uint32_t count = 0;
     while (1) {
-        led2_off();
-        systick_delay_ms(200);
-        led2_on();
-        systick_delay_ms(800);
+        led2_toggle();
+        systick_delay_ms(250);
         
         /* Log every tick for first 10, then every 10th tick */
         if (++count < 10) {

@@ -221,7 +221,7 @@ Control which log levels are compiled into your binary using the `LOG_LEVEL` bui
 # Build with default level (INFO - includes critical, error, warning, info)
 make EXAMPLE=serial_simple
 
-# Build with DEBUG level (includes all messages)
+# Build with DEBUG level (includes all messages for maximum runtime flexibility)
 make EXAMPLE=serial_simple LOG_LEVEL=LOG_LEVEL_DEBUG
 
 # Build with only critical and error messages
@@ -237,6 +237,42 @@ Valid values:
 - `LOG_LEVEL_DEBUG` - All messages
 
 Higher levels include all lower levels. Messages above the compile-time level are completely eliminated from the binary, saving code space.
+
+### Runtime Log Level Control
+
+**New Feature**: Change log verbosity dynamically without recompilation!
+
+The logging system now supports runtime filtering in addition to compile-time optimization:
+
+```c
+#include "log_platform.h"
+#include "log_c.h"
+
+int main(void) {
+    log_platform_init_uart();
+    
+    // Start with normal verbosity
+    loginfo("System starting");
+    logdebug("Debug message");  // Hidden if compiled with LOG_LEVEL_INFO
+    
+    // Enable debug logging at runtime (if compiled in)
+    log_platform_set_level(LOG_LEVEL_DEBUG);
+    logdebug("Now visible!");  // ✓ Shows if compiled with LOG_LEVEL_DEBUG
+    
+    // Reduce verbosity after init
+    log_platform_set_level(LOG_LEVEL_ERROR);
+    loginfo("Suppressed");     // Hidden at runtime
+    logerror("Still prints");  // ✓ Errors still show
+}
+```
+
+**Use cases:**
+- Debug issues without reflashing firmware
+- Reduce log output after initialization
+- Interactive control via CLI commands
+- Performance optimization in critical sections
+
+**Best practice:** Compile with `LOG_LEVEL_DEBUG` for development to have maximum runtime flexibility, then use `LOG_LEVEL_INFO` for production to save code space.
 
 ### Thread and Interrupt Safety
 
