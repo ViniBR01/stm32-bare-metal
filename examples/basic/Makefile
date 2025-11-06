@@ -30,6 +30,7 @@ EXAMPLES := blink_pwm \
 			button_sleep \
 			serial_echo \
 			serial_simple \
+			shift_register_simple \
 			timer_interrupt
 
 #==============================================================================
@@ -43,6 +44,7 @@ button_simple_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
 button_sleep_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(PRINTF_LIB)
 serial_echo_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(LOG_C_LIB) $(PRINTF_LIB) $(UTILS_LIB)
 serial_simple_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(LOG_C_LIB) $(PRINTF_LIB)
+shift_register_simple_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(LOG_C_LIB) $(PRINTF_LIB)
 timer_interrupt_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
 
 #==============================================================================
