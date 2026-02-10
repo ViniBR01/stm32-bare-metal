@@ -34,7 +34,7 @@ ALL_EXAMPLES := \
 #==============================================================================
 # Phony targets
 #==============================================================================
-.PHONY: all clean $(SUBDIRS) flash debug openocd help $(EXAMPLE) $(ALL_EXAMPLES)
+.PHONY: all clean $(SUBDIRS) flash debug openocd serial help $(EXAMPLE) $(ALL_EXAMPLES)
 
 #==============================================================================
 # Build all examples
@@ -108,6 +108,21 @@ openocd:
 	openocd -f board/st_nucleo_f4.cfg
 
 #==============================================================================
+# Serial connection target
+#==============================================================================
+BAUD_RATE ?= 115200
+
+serial:
+	@echo "Connecting to serial port at $(BAUD_RATE) baud..."
+	@SERIAL_PORT=$$(ls /dev/cu.usbmodem* /dev/ttyACM* 2>/dev/null | head -1); \
+	if [ -z "$$SERIAL_PORT" ]; then \
+		echo "Error: No serial device found. Is the board connected?"; \
+		exit 1; \
+	fi; \
+	echo "Found device: $$SERIAL_PORT"; \
+	picocom -b $(BAUD_RATE) $$SERIAL_PORT
+
+#==============================================================================
 # Help target
 #==============================================================================
 help:
@@ -122,6 +137,8 @@ help:
 	@echo "  make flash              - Flash current example to target"
 	@echo "  make debug              - Debug current example"
 	@echo "  make openocd            - Start OpenOCD server"
+	@echo "  make serial             - Connect to serial port (115200 baud)"
+	@echo "  make serial BAUD_RATE=9600 - Connect with custom baud rate"
 	@echo ""
 	@echo "Available examples:"
 	@for example in $(ALL_EXAMPLES); do \
