@@ -5,19 +5,22 @@
 // Command implementations
 // NOTE: These are called from main loop context (not ISR),
 // so we can safely use printf() which accumulates to buffer
-static int cmd_led_on(void) {
+static int cmd_led_on(const char* args) {
+    (void)args;
     led2_on();
     printf("LED2 turned on\n");
     return 0;  // Success
 }
 
-static int cmd_led_off(void) {
+static int cmd_led_off(const char* args) {
+    (void)args;
     led2_off();
     printf("LED2 turned off\n");
     return 0;  // Success
 }
 
-static int cmd_led_toggle(void) {
+static int cmd_led_toggle(const char* args) {
+    (void)args;
     led2_toggle();
     printf("LED2 toggled\n");
     return 0;  // Success

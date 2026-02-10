@@ -11,7 +11,7 @@
 typedef struct {
     const char* name;           /**< Command name (null-terminated string) */
     const char* description;    /**< Brief description for help text */
-    int (*handler)(void);       /**< Command handler function (returns 0 on success, non-zero on error) */
+    int (*handler)(const char* args); /**< Command handler function (returns 0 on success, non-zero on error) */
 } cli_command_t;
 
 /**

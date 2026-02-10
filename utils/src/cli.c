@@ -10,7 +10,8 @@ static cli_context_t* g_current_cli_ctx = NULL;
  * 
  * @return 0 on success
  */
-static int cli_builtin_help_handler(void) {
+static int cli_builtin_help_handler(const char* args) {
+    (void)args;
     if (g_current_cli_ctx) {
         cli_print_help(g_current_cli_ctx);
     }
@@ -28,10 +29,21 @@ void cli_execute_command(cli_context_t* ctx) {
     
     // Search for matching command
     for (size_t i = 0; i < ctx->num_commands; i++) {
-        if (strlen(ctx->command_list[i].name) == ctx->buffer_pos &&
-            strncmp(ctx->buffer, ctx->command_list[i].name, ctx->buffer_pos) == 0) {
-            // Found matching command - execute it
-            ctx->command_list[i].handler();
+        size_t cmd_len = strlen(ctx->command_list[i].name);
+        
+        // Command must match as prefix, followed by whitespace or end-of-string
+        if (ctx->buffer_pos >= cmd_len &&
+            strncmp(ctx->buffer, ctx->command_list[i].name, cmd_len) == 0 &&
+            (ctx->buffer[cmd_len] == '\0' || ctx->buffer[cmd_len] == ' ')) {
+            
+            // Extract argument string: skip command name and leading whitespace
+            const char* args = &ctx->buffer[cmd_len];
+            while (*args == ' ') {
+                args++;
+            }
+            
+            // Found matching command - execute it with args
+            ctx->command_list[i].handler(args);
             return;
         }
     }
