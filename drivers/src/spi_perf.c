@@ -184,19 +184,40 @@ static uint32_t spi_perf_transfer(uint16_t size) {
     return cycles;
 }
 
+/**
+ * @brief Print a byte buffer, truncating with "..." if longer than 8 entries
+ *
+ * Prints all entries when size <= 8, otherwise prints the first 4 and last 4
+ * with a " .. " separator to indicate omitted entries.
+ */
+static void spi_perf_print_buf(const uint8_t *buf, uint16_t size) {
+    if (size <= 8) {
+        for (uint16_t i = 0; i < size; i++) {
+            printf(" 0x%02X", buf[i]);
+        }
+    } else {
+        for (uint16_t i = 0; i < 4; i++) {
+            printf(" 0x%02X", buf[i]);
+        }
+        printf(" ..");
+        for (uint16_t i = size - 4; i < size; i++) {
+            printf(" 0x%02X", buf[i]);
+        }
+    }
+}
+
 int spi_perf_run(uint16_t prescaler, uint16_t buffer_size) {
     uint32_t spi_freq_hz = SPI_PERF_APB1_CLOCK_HZ / prescaler;
-    uint32_t spi_freq_mhz = spi_freq_hz / 1000000;
+    uint32_t spi_freq_khz = spi_freq_hz / 1000;
 
-    printf("SPI2 Master TX Test\n");
-    printf("Prescaler: %u (%lu MHz)\n", prescaler, spi_freq_mhz);
-    printf("TX Size: %u bytes\n", buffer_size);
-    printf("TX Pattern:");
-    /* Show the pattern that will be sent */
-    for (uint16_t i = 0; i < buffer_size; i++) {
-        printf(" 0x%02X", i & 0xFF);
+    printf("--- SPI2 Master TX Test ---\n");
+    if (spi_freq_khz >= 1000) {
+        printf("  Clock:  %lu MHz (prescaler %u)\n", spi_freq_khz / 1000, prescaler);
+    } else {
+        printf("  Clock:  %lu kHz (prescaler %u)\n", spi_freq_khz, prescaler);
     }
-    printf("\n");
+    printf("  Bytes:  %u\n", buffer_size);
+    printf("  Peak Tput:   %lu KB/s\n", spi_freq_hz / 8000);
 
     /* Flush header output before running transfer */
     printf_dma_flush();
@@ -215,19 +236,43 @@ int spi_perf_run(uint16_t prescaler, uint16_t buffer_size) {
     uint32_t clock_mhz = SPI_PERF_APB1_CLOCK_HZ / 1000000;
     uint32_t elapsed_us = cycles / clock_mhz;
 
-    /* Print results */
-    printf("\n[Result]\n");
-    printf("Cycles: %lu\n", cycles);
-    printf("Time: %lu us\n", elapsed_us);
+    /* Compute throughput: (bytes * 1000000) / elapsed_us = bytes/s */
+    uint32_t throughput_kbps = 0;
+    if (elapsed_us > 0) {
+        throughput_kbps = ((uint32_t)buffer_size * 1000u) / elapsed_us;
+    }
 
-    /* Flush result header before printing RX data */
+    /* Compare TX and RX buffers */
+    uint16_t match_count = 0;
+    for (uint16_t i = 0; i < buffer_size; i++) {
+        if (tx_buf[i] == rx_buf[i]) {
+            match_count++;
+        }
+    }
+
+    /* Print results */
+    printf("--- Results ---\n");
+    printf("  Cycles: %lu\n", cycles);
+    printf("  Time:   %lu us\n", elapsed_us);
+    printf("  Thpt:   %lu KB/s\n", throughput_kbps);
+
     printf_dma_flush();
 
-    printf("RX (MISO):");
-    for (uint16_t i = 0; i < buffer_size; i++) {
-        printf(" 0x%02X", rx_buf[i]);
-    }
+    printf("  TX:");
+    spi_perf_print_buf(tx_buf, buffer_size);
     printf("\n");
+
+    printf("  RX:");
+    spi_perf_print_buf(rx_buf, buffer_size);
+    printf("\n");
+
+    printf("  Match:  %u/%u", match_count, buffer_size);
+    if (match_count == buffer_size) {
+        printf(" (OK)\n");
+    } else {
+        printf(" (FAIL - %u errors)\n", buffer_size - match_count);
+    }
+    printf("---------------------------\n");
 
     /* Cleanup */
     spi_perf_deinit();

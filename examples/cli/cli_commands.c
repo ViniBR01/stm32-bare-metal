@@ -44,7 +44,7 @@ static const cli_command_t commands[] = {
     {"led_on",        "Turn on LED2",              cmd_led_on},
     {"led_off",       "Turn off LED2",             cmd_led_off},
     {"led_toggle",    "Toggle LED2 state",         cmd_led_toggle},
-    {"spi_perf_test", "SPI loopback perf test",    cmd_spi_perf_test},
+    {"spi_perf_test", "SPI2 master TX test",        cmd_spi_perf_test},
 };
 
 const cli_command_t* cli_commands_get_table(size_t* num_commands) {
