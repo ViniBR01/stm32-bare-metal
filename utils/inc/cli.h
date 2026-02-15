@@ -2,6 +2,7 @@
 #define CLI_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 /**
  * @brief Command definition structure
@@ -20,9 +21,20 @@ typedef struct {
 #define CLI_MAX_COMMANDS 32
 
 /**
+ * @brief Maximum command size for history entries
+ */
+#define CLI_MAX_CMD_SIZE 64
+
+/**
+ * @brief Number of history entries to remember
+ */
+#define CLI_HISTORY_SIZE 8
+
+/**
  * @brief CLI context structure
  * 
- * Maintains the state of the CLI including registered commands and input buffer.
+ * Maintains the state of the CLI including registered commands, input buffer,
+ * and command history for recall via up/down arrow keys.
  */
 typedef struct {
     cli_command_t command_list[CLI_MAX_COMMANDS]; /**< Internal array storing all commands (user + built-in) */
@@ -30,6 +42,15 @@ typedef struct {
     char* buffer;                                 /**< Input buffer for command text */
     size_t buffer_size;                           /**< Maximum size of the buffer */
     size_t buffer_pos;                            /**< Current position in buffer */
+    /* Command history (circular buffer) */
+    char   history[CLI_HISTORY_SIZE][CLI_MAX_CMD_SIZE]; /**< Ring buffer of past commands */
+    size_t history_count;                         /**< Number of entries stored (0..CLI_HISTORY_SIZE) */
+    size_t history_head;                          /**< Index of next write slot (circular) */
+    int    history_browse;                        /**< Current browse offset while navigating (-1 = not browsing) */
+    char   history_stash[CLI_MAX_CMD_SIZE];       /**< Stash of in-progress input when browsing history */
+    size_t history_stash_len;                     /**< Length of stashed input */
+    /* ANSI escape sequence state machine */
+    uint8_t esc_state;                            /**< 0=idle, 1=got ESC, 2=got ESC+[ */
 } cli_context_t;
 
 /**
@@ -47,10 +68,11 @@ void cli_init(cli_context_t* ctx, const cli_command_t* commands, size_t num_comm
 /**
  * @brief Process a single character of input
  * 
- * Handles character input including printable characters, backspace, TAB, and newline.
- * When a newline is received, the command is executed automatically.
+ * Handles character input including printable characters, backspace, TAB, newline,
+ * and ANSI escape sequences for arrow keys (Up/Down for command history).
  * TAB key triggers auto-completion: finds the longest common prefix among all
  * commands matching the current input and auto-completes to that point.
+ * Up/Down arrow keys navigate through command history.
  * 
  * @param ctx Pointer to the CLI context structure
  * @param c Character to process
@@ -83,6 +105,17 @@ void cli_print_welcome(const char* message);
  * @param ctx Pointer to the CLI context structure
  */
 void cli_execute_command(cli_context_t* ctx);
+
+/**
+ * @brief Save the current buffer contents to the command history
+ * 
+ * Should be called after Enter is pressed but before the buffer is reset.
+ * Saves non-empty commands to the history ring buffer, skipping consecutive
+ * duplicates.
+ * 
+ * @param ctx Pointer to the CLI context structure
+ */
+void cli_history_save(cli_context_t* ctx);
 
 #endif /* CLI_H */
 

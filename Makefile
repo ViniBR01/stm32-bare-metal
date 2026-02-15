@@ -10,7 +10,7 @@ include Makefile.common
 #==============================================================================
 # To build a specific example, run: make EXAMPLE=<example_name>
 # For example: make EXAMPLE=blink_simple
-EXAMPLE ?= blink_simple
+EXAMPLE ?= cli_simple
 
 # Default goal
 .DEFAULT_GOAL := $(EXAMPLE)

@@ -54,6 +54,50 @@ void cli_execute_command(cli_context_t* ctx) {
     }
 }
 
+void cli_history_save(cli_context_t* ctx) {
+    // Null-terminate the buffer
+    ctx->buffer[ctx->buffer_pos] = '\0';
+    
+    // Don't save empty commands
+    if (ctx->buffer_pos == 0) {
+        return;
+    }
+    
+    // Cap to history entry size
+    size_t len = ctx->buffer_pos;
+    if (len >= CLI_MAX_CMD_SIZE) {
+        len = CLI_MAX_CMD_SIZE - 1;
+    }
+    
+    // Skip consecutive duplicates: compare with most recent entry
+    if (ctx->history_count > 0) {
+        size_t last = (ctx->history_head + CLI_HISTORY_SIZE - 1) % CLI_HISTORY_SIZE;
+        if (strncmp(ctx->buffer, ctx->history[last], len) == 0 &&
+            ctx->history[last][len] == '\0') {
+            // Reset browse state and return without saving
+            ctx->history_browse = -1;
+            return;
+        }
+    }
+    
+    // Copy command into the ring buffer at the head position
+    for (size_t i = 0; i < len; i++) {
+        ctx->history[ctx->history_head][i] = ctx->buffer[i];
+    }
+    ctx->history[ctx->history_head][len] = '\0';
+    
+    // Advance head circularly
+    ctx->history_head = (ctx->history_head + 1) % CLI_HISTORY_SIZE;
+    
+    // Increment count up to the maximum
+    if (ctx->history_count < CLI_HISTORY_SIZE) {
+        ctx->history_count++;
+    }
+    
+    // Reset browse state
+    ctx->history_browse = -1;
+}
+
 /**
  * @brief Find the longest common prefix among commands matching the current buffer
  * 
@@ -133,6 +177,17 @@ void cli_init(cli_context_t* ctx, const cli_command_t* commands, size_t num_comm
         ctx->buffer[i] = '\0';
     }
     
+    // Initialize command history
+    ctx->history_count = 0;
+    ctx->history_head = 0;
+    ctx->history_browse = -1;
+    ctx->history_stash_len = 0;
+    ctx->esc_state = 0;
+    for (size_t i = 0; i < CLI_HISTORY_SIZE; i++) {
+        ctx->history[i][0] = '\0';
+    }
+    ctx->history_stash[0] = '\0';
+    
     // Check if we have room for user commands + built-in help command
     if (num_commands >= CLI_MAX_COMMANDS) {
         printf("[ERROR] Too many commands! Maximum is %d (including built-in help)\n", 
@@ -169,8 +224,147 @@ void cli_print_welcome(const char* message) {
     printf("Type 'help' to see the list of available commands\n");
 }
 
+/**
+ * @brief Clear the current line on the terminal and reprint the prompt
+ * 
+ * Sends \r, overwrites with spaces, then repositions cursor after prompt.
+ */
+static void cli_clear_line(size_t old_len, void (*echo_fn)(char)) {
+    if (!echo_fn) {
+        return;
+    }
+    // Move cursor to beginning of line
+    echo_fn('\r');
+    // Overwrite prompt + old content with spaces
+    echo_fn(' '); echo_fn(' '); // "> " prompt
+    for (size_t i = 0; i < old_len; i++) {
+        echo_fn(' ');
+    }
+    // Return to beginning and reprint prompt
+    echo_fn('\r');
+    echo_fn('>'); echo_fn(' ');
+}
+
+/**
+ * @brief Recall a history entry (or stash) and display it on the current line
+ * 
+ * Clears the current line, copies the source string into the buffer,
+ * updates buffer_pos, and echoes the new content.
+ */
+static void cli_history_show(cli_context_t* ctx, const char* src, void (*echo_fn)(char)) {
+    size_t old_len = ctx->buffer_pos;
+    
+    // Compute length of source string (capped to buffer_size - 1)
+    size_t len = 0;
+    while (src[len] != '\0' && len < ctx->buffer_size - 1) {
+        len++;
+    }
+    
+    // Clear the current line
+    cli_clear_line(old_len, echo_fn);
+    
+    // Copy source into buffer and echo
+    for (size_t i = 0; i < len; i++) {
+        ctx->buffer[i] = src[i];
+        if (echo_fn) {
+            echo_fn(src[i]);
+        }
+    }
+    ctx->buffer_pos = len;
+}
+
+/**
+ * @brief Handle Up arrow key press - recall older history entry
+ */
+static void cli_history_up(cli_context_t* ctx, void (*echo_fn)(char)) {
+    if (ctx->history_count == 0) {
+        return;
+    }
+    
+    // First Up press: stash current input
+    if (ctx->history_browse == -1) {
+        ctx->buffer[ctx->buffer_pos] = '\0';
+        size_t len = ctx->buffer_pos;
+        if (len >= CLI_MAX_CMD_SIZE) {
+            len = CLI_MAX_CMD_SIZE - 1;
+        }
+        for (size_t i = 0; i < len; i++) {
+            ctx->history_stash[i] = ctx->buffer[i];
+        }
+        ctx->history_stash[len] = '\0';
+        ctx->history_stash_len = len;
+        ctx->history_browse = 0;
+    } else {
+        // Already browsing - try to go further back
+        if ((size_t)(ctx->history_browse + 1) >= ctx->history_count) {
+            return; // Already at oldest entry
+        }
+        ctx->history_browse++;
+    }
+    
+    // Compute the index into the ring buffer
+    // history_head points to next write slot, so most recent is head-1
+    // browse offset 0 = most recent, 1 = one before, etc.
+    size_t idx = (ctx->history_head + CLI_HISTORY_SIZE - 1 - (size_t)ctx->history_browse) % CLI_HISTORY_SIZE;
+    
+    cli_history_show(ctx, ctx->history[idx], echo_fn);
+}
+
+/**
+ * @brief Handle Down arrow key press - recall newer history entry or restore stash
+ */
+static void cli_history_down(cli_context_t* ctx, void (*echo_fn)(char)) {
+    // Not browsing history - nothing to do
+    if (ctx->history_browse == -1) {
+        return;
+    }
+    
+    ctx->history_browse--;
+    
+    if (ctx->history_browse < 0) {
+        // Returned past newest entry - restore stashed input
+        ctx->history_browse = -1;
+        cli_history_show(ctx, ctx->history_stash, echo_fn);
+        return;
+    }
+    
+    // Show the newer history entry
+    size_t idx = (ctx->history_head + CLI_HISTORY_SIZE - 1 - (size_t)ctx->history_browse) % CLI_HISTORY_SIZE;
+    cli_history_show(ctx, ctx->history[idx], echo_fn);
+}
+
 void cli_process_char(cli_context_t* ctx, char c, void (*echo_fn)(char)) {
+    // Handle ANSI escape sequence state machine (for arrow keys)
+    if (ctx->esc_state == 1) {
+        // Expecting '[' after ESC
+        if (c == '[') {
+            ctx->esc_state = 2;
+        } else {
+            ctx->esc_state = 0; // Invalid sequence, discard
+        }
+        return;
+    }
+    if (ctx->esc_state == 2) {
+        // Expecting arrow key code after ESC [
+        ctx->esc_state = 0;
+        switch (c) {
+            case 'A': // Up arrow
+                cli_history_up(ctx, echo_fn);
+                return;
+            case 'B': // Down arrow
+                cli_history_down(ctx, echo_fn);
+                return;
+            default:
+                // Ignore other escape sequences (Left, Right, etc.)
+                return;
+        }
+    }
+    
     switch(c) {
+        case 0x1B: // ESC - start of escape sequence
+            ctx->esc_state = 1;
+            break;
+            
         case '\b':
         case 127: // Handle DEL as backspace
             if (ctx->buffer_pos > 0) {
