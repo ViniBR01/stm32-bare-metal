@@ -67,6 +67,12 @@ void _putchar(char character) {
     }
 }
 
+void printf_dma_flush(void) {
+    printf_dma_mark_pending();
+    printf_dma_process();
+    while (uart_is_tx_busy());
+}
+
 // Swap buffers and transmit via DMA (non-blocking)
 // Called from main loop when pending_tx is set and DMA is idle
 static void try_swap_and_transmit(void) {

@@ -34,5 +34,17 @@ void printf_dma_tx_complete_callback(void);
  */
 void printf_dma_mark_pending(void);
 
+/**
+ * @brief Flush all buffered printf data synchronously (blocking)
+ *
+ * Triggers a DMA transmission of any buffered printf data and busy-waits
+ * until the transfer completes. Use this when a function produces more
+ * output than a single printf buffer can hold without returning to the
+ * main loop.
+ *
+ * Must only be called from main-loop context (not from ISR).
+ */
+void printf_dma_flush(void);
+
 #endif /* PRINTF_DMA_H */
 
