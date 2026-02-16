@@ -130,7 +130,7 @@ help:
 	@echo "============================="
 	@echo ""
 	@echo "Usage:"
-	@echo "  make                    - Build default example (blink_simple)"
+	@echo "  make                    - Build default example (cli_simple)"
 	@echo "  make EXAMPLE=<name>     - Build specific example"
 	@echo "  make all                - Build all examples"
 	@echo "  make clean              - Clean all build artifacts"

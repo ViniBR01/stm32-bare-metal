@@ -1,20 +1,22 @@
 # stm32-bare-metal
 
-This repository contains toolchain setup and bare-metal programming examples for the STM32 NUCLEO-F411RE evaluation board. It demonstrates direct register-level programming without using vendor libraries, HAL or IDE, providing a minimal and educational approach to embedded development.
+Bare-metal firmware for the STM32 NUCLEO-F411RE evaluation board, built entirely with direct register-level programming -- no vendor libraries, HAL, or IDE. The default build target is an **interactive CLI application** (`cli_simple`) designed as a foundation for manufacturing test software. Additional standalone examples demonstrate individual peripheral features.
 
 ## Features
 
+- **Interactive CLI application** (default target):
+  - LED control (`led_on`, `led_off`, `led_toggle`)
+  - SPI throughput testing with configurable parameters
+  - Tab auto-completion and command history (Up/Down arrows)
+  - DMA-buffered printf for non-blocking serial output
+  - Extensible command framework for adding new hardware tests
 - **Direct register access:** No vendor libraries or HAL; all peripheral access is via memory-mapped registers.
-- **Multiple examples:**
-  - LED blinking (simple)
-  - Button polling and interrupt-based handling
-  - UART serial communication (simple output and echo)
-  - Sleep mode with button wake-up
+- **Peripheral drivers:** GPIO abstraction, SPI master (all 5 instances), UART with DMA TX and RX interrupts, SysTick, EXTI, shift register, and more.
+- **Standalone demo examples:** LED blinking, button polling/interrupt, UART serial, sleep mode, PWM, timer interrupts, shift register.
 - **Modular build system:** Organized Makefile structure with common definitions and per-module builds.
 - **Third-party libraries:** Integrated printf and logging capabilities.
-- **Utility functions:** String manipulation utilities for embedded use.
-- **Custom linker script:** Simple linker script for STM32F411RE.
-- **Startup code:** Custom startup file with vector table and reset handler.
+- **Utility libraries:** CLI engine, DMA-buffered printf, and string manipulation utilities.
+- **Custom linker script and startup code:** Linker script and vector table for STM32F411RE.
 - **OpenOCD integration:** Flash and debug support via OpenOCD.
 
 ## Prerequisites
@@ -45,7 +47,7 @@ This repository contains toolchain setup and bare-metal programming examples for
    ```sh
    make
    ```
-   This builds the default example (`blink_simple`).
+   This builds the default target (`cli_simple`), the interactive CLI application.
    
    To build a specific example:
    ```sh
@@ -57,13 +59,21 @@ This repository contains toolchain setup and bare-metal programming examples for
    make all
    ```
    
-   Available examples:
-   - `blink_simple` - LED blink example
-   - `button_simple` - Push button polling example
-   - `button_interrupt` - Push button with interrupt handling
+   Available targets:
+
+   **CLI application:**
+   - `cli_simple` - Interactive CLI with LED control and SPI testing (default)
+
+   **Basic demos:**
+   - `blink_simple` - LED blink with SysTick delay
+   - `blink_pwm` - LED breathing/fade using TIM2 PWM
+   - `button_simple` - Push button polling
+   - `button_interrupt` - Push button with EXTI interrupt handling
    - `button_sleep` - Sleep mode with EXTI wakeup
-   - `serial_simple` - UART serial output example  
-   - `serial_echo` - UART echo example
+   - `serial_simple` - UART serial output with structured logging
+   - `serial_echo` - UART echo
+   - `shift_register_simple` - SN74HC595 shift register via SPI
+   - `timer_interrupt` - TIM2 update interrupt at 1 Hz
 
 3. **Clean build files:**
    ```sh
@@ -128,13 +138,59 @@ This will:
 - Automatically connect to the target
 - Load the symbol table
 
+## CLI Application
+
+The default target (`cli_simple`) is an interactive command-line interface designed as the foundation for manufacturing test software. It runs over UART and provides hardware test commands that can be extended as needed.
+
+### Quick Start
+
+1. **Flash the CLI application:**
+   ```sh
+   make flash
+   ```
+
+2. **Connect to the serial console:**
+   ```sh
+   picocom -b 115200 /dev/tty*  # Use the device name created when the board is connected
+   ```
+
+3. **Type `help` to see available commands.**
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `led_on` | Turn on LED2 |
+| `led_off` | Turn off LED2 |
+| `led_toggle` | Toggle LED2 state |
+| `spi_perf_test [spi_num] [prescaler] [buffer_size]` | Run SPI master TX throughput test |
+| `help` | List all available commands |
+
+The `spi_perf_test` command accepts optional arguments:
+- `spi_num`: 1-5 (default: 2) -- selects which SPI peripheral
+- `prescaler`: 2, 4, 8, 16, 32, 64, 128, 256 (default: 4) -- baud rate divider
+- `buffer_size`: 1-256 (default: 3) -- number of bytes per transfer
+
+It performs a timed full-duplex SPI transfer using the DWT cycle counter and reports clock speed, elapsed cycles/microseconds, throughput in KB/s, and TX/RX buffer contents.
+
+### CLI Features
+
+- **Tab auto-completion:** Press Tab to complete partial command names.
+- **Command history:** Navigate previous commands with Up/Down arrow keys (8-entry ring buffer).
+- **DMA-buffered output:** Printf output is buffered and flushed via DMA for non-blocking serial writes.
+- **ISR-safe architecture:** Character input is processed in interrupt context; command execution is deferred to the main loop so handlers can safely use `printf()`.
+
 ## Serial Communication
 
-1. **Connect and flash your NUCLEO board with a serial example:**
+The CLI application (`cli_simple`) is the primary serial interface. See the [CLI Application](#cli-application) section above for setup and usage.
+
+For simpler serial demos, the basic examples are also available:
+
+1. **Flash a basic serial example:**
    ```sh
-   make flash EXAMPLE=serial_simple  # For output only
+   make flash EXAMPLE=serial_simple  # Structured logging output
    # or
-   make flash EXAMPLE=serial_echo    # For echo functionality
+   make flash EXAMPLE=serial_echo    # Echo functionality
    ```
 
 2. **Open a terminal on the host PC:**
@@ -174,10 +230,31 @@ The project includes the following third-party components:
   - Located in `3rd_party/log_c/`
 
 ### Internal Libraries
-- **String Utilities**
+- **CLI Engine** (`utils/src/cli.c`)
+  - Reusable command-line interface framework
+  - Command dispatch, tab auto-completion, command history
+  - ANSI escape sequence handling for arrow key navigation
+  - Located in `utils/`
+
+- **Printf DMA** (`utils/src/printf_dma.c`)
+  - Double-buffered, DMA-backed printf output
+  - Non-blocking serial writes with flush support
+  - Located in `utils/`
+
+- **String Utilities** (`utils/src/string_utils.c`)
   - Custom string manipulation functions optimized for embedded use
   - Includes safe string operations and formatting helpers
   - Located in `utils/`
+
+- **Peripheral Drivers** (`drivers/`)
+  - GPIO abstraction (port/pin configure, read/write/toggle, alternate function)
+  - SPI master driver for all 5 instances (polled, full-duplex)
+  - SPI performance benchmarking with DWT cycle counter
+  - UART with DMA TX, RX interrupt, and callback support
+  - SysTick millisecond delay, EXTI interrupt configuration
+  - LED2, user button, sleep mode, and shift register drivers
+  - Logging platform integration layer for log_c
+  - Located in `drivers/`
 
 All dependencies are included in the repository or fetched via git submodules during the initial setup.
 
