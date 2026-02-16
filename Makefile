@@ -10,7 +10,7 @@ include Makefile.common
 #==============================================================================
 # To build a specific example, run: make EXAMPLE=<example_name>
 # For example: make EXAMPLE=blink_simple
-EXAMPLE ?= blink_simple
+EXAMPLE ?= cli_simple
 
 # Default goal
 .DEFAULT_GOAL := $(EXAMPLE)
@@ -130,7 +130,7 @@ help:
 	@echo "============================="
 	@echo ""
 	@echo "Usage:"
-	@echo "  make                    - Build default example (blink_simple)"
+	@echo "  make                    - Build default example (cli_simple)"
 	@echo "  make EXAMPLE=<name>     - Build specific example"
 	@echo "  make all                - Build all examples"
 	@echo "  make clean              - Clean all build artifacts"

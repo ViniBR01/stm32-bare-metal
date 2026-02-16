@@ -35,6 +35,9 @@ static void on_char_received(char ch) {
 // Process pending command in main loop (non-ISR context)
 static void process_pending_command(void) {
     if (command_pending) {
+        // Save command to history before execution resets anything
+        cli_history_save(&g_cli);
+        
         // Execute the command
         cli_execute_command(&g_cli);
         

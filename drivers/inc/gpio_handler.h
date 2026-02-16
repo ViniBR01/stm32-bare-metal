@@ -75,4 +75,16 @@ void gpio_toggle_pin(gpio_port_t port, uint8_t pin_num);
  */
 uint8_t gpio_read_pin(gpio_port_t port, uint8_t pin_num);
 
+/**
+ * @brief Sets the alternate function for a GPIO pin.
+ *
+ * Configures the AFR (Alternate Function Register) for the given pin.
+ * The pin must already be configured in AF mode via gpio_configure_pin().
+ *
+ * @param port The GPIO port (GPIO_PORT_A, GPIO_PORT_B, etc.).
+ * @param pin_num The pin number (0-15).
+ * @param af The alternate function number (0-15).
+ */
+void gpio_set_af(gpio_port_t port, uint8_t pin_num, uint8_t af);
+
 #endif /* GPIO_HANDLER_H_ */
