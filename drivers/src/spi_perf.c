@@ -1,5 +1,5 @@
 #include "spi_perf.h"
-#include "gpio_handler.h"
+#include "spi.h"
 #include "printf.h"
 
 /* Only include hardware headers when compiling for target */
@@ -11,20 +11,6 @@
 /*===========================================================================
  * Pure logic functions (no hardware dependencies, testable on host)
  *===========================================================================*/
-
-int spi_prescaler_to_br(uint16_t prescaler) {
-    switch (prescaler) {
-        case 2:   return 0;
-        case 4:   return 1;
-        case 8:   return 2;
-        case 16:  return 3;
-        case 32:  return 4;
-        case 64:  return 5;
-        case 128: return 6;
-        case 256: return 7;
-        default:  return -1;
-    }
-}
 
 /**
  * @brief Simple string-to-unsigned-int parser
@@ -45,9 +31,10 @@ static const char* parse_uint(const char* s, uint32_t* out) {
 
 spi_perf_args_t spi_perf_parse_args(const char* args) {
     spi_perf_args_t result;
-    result.prescaler = SPI_PERF_DEFAULT_PRESCALER;
+    result.instance    = SPI_PERF_DEFAULT_INSTANCE;
+    result.prescaler   = SPI_PERF_DEFAULT_PRESCALER;
     result.buffer_size = SPI_PERF_DEFAULT_BUF_SIZE;
-    result.error = 0;
+    result.error       = 0;
 
     /* Skip leading whitespace */
     while (*args == ' ') args++;
@@ -55,9 +42,20 @@ spi_perf_args_t spi_perf_parse_args(const char* args) {
     /* Empty args -> use defaults */
     if (*args == '\0') return result;
 
-    /* Parse prescaler */
+    /* Parse SPI number (1-5) */
     uint32_t val = 0;
     const char* p = parse_uint(args, &val);
+    if (!p) { result.error = 1; return result; }
+    if (val < 1 || val > 5) { result.error = 1; return result; }
+    result.instance = (spi_instance_t)(val - 1);
+
+    /* Skip whitespace */
+    while (*p == ' ') p++;
+    if (*p == '\0') return result;
+
+    /* Parse prescaler */
+    val = 0;
+    p = parse_uint(p, &val);
     if (!p) { result.error = 1; return result; }
     result.prescaler = (uint16_t)val;
 
@@ -92,103 +90,81 @@ spi_perf_args_t spi_perf_parse_args(const char* args) {
  *===========================================================================*/
 #ifndef SPI_PERF_HOST_TEST
 
+/**
+ * @brief Default pin mappings for each SPI instance
+ *
+ * These are common Nucleo-F411RE pin assignments.  The perf test uses
+ * whichever entry matches the selected SPI instance.
+ */
+static const spi_config_t spi_perf_pin_defaults[SPI_INSTANCE_COUNT] = {
+    [SPI_INSTANCE_1] = {
+        .instance  = SPI_INSTANCE_1,
+        .sck_port  = GPIO_PORT_B, .sck_pin  = 3,
+        .miso_port = GPIO_PORT_B, .miso_pin = 4,
+        .mosi_port = GPIO_PORT_B, .mosi_pin = 5,
+        .af = 5,
+    },
+    [SPI_INSTANCE_2] = {
+        .instance  = SPI_INSTANCE_2,
+        .sck_port  = GPIO_PORT_B, .sck_pin  = 13,
+        .miso_port = GPIO_PORT_B, .miso_pin = 14,
+        .mosi_port = GPIO_PORT_B, .mosi_pin = 15,
+        .af = 5,
+    },
+    [SPI_INSTANCE_3] = {
+        .instance  = SPI_INSTANCE_3,
+        .sck_port  = GPIO_PORT_C, .sck_pin  = 10,
+        .miso_port = GPIO_PORT_C, .miso_pin = 11,
+        .mosi_port = GPIO_PORT_C, .mosi_pin = 12,
+        .af = 6,
+    },
+    [SPI_INSTANCE_4] = {
+        .instance  = SPI_INSTANCE_4,
+        .sck_port  = GPIO_PORT_B, .sck_pin  = 13,
+        .miso_port = GPIO_PORT_A, .miso_pin = 11,
+        .mosi_port = GPIO_PORT_A, .mosi_pin = 1,
+        .af = 5,
+    },
+    [SPI_INSTANCE_5] = {
+        .instance  = SPI_INSTANCE_5,
+        .sck_port  = GPIO_PORT_B, .sck_pin  = 0,
+        .miso_port = GPIO_PORT_A, .miso_pin = 12,
+        .mosi_port = GPIO_PORT_A, .mosi_pin = 10,
+        .af = 6,
+    },
+};
+
 /* Static buffers for SPI transfer */
 static uint8_t tx_buf[SPI_PERF_MAX_BUF_SIZE];
 static uint8_t rx_buf[SPI_PERF_MAX_BUF_SIZE];
-
-/**
- * @brief Initialize SPI2 GPIO pins on Port B
- *
- * PB13 = SCK, PB14 = MISO, PB15 = MOSI (AF5)
- */
-static void spi_perf_gpio_init(void) {
-    gpio_clock_enable(GPIO_PORT_B);
-
-    /* Configure PB13 (SCK), PB14 (MISO), PB15 (MOSI) as AF mode */
-    gpio_configure_pin(GPIO_PORT_B, 13, GPIO_MODE_AF);
-    gpio_configure_pin(GPIO_PORT_B, 14, GPIO_MODE_AF);
-    gpio_configure_pin(GPIO_PORT_B, 15, GPIO_MODE_AF);
-
-    /* Set AF5 for PB13, PB14, PB15 (SPI2) */
-    /* PB13 = AFR[1] bits [23:20], PB14 = bits [27:24], PB15 = bits [31:28] */
-    GPIOB->AFR[1] &= ~(0xFFFU << 20);
-    GPIOB->AFR[1] |=  (0x555U << 20);  /* AF5 for pins 13,14,15 */
-}
-
-/**
- * @brief Initialize SPI2 as Master
- */
-static void spi_perf_spi_init(uint16_t prescaler) {
-    int br = spi_prescaler_to_br(prescaler);
-
-    /* Enable SPI2 peripheral clock (APB1) */
-    RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
-
-    /* Configure SPI2 as Master */
-    /* Mode 0 (CPOL=0, CPHA=0), 8-bit, MSB first, SSM=1, SSI=1 */
-    SPI2->CR1 = 0;
-    SPI2->CR1 = SPI_CR1_MSTR          /* Master mode */
-              | SPI_CR1_SSM           /* Software slave management */
-              | SPI_CR1_SSI           /* Internal slave select high */
-              | ((uint32_t)br << SPI_CR1_BR_Pos);  /* Baud rate */
-}
-
-/**
- * @brief Deinitialize SPI2 peripheral
- */
-static void spi_perf_deinit(void) {
-    SPI2->CR1 &= ~SPI_CR1_SPE;
-    RCC->APB1ENR &= ~RCC_APB1ENR_SPI2EN;
-}
 
 /**
  * @brief Fill TX buffer with a known pattern and clear RX buffer
  */
 static void spi_perf_fill_patterns(uint16_t size) {
     for (uint16_t i = 0; i < size; i++) {
-        tx_buf[i] = (uint8_t)(i & 0xFF);
+        tx_buf[i] = (uint8_t)((i+1) & 0xFF);
         rx_buf[i] = 0;
     }
 }
 
 /**
- * @brief Transmit data via SPI2 and capture what comes back on MISO
+ * @brief Run a timed SPI transfer using the DWT cycle counter
  * @return Elapsed DWT cycles
  */
-static uint32_t spi_perf_transfer(uint16_t size) {
+static uint32_t spi_perf_timed_transfer(spi_handle_t *handle, uint16_t size) {
     /* Enable DWT cycle counter */
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CYCCNT = 0;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
-    /* Enable SPI2 */
-    SPI2->CR1 |= SPI_CR1_SPE;
+    spi_transfer(handle, tx_buf, rx_buf, size);
 
-    for (uint16_t i = 0; i < size; i++) {
-        /* Wait for TX buffer empty, then write */
-        while (!(SPI2->SR & SPI_SR_TXE));
-        SPI2->DR = tx_buf[i];
-
-        /* Wait for RX buffer not empty, then read */
-        while (!(SPI2->SR & SPI_SR_RXNE));
-        rx_buf[i] = (uint8_t)(SPI2->DR & 0xFF);
-    }
-
-    /* Wait until not busy */
-    while (SPI2->SR & SPI_SR_BSY);
-
-    uint32_t cycles = DWT->CYCCNT;
-
-    SPI2->CR1 &= ~SPI_CR1_SPE;
-
-    return cycles;
+    return DWT->CYCCNT;
 }
 
 /**
  * @brief Print a byte buffer, truncating with "..." if longer than 8 entries
- *
- * Prints all entries when size <= 8, otherwise prints the first 4 and last 4
- * with a " .. " separator to indicate omitted entries.
  */
 static void spi_perf_print_buf(const uint8_t *buf, uint16_t size) {
     if (size <= 8) {
@@ -206,11 +182,29 @@ static void spi_perf_print_buf(const uint8_t *buf, uint16_t size) {
     }
 }
 
-int spi_perf_run(uint16_t prescaler, uint16_t buffer_size) {
-    uint32_t spi_freq_hz = SPI_PERF_APB1_CLOCK_HZ / prescaler;
+/**
+ * @brief Return the peripheral bus clock for an SPI instance
+ */
+static uint32_t spi_perf_bus_clock(spi_instance_t inst) {
+    switch (inst) {
+        case SPI_INSTANCE_2:
+        case SPI_INSTANCE_3:
+            return SPI_PERF_APB1_CLOCK_HZ;
+        default:
+            return SPI_PERF_APB2_CLOCK_HZ;
+    }
+}
+
+int spi_perf_run(spi_instance_t instance, uint16_t prescaler, uint16_t buffer_size) {
+    int br = spi_prescaler_to_br(prescaler);
+    if (br < 0) return -1;
+    if (instance >= SPI_INSTANCE_COUNT) return -1;
+
+    uint32_t bus_clock = spi_perf_bus_clock(instance);
+    uint32_t spi_freq_hz  = bus_clock / prescaler;
     uint32_t spi_freq_khz = spi_freq_hz / 1000;
 
-    printf("--- SPI2 Master TX Test ---\n");
+    printf("--- SPI%u Master TX Test ---\n", (unsigned)(instance + 1));
     if (spi_freq_khz >= 1000) {
         printf("  Clock:  %lu MHz (prescaler %u)\n", spi_freq_khz / 1000, prescaler);
     } else {
@@ -222,18 +216,27 @@ int spi_perf_run(uint16_t prescaler, uint16_t buffer_size) {
     /* Flush header output before running transfer */
     printf_dma_flush();
 
-    /* Initialize hardware */
-    spi_perf_gpio_init();
-    spi_perf_spi_init(prescaler);
+    /* Build SPI configuration from defaults + runtime parameters */
+    spi_config_t cfg = spi_perf_pin_defaults[instance];
+    cfg.prescaler_br = (uint8_t)br;
+    cfg.cpol = 0;
+    cfg.cpha = 0;
+
+    /* Initialize SPI via generic driver */
+    spi_handle_t spi;
+    if (spi_init(&spi, &cfg) != 0) {
+        printf("  ERROR: spi_init failed\n");
+        return -1;
+    }
 
     /* Fill test patterns */
     spi_perf_fill_patterns(buffer_size);
 
-    /* Run transfer and measure */
-    uint32_t cycles = spi_perf_transfer(buffer_size);
+    /* Run timed transfer */
+    uint32_t cycles = spi_perf_timed_transfer(&spi, buffer_size);
 
     /* Compute timing */
-    uint32_t clock_mhz = SPI_PERF_APB1_CLOCK_HZ / 1000000;
+    uint32_t clock_mhz = bus_clock / 1000000;
     uint32_t elapsed_us = cycles / clock_mhz;
 
     /* Compute throughput: (bytes * 1000000) / elapsed_us = bytes/s */
@@ -275,7 +278,7 @@ int spi_perf_run(uint16_t prescaler, uint16_t buffer_size) {
     printf("---------------------------\n");
 
     /* Cleanup */
-    spi_perf_deinit();
+    spi_deinit(&spi);
 
     return 0;
 }
