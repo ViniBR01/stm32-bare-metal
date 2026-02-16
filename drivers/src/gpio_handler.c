@@ -94,3 +94,15 @@ uint8_t gpio_read_pin(gpio_port_t port, uint8_t pin_num)
 
     return (gpio_port->IDR & (1U << pin_num)) ? 1 : 0;
 }
+
+void gpio_set_af(gpio_port_t port, uint8_t pin_num, uint8_t af)
+{
+    if (pin_num > 15 || af > 15) return;
+    GPIO_TypeDef* gpio = get_gpio_port_ptr(port);
+    if (!gpio) return;
+
+    uint8_t reg = pin_num / 8;       /* AFR[0] for pins 0-7, AFR[1] for 8-15 */
+    uint8_t pos = (pin_num % 8) * 4; /* 4 bits per pin within the register */
+    gpio->AFR[reg] &= ~(0xFU << pos);
+    gpio->AFR[reg] |= ((uint32_t)af & 0xFU) << pos;
+}
