@@ -4,6 +4,7 @@
 
 /* Only include hardware headers when compiling for target */
 #ifndef SPI_PERF_HOST_TEST
+#include "rcc.h"
 #include "stm32f4xx.h"
 #include "printf_dma.h"
 #endif
@@ -208,9 +209,9 @@ static uint32_t spi_perf_bus_clock(spi_instance_t inst) {
     switch (inst) {
         case SPI_INSTANCE_2:
         case SPI_INSTANCE_3:
-            return SPI_PERF_APB1_CLOCK_HZ;
+            return rcc_get_apb1_clk();
         default:
-            return SPI_PERF_APB2_CLOCK_HZ;
+            return rcc_get_apb2_clk();
     }
 }
 
@@ -256,9 +257,9 @@ int spi_perf_run(spi_instance_t instance, uint16_t prescaler,
     /* Run timed transfer */
     uint32_t cycles = spi_perf_timed_transfer(&spi, buffer_size, use_dma);
 
-    /* Compute timing */
-    uint32_t clock_mhz = bus_clock / 1000000;
-    uint32_t elapsed_us = cycles / clock_mhz;
+    /* Compute timing — DWT ticks at the core clock (HCLK), not bus clock */
+    uint32_t core_mhz = rcc_get_sysclk() / 1000000;
+    uint32_t elapsed_us = cycles / core_mhz;
 
     /* Compute throughput: (bytes * 1000000) / elapsed_us = bytes/s */
     uint32_t throughput_kbps = 0;

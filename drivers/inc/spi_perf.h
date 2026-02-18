@@ -36,16 +36,6 @@ typedef struct {
 #define SPI_PERF_MAX_BUF_SIZE       256
 
 /**
- * @brief APB1 clock frequency (SPI2/SPI3 clock source)
- */
-#define SPI_PERF_APB1_CLOCK_HZ     16000000
-
-/**
- * @brief APB2 clock frequency (SPI1/SPI4/SPI5 clock source)
- */
-#define SPI_PERF_APB2_CLOCK_HZ     16000000
-
-/**
  * @brief Parse CLI arguments into SPI perf test config
  *
  * Parses optional spi_num, prescaler, and buffer_size from the argument string.

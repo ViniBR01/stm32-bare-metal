@@ -2,6 +2,7 @@
 #include <stddef.h>
 
 #include "gpio_handler.h"
+#include "rcc.h"
 #include "stm32f4xx.h"
 #include "uart.h"
 
@@ -30,8 +31,6 @@
 
 /* Configuration constants */
 #define UART_BAUDRATE          115200
-#define SYS_CLOCK_FREQ         16000000
-#define APB1_CLOCK_FREQ        SYS_CLOCK_FREQ
 
 /* Internal state variables */
 static volatile uint8_t tx_busy = 0;
@@ -63,7 +62,7 @@ void uart_init(void) {
     RCC->APB1ENR |= UART2EN;
     
     /* Configure baudrate */
-    uart_set_baudrate(APB1_CLOCK_FREQ, UART_BAUDRATE);
+    uart_set_baudrate(rcc_get_apb1_clk(), UART_BAUDRATE);
     
     /* Enable transmitter, receiver, and UART module */
     USART2->CR1 |= CR1_TE;
