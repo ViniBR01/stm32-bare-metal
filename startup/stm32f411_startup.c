@@ -10,6 +10,7 @@ extern uint32_t _ebss;
 
 /* Function prototypes */
 void Reset_Handler(void);
+void SystemInit(void);
 int main(void);
 
 /* Exception and Interrupt Handlers */
@@ -225,5 +226,6 @@ void Reset_Handler(void)
 	
 	    // Call the application's main function.
 
+	SystemInit();
 	main();
 }
