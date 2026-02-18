@@ -1,6 +1,6 @@
 #include "led2.h"
+#include "rcc.h"
 #include "stm32f4xx.h"
-// #include "tim2_uie.h"
 
 volatile uint32_t g_toggle_led;
 
@@ -9,13 +9,15 @@ volatile uint32_t g_toggle_led;
 #define CR1_CEN (1U<<0)
 #define DIER_UIE (1U<<0)
 
+#define TIM2_TICK_HZ   10000U
+#define TIM2_PERIOD_HZ     2U
+
 void tim2_1hz_init(void) {
-    // Enable TIM2 clock
     RCC->APB1ENR |= TIM2EN;
 
-    // Set prescaler and auto-reload for 1 Hz
-    TIM2->PSC = 1600 - 1;
-    TIM2->ARR = 5000 - 1;
+    uint32_t timer_clk = rcc_get_apb1_timer_clk();
+    TIM2->PSC = (timer_clk / TIM2_TICK_HZ) - 1;
+    TIM2->ARR = (TIM2_TICK_HZ / TIM2_PERIOD_HZ) - 1;
     TIM2->CNT = 0;
 
     // Enable update interrupt
