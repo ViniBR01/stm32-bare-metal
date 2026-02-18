@@ -11,6 +11,7 @@ typedef struct {
     spi_instance_t instance;   /**< SPI peripheral to test (default: SPI2) */
     uint16_t prescaler;        /**< Baud rate prescaler (2, 4, 8, ..., 256) */
     uint16_t buffer_size;      /**< Transfer buffer size in bytes (1-256) */
+    uint8_t  use_dma;          /**< Non-zero to use DMA transfer mode */
     int error;                 /**< 0 = ok, non-zero = parse/validation error */
 } spi_perf_args_t;
 
@@ -65,8 +66,10 @@ spi_perf_args_t spi_perf_parse_args(const char* args);
  * @param instance    SPI peripheral to test
  * @param prescaler   Baud rate prescaler (2, 4, 8, ..., 256)
  * @param buffer_size Number of bytes to transfer (1-256)
+ * @param use_dma     Non-zero to use DMA transfer mode
  * @return 0 on success, non-zero on error
  */
-int spi_perf_run(spi_instance_t instance, uint16_t prescaler, uint16_t buffer_size);
+int spi_perf_run(spi_instance_t instance, uint16_t prescaler,
+                 uint16_t buffer_size, uint8_t use_dma);
 
 #endif /* SPI_PERF_H */

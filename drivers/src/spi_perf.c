@@ -34,6 +34,7 @@ spi_perf_args_t spi_perf_parse_args(const char* args) {
     result.instance    = SPI_PERF_DEFAULT_INSTANCE;
     result.prescaler   = SPI_PERF_DEFAULT_PRESCALER;
     result.buffer_size = SPI_PERF_DEFAULT_BUF_SIZE;
+    result.use_dma     = 0;
     result.error       = 0;
 
     /* Skip leading whitespace */
@@ -68,6 +69,15 @@ spi_perf_args_t spi_perf_parse_args(const char* args) {
         p = parse_uint(p, &val);
         if (!p) { result.error = 1; return result; }
         result.buffer_size = (uint16_t)val;
+    }
+
+    /* Skip whitespace */
+    while (*p == ' ') p++;
+
+    /* Parse optional "dma" keyword */
+    if (p[0] == 'd' && p[1] == 'm' && p[2] == 'a' &&
+        (p[3] == '\0' || p[3] == ' ')) {
+        result.use_dma = 1;
     }
 
     /* Validate prescaler */
@@ -156,13 +166,18 @@ static void spi_perf_fill_patterns(uint16_t size) {
  * @brief Run a timed SPI transfer using the DWT cycle counter
  * @return Elapsed DWT cycles
  */
-static uint32_t spi_perf_timed_transfer(spi_handle_t *handle, uint16_t size) {
+static uint32_t spi_perf_timed_transfer(spi_handle_t *handle, uint16_t size,
+                                        uint8_t use_dma) {
     /* Enable DWT cycle counter */
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CYCCNT = 0;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
-    spi_transfer(handle, tx_buf, rx_buf, size);
+    if (use_dma) {
+        spi_transfer_dma_blocking(handle, tx_buf, rx_buf, size);
+    } else {
+        spi_transfer(handle, tx_buf, rx_buf, size);
+    }
 
     return DWT->CYCCNT;
 }
@@ -199,7 +214,8 @@ static uint32_t spi_perf_bus_clock(spi_instance_t inst) {
     }
 }
 
-int spi_perf_run(spi_instance_t instance, uint16_t prescaler, uint16_t buffer_size) {
+int spi_perf_run(spi_instance_t instance, uint16_t prescaler,
+                 uint16_t buffer_size, uint8_t use_dma) {
     int br = spi_prescaler_to_br(prescaler);
     if (br < 0) return -1;
     if (instance >= SPI_INSTANCE_COUNT) return -1;
@@ -208,7 +224,8 @@ int spi_perf_run(spi_instance_t instance, uint16_t prescaler, uint16_t buffer_si
     uint32_t spi_freq_hz  = bus_clock / prescaler;
     uint32_t spi_freq_khz = spi_freq_hz / 1000;
 
-    printf("--- SPI%u Master TX Test ---\n", (unsigned)(instance + 1));
+    printf("--- SPI%u Master TX Test (%s) ---\n",
+           (unsigned)(instance + 1), use_dma ? "DMA" : "polled");
     if (spi_freq_khz >= 1000) {
         printf("  Clock:  %lu MHz (prescaler %u)\n", spi_freq_khz / 1000, prescaler);
     } else {
@@ -237,7 +254,7 @@ int spi_perf_run(spi_instance_t instance, uint16_t prescaler, uint16_t buffer_si
     spi_perf_fill_patterns(buffer_size);
 
     /* Run timed transfer */
-    uint32_t cycles = spi_perf_timed_transfer(&spi, buffer_size);
+    uint32_t cycles = spi_perf_timed_transfer(&spi, buffer_size, use_dma);
 
     /* Compute timing */
     uint32_t clock_mhz = bus_clock / 1000000;
