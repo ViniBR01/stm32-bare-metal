@@ -30,7 +30,9 @@ typedef struct {
     uint8_t         miso_pin;       /**< GPIO pin number for MISO (0-15) */
     gpio_port_t     mosi_port;      /**< GPIO port for MOSI pin */
     uint8_t         mosi_pin;       /**< GPIO pin number for MOSI (0-15) */
-    uint8_t         af;             /**< GPIO alternate function number (e.g. 5) */
+    uint8_t         sck_af;         /**< GPIO AF number for SCK pin */
+    uint8_t         miso_af;        /**< GPIO AF number for MISO pin */
+    uint8_t         mosi_af;        /**< GPIO AF number for MOSI pin */
     uint8_t         prescaler_br;   /**< Baud rate BR[2:0] value (0-7) */
     uint8_t         cpol;           /**< Clock polarity (0 or 1) */
     uint8_t         cpha;           /**< Clock phase (0 or 1) */

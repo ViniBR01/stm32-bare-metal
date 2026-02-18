@@ -63,10 +63,10 @@ static void spi_gpio_init(const spi_config_t *cfg) {
     gpio_configure_pin(cfg->miso_port, cfg->miso_pin, GPIO_MODE_AF);
     gpio_configure_pin(cfg->mosi_port, cfg->mosi_pin, GPIO_MODE_AF);
 
-    /* Assign the alternate function number */
-    gpio_set_af(cfg->sck_port,  cfg->sck_pin,  cfg->af);
-    gpio_set_af(cfg->miso_port, cfg->miso_pin, cfg->af);
-    gpio_set_af(cfg->mosi_port, cfg->mosi_pin, cfg->af);
+    /* Assign per-pin alternate function numbers */
+    gpio_set_af(cfg->sck_port,  cfg->sck_pin,  cfg->sck_af);
+    gpio_set_af(cfg->miso_port, cfg->miso_pin, cfg->miso_af);
+    gpio_set_af(cfg->mosi_port, cfg->mosi_pin, cfg->mosi_af);
 }
 
 int spi_init(spi_handle_t *handle, const spi_config_t *config) {
@@ -103,6 +103,11 @@ void spi_deinit(spi_handle_t *handle) {
 
     SPI_TypeDef *spi = (SPI_TypeDef *)handle->regs;
     spi->CR1 &= ~SPI_CR1_SPE;
+
+    /* Reset GPIO pins to input mode (default state after reset) */
+    gpio_configure_pin(handle->config.sck_port,  handle->config.sck_pin,  GPIO_MODE_INPUT);
+    gpio_configure_pin(handle->config.miso_port, handle->config.miso_pin, GPIO_MODE_INPUT);
+    gpio_configure_pin(handle->config.mosi_port, handle->config.mosi_pin, GPIO_MODE_INPUT);
 
     const spi_hw_info_t *hw = &spi_hw_table[handle->config.instance];
     *hw->rcc_enr &= ~hw->rcc_en_bit;
