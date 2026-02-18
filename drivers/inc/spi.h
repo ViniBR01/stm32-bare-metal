@@ -47,6 +47,7 @@ typedef struct {
 typedef struct {
     void           *regs;           /**< Pointer to SPI register block (SPI_TypeDef*) */
     spi_config_t    config;         /**< Stored configuration */
+    volatile uint8_t dma_busy;      /**< Non-zero while a DMA transfer is in progress */
 } spi_handle_t;
 
 /**
@@ -101,6 +102,38 @@ void spi_disable(spi_handle_t *handle);
  * @return 0 on success, -1 on error
  */
 int spi_transfer(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint16_t len);
+
+/**
+ * @brief Start a full-duplex SPI transfer using DMA (non-blocking)
+ *
+ * Configures two DMA streams (TX and RX), enables SPE, and returns
+ * immediately.  The transfer completes in the background; poll
+ * handle->dma_busy (cleared by the DMA RX-complete ISR) to know when
+ * it finishes.
+ *
+ * - If @p tx is NULL, 0xFF is sent for each byte.
+ * - If @p rx is NULL, received data is discarded.
+ *
+ * @param handle  Initialized SPI handle
+ * @param tx      Transmit buffer (may be NULL)
+ * @param rx      Receive buffer (may be NULL)
+ * @param len     Number of bytes to transfer (1-65535)
+ * @return 0 on success, -1 on error
+ */
+int spi_transfer_dma(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint16_t len);
+
+/**
+ * @brief Perform a full-duplex SPI transfer using DMA (blocking)
+ *
+ * Same as spi_transfer_dma() but spins until the transfer completes.
+ *
+ * @param handle  Initialized SPI handle
+ * @param tx      Transmit buffer (may be NULL)
+ * @param rx      Receive buffer (may be NULL)
+ * @param len     Number of bytes to transfer (1-65535)
+ * @return 0 on success, -1 on error
+ */
+int spi_transfer_dma_blocking(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint16_t len);
 
 /**
  * @brief Convert a human-readable prescaler value to the BR[2:0] bit field
