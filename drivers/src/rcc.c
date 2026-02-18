@@ -201,6 +201,9 @@ int rcc_init(rcc_clk_src_t source, uint32_t target_sysclk_hz) {
  * Configures system clock to 100 MHz from HSI via PLL.
  */
 void SystemInit(void) {
+    /* Pre-cache HSI defaults so drivers have valid clock values
+     * even if rcc_init fails (e.g. unsupported target frequency). */
+    cache_default_clocks(HSI_FREQ_HZ);
     rcc_init(RCC_CLK_SRC_HSI, 100000000U);
 }
 
