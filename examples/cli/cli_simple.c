@@ -45,7 +45,7 @@ static void process_pending_command(void) {
         g_cli.buffer_pos = 0;
         
         // Print prompt
-        printf("> ");
+        printf("\n> ");
         printf_dma_mark_pending();
         
         // Clear the pending flag

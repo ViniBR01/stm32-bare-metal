@@ -380,40 +380,46 @@ void cli_process_char(cli_context_t* ctx, char c, void (*echo_fn)(char)) {
             
         case '\t': // TAB key - auto-complete
             {
-                // Find the longest common prefix among matching commands
                 size_t common_prefix_len = cli_find_common_prefix(ctx);
                 
-                // Only auto-complete if we have a valid extension and room in buffer
                 if (common_prefix_len > ctx->buffer_pos && 
                     common_prefix_len < ctx->buffer_size) {
                     
-                    // Find first matching command to copy the prefix from
                     for (size_t i = 0; i < ctx->num_commands; i++) {
                         if (strncmp(ctx->buffer, ctx->command_list[i].name, ctx->buffer_pos) == 0) {
-                            // Copy new characters to buffer and echo them
                             for (size_t j = ctx->buffer_pos; j < common_prefix_len; j++) {
                                 ctx->buffer[j] = ctx->command_list[i].name[j];
                                 if (echo_fn) {
                                     echo_fn(ctx->buffer[j]);
                                 }
                             }
-                            // Update buffer position
                             ctx->buffer_pos = common_prefix_len;
                             break;
+                        }
+                    }
+
+                    /* If the completed prefix is a single exact command name, append a space */
+                    size_t exact_matches = 0;
+                    ctx->buffer[ctx->buffer_pos] = '\0';
+                    for (size_t i = 0; i < ctx->num_commands; i++) {
+                        size_t cmd_len = strlen(ctx->command_list[i].name);
+                        if (cmd_len == ctx->buffer_pos &&
+                            strncmp(ctx->buffer, ctx->command_list[i].name, cmd_len) == 0) {
+                            exact_matches++;
+                        }
+                    }
+                    if (exact_matches == 1 && ctx->buffer_pos < ctx->buffer_size - 1) {
+                        ctx->buffer[ctx->buffer_pos++] = ' ';
+                        if (echo_fn) {
+                            echo_fn(' ');
                         }
                     }
                 }
             }
             break;
             
-        case '\r': // Handle carriage return as newline
+        case '\r':
         case '\n':
-            if (echo_fn) {
-                echo_fn('\n');
-            }
-            // Note: Command execution is not triggered here anymore.
-            // The caller should check if Enter was pressed and call
-            // cli_execute_command() from main loop context.
             break;
             
         default:
