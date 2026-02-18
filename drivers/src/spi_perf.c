@@ -93,44 +93,48 @@ spi_perf_args_t spi_perf_parse_args(const char* args) {
 /**
  * @brief Default pin mappings for each SPI instance
  *
- * These are common Nucleo-F411RE pin assignments.  The perf test uses
- * whichever entry matches the selected SPI instance.
+ * These are common Nucleo-F411RE (LQFP64) pin assignments.  The perf test
+ * uses whichever entry matches the selected SPI instance.
+ *
+ * NOTE: SPI4 and SPI5 MISO pins (PA11, PA12) are shared with USB OTG FS
+ * (D-, D+) on the Nucleo board.  Loopback tests on these instances may
+ * fail if USB is active or board-level components interfere with the signals.
  */
 static const spi_config_t spi_perf_pin_defaults[SPI_INSTANCE_COUNT] = {
     [SPI_INSTANCE_1] = {
         .instance  = SPI_INSTANCE_1,
-        .sck_port  = GPIO_PORT_B, .sck_pin  = 3,
-        .miso_port = GPIO_PORT_B, .miso_pin = 4,
-        .mosi_port = GPIO_PORT_B, .mosi_pin = 5,
-        .af = 5,
+        .sck_port  = GPIO_PORT_B, .sck_pin  = 3,   /* PB3  AF5 = SPI1_SCK  */
+        .miso_port = GPIO_PORT_B, .miso_pin = 4,   /* PB4  AF5 = SPI1_MISO */
+        .mosi_port = GPIO_PORT_B, .mosi_pin = 5,   /* PB5  AF5 = SPI1_MOSI */
+        .sck_af = 5, .miso_af = 5, .mosi_af = 5,
     },
     [SPI_INSTANCE_2] = {
         .instance  = SPI_INSTANCE_2,
-        .sck_port  = GPIO_PORT_B, .sck_pin  = 13,
-        .miso_port = GPIO_PORT_B, .miso_pin = 14,
-        .mosi_port = GPIO_PORT_B, .mosi_pin = 15,
-        .af = 5,
+        .sck_port  = GPIO_PORT_B, .sck_pin  = 13,  /* PB13 AF5 = SPI2_SCK  */
+        .miso_port = GPIO_PORT_B, .miso_pin = 14,  /* PB14 AF5 = SPI2_MISO */
+        .mosi_port = GPIO_PORT_B, .mosi_pin = 15,  /* PB15 AF5 = SPI2_MOSI */
+        .sck_af = 5, .miso_af = 5, .mosi_af = 5,
     },
     [SPI_INSTANCE_3] = {
         .instance  = SPI_INSTANCE_3,
-        .sck_port  = GPIO_PORT_C, .sck_pin  = 10,
-        .miso_port = GPIO_PORT_C, .miso_pin = 11,
-        .mosi_port = GPIO_PORT_C, .mosi_pin = 12,
-        .af = 6,
+        .sck_port  = GPIO_PORT_C, .sck_pin  = 10,  /* PC10 AF6 = SPI3_SCK  */
+        .miso_port = GPIO_PORT_C, .miso_pin = 11,  /* PC11 AF6 = SPI3_MISO */
+        .mosi_port = GPIO_PORT_C, .mosi_pin = 12,  /* PC12 AF6 = SPI3_MOSI */
+        .sck_af = 6, .miso_af = 6, .mosi_af = 6,
     },
     [SPI_INSTANCE_4] = {
         .instance  = SPI_INSTANCE_4,
-        .sck_port  = GPIO_PORT_B, .sck_pin  = 13,
-        .miso_port = GPIO_PORT_A, .miso_pin = 11,
-        .mosi_port = GPIO_PORT_A, .mosi_pin = 1,
-        .af = 5,
+        .sck_port  = GPIO_PORT_B, .sck_pin  = 13,  /* PB13 AF6 = SPI4_SCK  */
+        .miso_port = GPIO_PORT_A, .miso_pin = 11,  /* PA11 AF6 = SPI4_MISO (shared with USB D-) */
+        .mosi_port = GPIO_PORT_A, .mosi_pin = 1,   /* PA1  AF5 = SPI4_MOSI */
+        .sck_af = 6, .miso_af = 6, .mosi_af = 5,
     },
     [SPI_INSTANCE_5] = {
         .instance  = SPI_INSTANCE_5,
-        .sck_port  = GPIO_PORT_B, .sck_pin  = 0,
-        .miso_port = GPIO_PORT_A, .miso_pin = 12,
-        .mosi_port = GPIO_PORT_A, .mosi_pin = 10,
-        .af = 6,
+        .sck_port  = GPIO_PORT_B, .sck_pin  = 0,   /* PB0  AF6 = SPI5_SCK  */
+        .miso_port = GPIO_PORT_A, .miso_pin = 12,  /* PA12 AF6 = SPI5_MISO (shared with USB D+) */
+        .mosi_port = GPIO_PORT_A, .mosi_pin = 10,  /* PA10 AF6 = SPI5_MOSI */
+        .sck_af = 6, .miso_af = 6, .mosi_af = 6,
     },
 };
 
