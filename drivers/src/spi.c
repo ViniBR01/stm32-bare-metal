@@ -58,10 +58,13 @@ static void spi_gpio_init(const spi_config_t *cfg) {
     gpio_clock_enable(cfg->miso_port);
     gpio_clock_enable(cfg->mosi_port);
 
-    /* Set pins to alternate function mode */
-    gpio_configure_pin(cfg->sck_port,  cfg->sck_pin,  GPIO_MODE_AF);
-    gpio_configure_pin(cfg->miso_port, cfg->miso_pin, GPIO_MODE_AF);
-    gpio_configure_pin(cfg->mosi_port, cfg->mosi_pin, GPIO_MODE_AF);
+    /* Configure pins: AF mode, high-speed slew rate for fast SPI clocks */
+    gpio_configure_full(cfg->sck_port,  cfg->sck_pin,  GPIO_MODE_AF,
+                        GPIO_OUTPUT_PUSH_PULL, GPIO_SPEED_HIGH, GPIO_PULL_NONE);
+    gpio_configure_full(cfg->miso_port, cfg->miso_pin, GPIO_MODE_AF,
+                        GPIO_OUTPUT_PUSH_PULL, GPIO_SPEED_HIGH, GPIO_PULL_NONE);
+    gpio_configure_full(cfg->mosi_port, cfg->mosi_pin, GPIO_MODE_AF,
+                        GPIO_OUTPUT_PUSH_PULL, GPIO_SPEED_HIGH, GPIO_PULL_NONE);
 
     /* Assign per-pin alternate function numbers */
     gpio_set_af(cfg->sck_port,  cfg->sck_pin,  cfg->sck_af);

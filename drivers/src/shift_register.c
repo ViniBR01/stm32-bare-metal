@@ -3,12 +3,10 @@
 #include "stm32f4xx.h"
 
 /* Pin definitions */
-#define LATCH_PORT_ENUM GPIO_PORT_A
-#define LATCH_PORT      GPIOA
+#define LATCH_PORT      GPIO_PORT_A
 #define LATCH_PIN       8U
 
-#define SPI_PORT_ENUM   GPIO_PORT_B
-#define SPI_PORT        GPIOB
+#define SPI_PORT        GPIO_PORT_B
 #define SCK_PIN         3U   /* PB3 - SPI1_SCK */
 #define MOSI_PIN        5U   /* PB5 - SPI1_MOSI */
 
@@ -21,44 +19,28 @@
 void shift_register_init(void)
 {
     /* Enable GPIO clocks using gpio_handler */
-    gpio_clock_enable(LATCH_PORT_ENUM);
-    gpio_clock_enable(SPI_PORT_ENUM);
+    gpio_clock_enable(LATCH_PORT);
+    gpio_clock_enable(SPI_PORT);
     
     /* Enable SPI1 peripheral clock */
     RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
 
-    /* Configure latch pin (PA8) as output using gpio_handler */
-    gpio_configure_pin(LATCH_PORT_ENUM, LATCH_PIN, GPIO_MODE_OUTPUT);
-    
-    /* Configure additional GPIO settings for latch pin (not covered by gpio_handler) */
-    LATCH_PORT->OTYPER &= ~(0x1U << LATCH_PIN);           /* Push-pull */
-    LATCH_PORT->OSPEEDR |= (0x3U << (LATCH_PIN * 2));     /* High speed */
-    LATCH_PORT->PUPDR &= ~(0x3U << (LATCH_PIN * 2));      /* No pull-up/pull-down */
-    
-    /* Set latch LOW initially using gpio_handler */
-    gpio_clear_pin(LATCH_PORT_ENUM, LATCH_PIN);
+    /* Configure latch pin (PA8) as push-pull output, high speed, no pull */
+    gpio_configure_full(LATCH_PORT, LATCH_PIN, GPIO_MODE_OUTPUT,
+                        GPIO_OUTPUT_PUSH_PULL, GPIO_SPEED_HIGH, GPIO_PULL_NONE);
 
-    /* Configure SPI pins (PB3 = SCK, PB5 = MOSI) as alternate function using gpio_handler */
-    gpio_configure_pin(SPI_PORT_ENUM, SCK_PIN, GPIO_MODE_AF);
-    gpio_configure_pin(SPI_PORT_ENUM, MOSI_PIN, GPIO_MODE_AF);
-    
-    /* Configure additional GPIO settings for SCK pin (not covered by gpio_handler) */
-    SPI_PORT->OTYPER &= ~(0x1U << SCK_PIN);               /* Push-pull */
-    SPI_PORT->OSPEEDR |= (0x3U << (SCK_PIN * 2));         /* High speed */
-    SPI_PORT->PUPDR &= ~(0x3U << (SCK_PIN * 2));          /* No pull-up/pull-down */
-    
-    /* Set alternate function to AF5 (SPI1) for PB3 */
-    SPI_PORT->AFR[0] &= ~(0xFU << (SCK_PIN * 4));         /* Clear AF bits */
-    SPI_PORT->AFR[0] |= (GPIO_AF5_SPI1 << (SCK_PIN * 4)); /* Set AF5 */
+    /* Set latch LOW initially */
+    gpio_clear_pin(LATCH_PORT, LATCH_PIN);
 
-    /* Configure additional GPIO settings for MOSI pin (not covered by gpio_handler) */
-    SPI_PORT->OTYPER &= ~(0x1U << MOSI_PIN);              /* Push-pull */
-    SPI_PORT->OSPEEDR |= (0x3U << (MOSI_PIN * 2));        /* High speed */
-    SPI_PORT->PUPDR &= ~(0x3U << (MOSI_PIN * 2));         /* No pull-up/pull-down */
-    
-    /* Set alternate function to AF5 (SPI1) for PB5 */
-    SPI_PORT->AFR[0] &= ~(0xFU << (MOSI_PIN * 4));        /* Clear AF bits */
-    SPI_PORT->AFR[0] |= (GPIO_AF5_SPI1 << (MOSI_PIN * 4));/* Set AF5 */
+    /* Configure SCK (PB3) as AF push-pull, high speed, no pull */
+    gpio_configure_full(SPI_PORT, SCK_PIN, GPIO_MODE_AF,
+                        GPIO_OUTPUT_PUSH_PULL, GPIO_SPEED_HIGH, GPIO_PULL_NONE);
+    gpio_set_af(SPI_PORT, SCK_PIN, GPIO_AF5_SPI1);
+
+    /* Configure MOSI (PB5) as AF push-pull, high speed, no pull */
+    gpio_configure_full(SPI_PORT, MOSI_PIN, GPIO_MODE_AF,
+                        GPIO_OUTPUT_PUSH_PULL, GPIO_SPEED_HIGH, GPIO_PULL_NONE);
+    gpio_set_af(SPI_PORT, MOSI_PIN, GPIO_AF5_SPI1);
 
     /* Configure SPI1 */
     /* SPI must be disabled before configuration */
@@ -92,7 +74,7 @@ void shift_register_init(void)
 void shift_register_write(uint8_t data)
 {
     /* Set latch LOW to prepare for data shift using gpio_handler */
-    gpio_clear_pin(LATCH_PORT_ENUM, LATCH_PIN);
+    gpio_clear_pin(LATCH_PORT, LATCH_PIN);
 
     /* Wait for transmit buffer to be empty */
     while (!(SPI1->SR & SPI_SR_TXE))
@@ -116,5 +98,5 @@ void shift_register_write(uint8_t data)
     }
 
     /* Set latch HIGH to transfer shift register data to output register using gpio_handler */
-    gpio_set_pin(LATCH_PORT_ENUM, LATCH_PIN);
+    gpio_set_pin(LATCH_PORT, LATCH_PIN);
 }

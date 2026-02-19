@@ -106,3 +106,43 @@ void gpio_set_af(gpio_port_t port, uint8_t pin_num, uint8_t af)
     gpio->AFR[reg] &= ~(0xFU << pos);
     gpio->AFR[reg] |= ((uint32_t)af & 0xFU) << pos;
 }
+
+void gpio_set_output_type(gpio_port_t port, uint8_t pin_num, gpio_output_type_t type)
+{
+    if (pin_num > 15) return;
+    GPIO_TypeDef* gpio = get_gpio_port_ptr(port);
+    if (!gpio) return;
+
+    gpio->OTYPER &= ~(1U << pin_num);
+    gpio->OTYPER |= ((uint32_t)type & 0x1U) << pin_num;
+}
+
+void gpio_set_speed(gpio_port_t port, uint8_t pin_num, gpio_speed_t speed)
+{
+    if (pin_num > 15) return;
+    GPIO_TypeDef* gpio = get_gpio_port_ptr(port);
+    if (!gpio) return;
+
+    gpio->OSPEEDR &= ~(3U << (pin_num * 2));
+    gpio->OSPEEDR |= ((uint32_t)speed & 0x3U) << (pin_num * 2);
+}
+
+void gpio_set_pull(gpio_port_t port, uint8_t pin_num, gpio_pull_t pull)
+{
+    if (pin_num > 15) return;
+    GPIO_TypeDef* gpio = get_gpio_port_ptr(port);
+    if (!gpio) return;
+
+    gpio->PUPDR &= ~(3U << (pin_num * 2));
+    gpio->PUPDR |= ((uint32_t)pull & 0x3U) << (pin_num * 2);
+}
+
+void gpio_configure_full(gpio_port_t port, uint8_t pin_num, gpio_mode_t mode,
+                         gpio_output_type_t output_type, gpio_speed_t speed,
+                         gpio_pull_t pull)
+{
+    gpio_configure_pin(port, pin_num, mode);
+    gpio_set_output_type(port, pin_num, output_type);
+    gpio_set_speed(port, pin_num, speed);
+    gpio_set_pull(port, pin_num, pull);
+}
