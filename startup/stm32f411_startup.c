@@ -200,6 +200,20 @@ void Default_Handler(void)
 /* Reset Handler */
 void Reset_Handler(void)
 {
+#ifdef ENABLE_HW_FPU
+	/* Enable FPU: set CP10 and CP11 to full access (bits 20-23 in CPACR).
+	 * This must happen before any C code that may use floating-point,
+	 * including library init routines and main().
+	 * SCB->CPACR is at address 0xE000ED88. */
+	volatile uint32_t *cpacr = (volatile uint32_t *)0xE000ED88U;
+	*cpacr |= ((3U << 20) | (3U << 22));  /* CP10 full access | CP11 full access */
+
+	/* Data Synchronization Barrier + Instruction Synchronization Barrier
+	 * to ensure the FPU setting is effective before any FP instruction. */
+	__asm volatile ("dsb");
+	__asm volatile ("isb");
+#endif
+
 	// Calculate the sizes of the .data and .bss sections
 	uint32_t data_mem_size =  ((uint32_t)&_edata - (uint32_t)&_sdata + 3)/4; // Round up to the nearest word
 	uint32_t bss_mem_size  =   ((uint32_t)&_ebss - (uint32_t)&_sbss + 3)/4;
