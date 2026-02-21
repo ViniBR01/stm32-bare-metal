@@ -187,27 +187,36 @@ void fault_handler_print(uint32_t *stack_frame)
 /* ------------------------------------------------------------------ */
 
 /**
- * @brief HardFault_Handler -- overrides the weak alias in the startup file.
+ * @brief Common naked trampoline body.
  *
- * This is a naked function: the compiler emits no prologue / epilogue so
- * the hardware-stacked frame is still at the top of the active stack when
- * we read it.
+ * Every fault handler needs the same sequence: test EXC_RETURN bit 2 to
+ * pick MSP vs PSP, then branch to the C print function.  We wrap it in
+ * a macro so all four handlers share the identical instruction stream.
  *
  * EXC_RETURN bit 2:
  *   0 -> MSP was used (handler / main stack)
  *   1 -> PSP was used (thread / process stack)
  */
+#define FAULT_TRAMPOLINE()                           \
+    __asm volatile(                                  \
+        "tst   lr, #4          \n"                   \
+        "ite   eq              \n"                   \
+        "mrseq r0, msp         \n"                   \
+        "mrsne r0, psp         \n"                   \
+        "b     fault_handler_print \n"               \
+    )
+
 __attribute__((naked))
-void HardFault_Handler(void)
-{
-    __asm volatile(
-        "tst   lr, #4          \n"   /* test bit 2 of EXC_RETURN        */
-        "ite   eq              \n"
-        "mrseq r0, msp         \n"   /* bit 2 == 0 -> stack frame on MSP */
-        "mrsne r0, psp         \n"   /* bit 2 == 1 -> stack frame on PSP */
-        "b     fault_handler_print \n"
-    );
-}
+void HardFault_Handler(void)  { FAULT_TRAMPOLINE(); }
+
+__attribute__((naked))
+void MemManage_Handler(void)  { FAULT_TRAMPOLINE(); }
+
+__attribute__((naked))
+void BusFault_Handler(void)   { FAULT_TRAMPOLINE(); }
+
+__attribute__((naked))
+void UsageFault_Handler(void) { FAULT_TRAMPOLINE(); }
 
 /* ------------------------------------------------------------------ */
 /*  Optional initialisation helper                                     */

@@ -88,8 +88,8 @@ static int cmd_spi_perf_test(const char* args) {
  * @brief Deliberately trigger a HardFault to test the fault handler.
  *
  * Supports several fault types via an optional argument:
- *   fault_test          - null-pointer dereference (default)
- *   fault_test nullptr  - null-pointer dereference
+ *   fault_test          - bad-address read (default)
+ *   fault_test nullptr  - bad-address read
  *   fault_test divzero  - integer divide by zero (requires fault_handler_init)
  *   fault_test illegal  - undefined instruction (permanently undefined encoding)
  *
@@ -99,12 +99,12 @@ static int cmd_spi_perf_test(const char* args) {
  */
 static int cmd_fault_test(const char* args) {
     if (args == NULL || args[0] == '\0' || args[0] == 'n') {
-        /* Null-pointer dereference (read from address 0) */
-        printf("Triggering null-pointer dereference...\n");
-        volatile uint32_t *bad_ptr = (volatile uint32_t *)0x00000000U;
-        /* Writing to address 0 on STM32F4 hits the aliased flash region
-         * which is read-only, causing a BusFault / HardFault. */
-        *bad_ptr = 0xDEADBEEFU;
+        /* Read from an unmapped address region (0xBFFFFFFC is between SRAM
+         * and peripheral space -- no device exists there on STM32F411).
+         * This reliably triggers a BusFault / HardFault. */
+        printf("Triggering bad-address read...\n");
+        volatile uint32_t val = *(volatile uint32_t *)0xBFFFFFFFU;
+        (void)val;
     } else if (args[0] == 'd') {
         /* Integer divide by zero -- requires SCB->CCR DIV_0_TRP enabled
          * (call fault_handler_init() at startup). */
