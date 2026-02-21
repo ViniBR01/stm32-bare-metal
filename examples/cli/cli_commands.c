@@ -1,4 +1,5 @@
 #include "cli_commands.h"
+#include "fault_handler.h"
 #include "led2.h"
 #include "printf.h"
 #include "spi_perf.h"
@@ -83,12 +84,56 @@ static int cmd_spi_perf_test(const char* args) {
     return spi_perf_run(cfg.instance, cfg.prescaler, cfg.buffer_size, cfg.use_dma);
 }
 
+/**
+ * @brief Deliberately trigger a HardFault to test the fault handler.
+ *
+ * Supports several fault types via an optional argument:
+ *   fault_test          - null-pointer dereference (default)
+ *   fault_test nullptr  - null-pointer dereference
+ *   fault_test divzero  - integer divide by zero (requires fault_handler_init)
+ *   fault_test illegal  - undefined instruction (permanently undefined encoding)
+ *
+ * After issuing the command the board should print a register dump over
+ * UART and blink LED2 in an SOS pattern.  The faulting PC in the dump
+ * can be decoded with arm-none-eabi-addr2line or the .map file.
+ */
+static int cmd_fault_test(const char* args) {
+    if (args == NULL || args[0] == '\0' || args[0] == 'n') {
+        /* Null-pointer dereference (read from address 0) */
+        printf("Triggering null-pointer dereference...\n");
+        volatile uint32_t *bad_ptr = (volatile uint32_t *)0x00000000U;
+        /* Writing to address 0 on STM32F4 hits the aliased flash region
+         * which is read-only, causing a BusFault / HardFault. */
+        *bad_ptr = 0xDEADBEEFU;
+    } else if (args[0] == 'd') {
+        /* Integer divide by zero -- requires SCB->CCR DIV_0_TRP enabled
+         * (call fault_handler_init() at startup). */
+        printf("Triggering divide-by-zero...\n");
+        volatile int zero = 0;
+        volatile int result = 1 / zero;
+        (void)result;
+    } else if (args[0] == 'i') {
+        /* Execute an undefined instruction (ARM permanently undefined).
+         * 0xF7F0A000 is a guaranteed UDF encoding on Thumb-2. */
+        printf("Triggering illegal instruction...\n");
+        __asm volatile (".short 0xDE00");  /* UDF #0 (Thumb encoding) */
+    } else {
+        printf("Unknown fault type '%s'\n", args);
+        printf("Usage: fault_test [nullptr|divzero|illegal]\n");
+        return 1;
+    }
+
+    /* Should never reach here */
+    return 0;
+}
+
 // Command table (help command is automatically added by CLI library)
 static const cli_command_t commands[] = {
     {"led_on",        "Turn on LED2",              cmd_led_on},
     {"led_off",       "Turn off LED2",             cmd_led_off},
     {"led_toggle",    "Toggle LED2 state",         cmd_led_toggle},
     {"spi_perf_test", "SPI master TX perf test",   cmd_spi_perf_test},
+    {"fault_test",    "Trigger a fault (nullptr|divzero|illegal)", cmd_fault_test},
 #ifdef ENABLE_HW_FPU
     {"fpu_test",      "Validate HW FPU is working", cmd_fpu_test},
 #endif
