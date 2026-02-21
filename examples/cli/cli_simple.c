@@ -2,6 +2,7 @@
 
 #include "cli.h"
 #include "cli_commands.h"
+#include "fault_handler.h"
 #include "led2.h"
 #include "printf.h"
 #include "printf_dma.h"
@@ -58,6 +59,9 @@ int main(void) {
     led2_init();
     uart_init();
     sleep_mode_init();
+    
+    // Enable DIV_0 trapping and individual fault handlers
+    fault_handler_init();
     
     // Initialize printf DMA buffering
     printf_dma_init();
