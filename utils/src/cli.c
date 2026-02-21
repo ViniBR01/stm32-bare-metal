@@ -1,5 +1,6 @@
 #include "cli.h"
 #include "printf.h"
+#include "printf_dma.h"
 #include "string_utils.h"
 
 // Global pointer to current CLI context (needed for built-in help command)
@@ -212,8 +213,10 @@ void cli_init(cli_context_t* ctx, const cli_command_t* commands, size_t num_comm
 
 void cli_print_help(const cli_context_t* ctx) {
     printf("\nAvailable commands:\n");
+    printf_dma_flush();
     for (size_t i = 0; i < ctx->num_commands; i++) {
         printf("%-12s - %s\n", ctx->command_list[i].name, ctx->command_list[i].description);
+        printf_dma_flush();
     }
 }
 
