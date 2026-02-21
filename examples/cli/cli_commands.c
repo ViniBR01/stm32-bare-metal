@@ -6,6 +6,48 @@
 // Command implementations
 // NOTE: These are called from main loop context (not ISR),
 // so we can safely use printf() which accumulates to buffer
+
+#ifdef ENABLE_HW_FPU
+/**
+ * @brief Validate that the hardware FPU is operational.
+ *
+ * Performs a small set of single-precision floating-point operations
+ * (multiply, divide, add) and prints the results.  If the FPU was not
+ * enabled in Reset_Handler (SCB->CPACR), this would trigger a UsageFault.
+ */
+static int cmd_fpu_test(const char* args) {
+    (void)args;
+
+    volatile float a = 3.14f;
+    volatile float b = 2.72f;
+    volatile float mul = a * b;
+    volatile float div = a / b;
+    volatile float add = a + b;
+
+    /* Print integer and fractional parts (printf may not support %f on
+     * minimal implementations, so we split manually). */
+    printf("FPU test  (a = 3.14, b = 2.72)\n");
+
+    int mul_i = (int)mul;
+    int mul_f = (int)((mul - (float)mul_i) * 1000.0f);
+    if (mul_f < 0) mul_f = -mul_f;
+    printf("  a * b = %d.%03d\n", mul_i, mul_f);
+
+    int div_i = (int)div;
+    int div_f = (int)((div - (float)div_i) * 1000.0f);
+    if (div_f < 0) div_f = -div_f;
+    printf("  a / b = %d.%03d\n", div_i, div_f);
+
+    int add_i = (int)add;
+    int add_f = (int)((add - (float)add_i) * 1000.0f);
+    if (add_f < 0) add_f = -add_f;
+    printf("  a + b = %d.%03d\n", add_i, add_f);
+
+    printf("FPU OK – no UsageFault\n");
+    return 0;
+}
+#endif /* ENABLE_HW_FPU */
+
 static int cmd_led_on(const char* args) {
     (void)args;
     led2_on();
@@ -46,7 +88,10 @@ static const cli_command_t commands[] = {
     {"led_on",        "Turn on LED2",              cmd_led_on},
     {"led_off",       "Turn off LED2",             cmd_led_off},
     {"led_toggle",    "Toggle LED2 state",         cmd_led_toggle},
-    {"spi_perf_test", "SPI master TX perf test", cmd_spi_perf_test},
+    {"spi_perf_test", "SPI master TX perf test",   cmd_spi_perf_test},
+#ifdef ENABLE_HW_FPU
+    {"fpu_test",      "Validate HW FPU is working", cmd_fpu_test},
+#endif
 };
 
 const cli_command_t* cli_commands_get_table(size_t* num_commands) {

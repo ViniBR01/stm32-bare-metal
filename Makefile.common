@@ -34,11 +34,22 @@ UTILS_DIR     := $(ROOT_DIR)/utils
 #==============================================================================
 MCU_FLAGS := -mcpu=cortex-m4 -mthumb
 
+# Hardware FPU control (ON by default for STM32F411 Cortex-M4F)
+# Override on the command line:  make FPU_ENABLE=0 EXAMPLE=cli_simple
+FPU_ENABLE ?= 1
+ifeq ($(FPU_ENABLE),1)
+  MCU_FLAGS  += -mfloat-abi=hard -mfpu=fpv4-sp-d16
+  FPU_CFLAGS := -DENABLE_HW_FPU
+else
+  MCU_FLAGS  += -mfloat-abi=soft
+  FPU_CFLAGS :=
+endif
+
 #==============================================================================
 # Compiler flags
 #==============================================================================
 # Base C flags
-CFLAGS_BASE := $(MCU_FLAGS) -c -std=gnu11 -Wall -g -O0 -DSTM32F411xE -ffunction-sections -fdata-sections
+CFLAGS_BASE := $(MCU_FLAGS) -c -std=gnu11 -Wall -g -O0 -DSTM32F411xE -ffunction-sections -fdata-sections $(FPU_CFLAGS)
 
 # Log level configuration (controls compile-time log filtering)
 # Valid values: LOG_LEVEL_OFF, LOG_LEVEL_CRITICAL, LOG_LEVEL_ERROR, 
