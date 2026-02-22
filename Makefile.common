@@ -49,7 +49,7 @@ endif
 # Compiler flags
 #==============================================================================
 # Base C flags
-CFLAGS_BASE := $(MCU_FLAGS) -c -std=gnu11 -Wall -g -O0 -DSTM32F411xE -ffunction-sections -fdata-sections $(FPU_CFLAGS)
+CFLAGS_BASE := $(MCU_FLAGS) -c -std=gnu11 -Wall -g -O2 -DSTM32F411xE -ffunction-sections -fdata-sections $(FPU_CFLAGS)
 
 # Log level configuration (controls compile-time log filtering)
 # Valid values: LOG_LEVEL_OFF, LOG_LEVEL_CRITICAL, LOG_LEVEL_ERROR, 

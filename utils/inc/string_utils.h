@@ -37,4 +37,13 @@ int strncmp(const char *s1, const char *s2, size_t n);
  */
 void *memcpy(void *dest, const void *src, size_t n);
 
+/**
+ * @brief Fill memory with a constant byte
+ * @param dest Destination buffer
+ * @param c    Byte value to set (converted to unsigned char)
+ * @param n    Number of bytes to fill
+ * @return Pointer to destination buffer
+ */
+void *memset(void *dest, int c, size_t n);
+
 #endif /* STRING_UTILS_H */
