@@ -81,8 +81,8 @@ void FPU_IRQHandler              	(void) __attribute__ ((weak, alias("Default_Ha
 void SPI4_IRQHandler              	(void) __attribute__ ((weak, alias("Default_Handler"))); 
 void SPI5_IRQHandler              	(void) __attribute__ ((weak, alias("Default_Handler"))); 
 
-/* Vector Table */
-uint32_t vector_tbl[] __attribute__((section(".isr_vector_tbl")))={
+/* Vector Table -- __attribute__((used)) prevents LTO from discarding it */
+uint32_t vector_tbl[] __attribute__((used, section(".isr_vector_tbl")))={
 	
 	(uint32_t)&_estack,
 	(uint32_t)&Reset_Handler,
