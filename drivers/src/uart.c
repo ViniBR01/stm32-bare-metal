@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include "dma.h"
 #include "gpio_handler.h"
 #include "rcc.h"
 #include "stm32f4xx.h"
@@ -15,6 +16,7 @@
 #define CR1_TCIE               (1U<<6)
 #define CR1_IDLEIE             (1U<<4)
 #define CR3_DMAT               (1U<<7)
+#define CR3_DMAR               (1U<<6)
 #define CR3_EIE                (1U<<0)
 #define SR_TXE                 (1U<<7)
 #define SR_RXNE                (1U<<5)
@@ -24,13 +26,14 @@
 #define SR_NF                  (1U<<2)
 #define SR_FE                  (1U<<1)
 
-/* Register bit definitions - DMA */
-#define DMA1EN                 (1U<<21)
-#define DMA_SxCR_CHSEL_CH4     (4U<<25)
-#define DMA_SxCR_DIR_MEM2PER   (1U<<6)
-
 /* Configuration constants */
 #define UART_BAUDRATE          115200
+
+/* DMA stream/channel assignments (STM32F411 RM Table 28) */
+#define UART_TX_DMA_STREAM     DMA_STREAM_1_6
+#define UART_TX_DMA_CHANNEL    4
+#define UART_RX_DMA_STREAM     DMA_STREAM_1_5
+#define UART_RX_DMA_CHANNEL    4
 
 /* Internal state variables */
 static volatile uint8_t tx_busy = 0;
@@ -38,11 +41,19 @@ static uart_tx_complete_callback_t tx_complete_callback = NULL;
 static uart_rx_callback_t rx_callback = NULL;
 static volatile uart_error_flags_t error_flags = {0};
 
+/* DMA RX state */
+static uart_rx_dma_callback_t rx_dma_callback = NULL;
+static uint8_t *rx_dma_buf = NULL;
+static uint16_t rx_dma_buf_size = 0;
+static volatile uint16_t rx_dma_last_ndtr = 0;
+static volatile uint8_t  rx_dma_active = 0;
+
 /* Private function prototypes */
 static uint16_t compute_uart_bd(uint32_t periph_clk, uint32_t baudrate);
 static void uart_set_baudrate(uint32_t periph_clk, uint32_t baudrate);
-static void uart_dma_init(void);
+static void uart_tx_dma_init(void);
 static void uart_nvic_init(void);
+static void uart_tx_dma_tc_callback(dma_stream_id_t stream, void *ctx);
 
 void uart_init(void) {
     /* Enable GPIOA clock and configure PA2 (TX) and PA3 (RX) */
@@ -69,8 +80,8 @@ void uart_init(void) {
     USART2->CR1 |= CR1_RE;
     USART2->CR1 |= CR1_UE;
     
-    /* Initialize DMA for TX */
-    uart_dma_init();
+    /* Initialize DMA for TX via generic DMA driver */
+    uart_tx_dma_init();
     
     /* Enable UART DMA mode for transmitter */
     USART2->CR3 |= CR3_DMAT;
@@ -80,7 +91,7 @@ void uart_init(void) {
     USART2->CR1 |= CR1_IDLEIE;  // Idle line interrupt
     USART2->CR3 |= CR3_EIE;     // Error interrupt
     
-    /* Configure NVIC for UART and DMA interrupts */
+    /* Configure NVIC for UART interrupt (DMA NVIC handled by dma driver) */
     uart_nvic_init();
 }
 
@@ -107,7 +118,6 @@ void uart_write(char ch) {
     USART2->DR = (ch & 0xFF);
 }
 
-// TODO: This function should return a value indicating success or failure
 void uart_write_dma(const char* data, uint16_t length) {
     /* Check if DMA is already busy */
     if (tx_busy || length == 0) {
@@ -117,22 +127,8 @@ void uart_write_dma(const char* data, uint16_t length) {
     /* Mark TX as busy */
     tx_busy = 1;
     
-    /* Disable DMA stream to configure */
-    DMA1_Stream6->CR &= ~DMA_SxCR_EN;
-    
-    /* Wait until DMA stream is disabled */
-    while (DMA1_Stream6->CR & DMA_SxCR_EN);
-    
-    /* Clear all interrupt flags for stream 6 */
-    DMA1->HIFCR = DMA_HIFCR_CTCIF6 | DMA_HIFCR_CHTIF6 | DMA_HIFCR_CTEIF6 | 
-                  DMA_HIFCR_CDMEIF6 | DMA_HIFCR_CFEIF6;
-    
-    /* Configure DMA stream */
-    DMA1_Stream6->M0AR = (uint32_t)data;         // Memory address
-    DMA1_Stream6->NDTR = length;                  // Number of data items
-    
-    /* Enable DMA stream */
-    DMA1_Stream6->CR |= DMA_SxCR_EN;
+    /* Start DMA transfer via generic driver */
+    dma_stream_start(UART_TX_DMA_STREAM, (uint32_t)data, length);
 }
 
 void uart_register_rx_callback(uart_rx_callback_t callback) {
@@ -141,6 +137,10 @@ void uart_register_rx_callback(uart_rx_callback_t callback) {
 
 void uart_register_tx_complete_callback(uart_tx_complete_callback_t callback) {
     tx_complete_callback = callback;
+}
+
+void uart_register_rx_dma_callback(uart_rx_dma_callback_t callback) {
+    rx_dma_callback = callback;
 }
 
 uart_error_flags_t uart_get_errors(void) {
@@ -157,13 +157,96 @@ uint8_t uart_is_tx_busy(void) {
     return tx_busy;
 }
 
-/* Interrupt handlers */
+/*===========================================================================
+ * DMA RX support -- continuous reception with idle-line detection
+ *===========================================================================*/
 
-void USART2_IRQHandler(void) {
+static void uart_rx_dma_tc_callback(dma_stream_id_t stream, void *ctx) {
+    (void)stream;
+    (void)ctx;
+    /* In circular mode the DMA wraps around automatically.
+       Deliver any data accumulated since the last delivery. */
+    if (!rx_dma_active || !rx_dma_callback) return;
+
+    uint16_t ndtr = dma_stream_get_ndtr(UART_RX_DMA_STREAM);
+    uint16_t head = rx_dma_buf_size - ndtr;
+    uint16_t tail = rx_dma_buf_size - rx_dma_last_ndtr;
+
+    if (head != tail) {
+        if (head > tail) {
+            rx_dma_callback(&rx_dma_buf[tail], head - tail);
+        } else {
+            /* Wrapped: deliver tail..end, then 0..head */
+            if (tail < rx_dma_buf_size) {
+                rx_dma_callback(&rx_dma_buf[tail], rx_dma_buf_size - tail);
+            }
+            if (head > 0) {
+                rx_dma_callback(&rx_dma_buf[0], head);
+            }
+        }
+    }
+    rx_dma_last_ndtr = ndtr;
+}
+
+void uart_start_rx_dma(uint8_t *buf, uint16_t size) {
+    if (!buf || size == 0) return;
+
+    rx_dma_buf       = buf;
+    rx_dma_buf_size  = size;
+    rx_dma_last_ndtr = size;
+    rx_dma_active    = 1;
+
+    /* Disable per-character RXNE interrupt -- DMA handles reception now */
+    USART2->CR1 &= ~CR1_RXNEIE;
+
+    /* Configure DMA stream for USART2_RX: circular, P2M, MINC */
+    dma_stream_config_t rx_cfg = {
+        .stream        = UART_RX_DMA_STREAM,
+        .channel       = UART_RX_DMA_CHANNEL,
+        .direction     = DMA_DIR_PERIPH_TO_MEM,
+        .periph_addr   = (uint32_t)&(USART2->DR),
+        .mem_inc       = 1,
+        .periph_inc    = 0,
+        .circular      = 1,
+        .priority      = DMA_PRIO_HIGH,
+        .tc_callback   = uart_rx_dma_tc_callback,
+        .error_callback = NULL,
+        .cb_ctx        = NULL,
+        .nvic_priority = 1,
+    };
+    dma_stream_init(&rx_cfg);
+
+    /* Enable USART DMA receiver */
+    USART2->CR3 |= CR3_DMAR;
+
+    /* Start DMA reception */
+    dma_stream_start(UART_RX_DMA_STREAM, (uint32_t)buf, size);
+}
+
+void uart_stop_rx_dma(void) {
+    if (!rx_dma_active) return;
+
+    rx_dma_active = 0;
+
+    /* Stop DMA stream and release */
+    dma_stream_stop(UART_RX_DMA_STREAM);
+    dma_stream_release(UART_RX_DMA_STREAM);
+
+    /* Disable USART DMA receiver */
+    USART2->CR3 &= ~CR3_DMAR;
+
+    /* Re-enable per-character RXNE interrupt */
+    USART2->CR1 |= CR1_RXNEIE;
+}
+
+/* Interrupt handler -- __attribute__((used)) prevents LTO from stripping
+   this strong definition before the linker resolves the weak vector-table alias */
+
+void __attribute__((used)) USART2_IRQHandler(void) {
     uint32_t sr = USART2->SR;
     
-    /* Handle RX not empty */
-    if (sr & SR_RXNE) {
+    /* Handle RX not empty (only when not using DMA RX) */
+    if ((sr & SR_RXNE) && !rx_dma_active) {
         char ch = (char)(USART2->DR & 0xFF);
         if (rx_callback != NULL) {
             rx_callback(ch);
@@ -174,6 +257,28 @@ void USART2_IRQHandler(void) {
     if (sr & SR_IDLE) {
         /* Clear IDLE flag by reading SR then DR */
         (void)USART2->DR;
+
+        /* When DMA RX is active, deliver received bytes on idle */
+        if (rx_dma_active && rx_dma_callback) {
+            uint16_t ndtr = dma_stream_get_ndtr(UART_RX_DMA_STREAM);
+            uint16_t head = rx_dma_buf_size - ndtr;
+            uint16_t tail = rx_dma_buf_size - rx_dma_last_ndtr;
+
+            if (head != tail) {
+                if (head > tail) {
+                    rx_dma_callback(&rx_dma_buf[tail], head - tail);
+                } else {
+                    /* Wrapped: deliver tail..end, then 0..head */
+                    if (tail < rx_dma_buf_size) {
+                        rx_dma_callback(&rx_dma_buf[tail], rx_dma_buf_size - tail);
+                    }
+                    if (head > 0) {
+                        rx_dma_callback(&rx_dma_buf[0], head);
+                    }
+                }
+            }
+            rx_dma_last_ndtr = ndtr;
+        }
     }
     
     /* Handle overrun error */
@@ -198,22 +303,6 @@ void USART2_IRQHandler(void) {
     }
 }
 
-void DMA1_Stream6_IRQHandler(void) {
-    /* Check if transfer complete interrupt */
-    if (DMA1->HISR & DMA_HISR_TCIF6) {
-        /* Clear transfer complete flag */
-        DMA1->HIFCR = DMA_HIFCR_CTCIF6;
-        
-        /* Mark TX as not busy */
-        tx_busy = 0;
-        
-        /* Call user callback if registered */
-        if (tx_complete_callback != NULL) {
-            tx_complete_callback();
-        }
-    }
-}
-
 /* Private function implementations */
 
 static uint16_t compute_uart_bd(uint32_t periph_clk, uint32_t baudrate) {
@@ -224,38 +313,48 @@ static void uart_set_baudrate(uint32_t periph_clk, uint32_t baudrate) {
     USART2->BRR = compute_uart_bd(periph_clk, baudrate);
 }
 
-static void uart_dma_init(void) {
-    /* Enable DMA1 clock */
-    RCC->AHB1ENR |= DMA1EN;
-    
-    /* Disable DMA1 Stream 6 before configuration */
-    DMA1_Stream6->CR &= ~DMA_SxCR_EN;
-    
-    /* Wait until stream is disabled */
-    while (DMA1_Stream6->CR & DMA_SxCR_EN);
-    
-    /* Configure DMA Stream 6 for USART2_TX */
-    DMA1_Stream6->CR = 0;  // Reset configuration
-    DMA1_Stream6->CR |= DMA_SxCR_CHSEL_CH4;      // Channel 4 (USART2_TX)
-    DMA1_Stream6->CR |= DMA_SxCR_MINC;           // Memory increment mode
-    DMA1_Stream6->CR |= DMA_SxCR_DIR_MEM2PER;    // Memory to peripheral
-    DMA1_Stream6->CR |= DMA_SxCR_TCIE;           // Transfer complete interrupt
-    
-    /* Set peripheral address (USART2 data register) */
-    DMA1_Stream6->PAR = (uint32_t)&(USART2->DR);
-    
-    /* Memory address and data count will be set in uart_write_dma() */
+/**
+ * @brief DMA TX transfer-complete callback (called from DMA ISR context)
+ */
+static void uart_tx_dma_tc_callback(dma_stream_id_t stream, void *ctx) {
+    (void)stream;
+    (void)ctx;
+
+    /* Mark TX as not busy */
+    tx_busy = 0;
+
+    /* Call user callback if registered */
+    if (tx_complete_callback != NULL) {
+        tx_complete_callback();
+    }
+}
+
+/**
+ * @brief Initialize DMA for UART TX using the generic DMA driver
+ */
+static void uart_tx_dma_init(void) {
+    dma_stream_config_t tx_cfg = {
+        .stream        = UART_TX_DMA_STREAM,
+        .channel       = UART_TX_DMA_CHANNEL,
+        .direction     = DMA_DIR_MEM_TO_PERIPH,
+        .periph_addr   = (uint32_t)&(USART2->DR),
+        .mem_inc       = 1,
+        .periph_inc    = 0,
+        .circular      = 0,
+        .priority      = DMA_PRIO_HIGH,
+        .tc_callback   = uart_tx_dma_tc_callback,
+        .error_callback = NULL,
+        .cb_ctx        = NULL,
+        .nvic_priority = 0,  /* DMA higher priority than UART (2) */
+    };
+    dma_stream_init(&tx_cfg);
 }
 
 static void uart_nvic_init(void) {
     /* Enable USART2 interrupt in NVIC */
     NVIC_EnableIRQ(USART2_IRQn);
     NVIC_SetPriority(USART2_IRQn, 2);  // Lower priority (higher number)
-    
-    /* Enable DMA1 Stream 6 interrupt in NVIC */
-    NVIC_EnableIRQ(DMA1_Stream6_IRQn);
-    NVIC_SetPriority(DMA1_Stream6_IRQn, 0);  // Higher priority (lower number)
+    // DMA NVIC is configured by dma_stream_init() with priority 0
     // DMA must have higher priority than UART to allow DMA completion 
     // interrupts to fire even when called from UART interrupt context
 }
-
