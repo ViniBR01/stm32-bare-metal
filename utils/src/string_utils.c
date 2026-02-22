@@ -1,3 +1,13 @@
+/*
+ * Bare-metal implementations of standard C string/memory functions.
+ *
+ * -fno-builtin prevents GCC (especially with -O2 / -flto) from recognising
+ * the byte-loop patterns inside these functions and replacing them with
+ * calls to the very builtins we are defining — which would cause infinite
+ * recursion in a -nostdlib build.
+ */
+#pragma GCC optimize("-fno-builtin")
+
 #include "string_utils.h"
 
 #pragma GCC diagnostic push
@@ -60,8 +70,6 @@ void *memcpy(void *dest, const void *src, size_t n) {
     return dest;
 }
 
-#pragma GCC push_options
-#pragma GCC optimize("O0")
 void *memset(void *dest, int c, size_t n) {
     unsigned char *d = (unsigned char *)dest;
 
@@ -72,4 +80,3 @@ void *memset(void *dest, int c, size_t n) {
     }
     return dest;
 }
-#pragma GCC pop_options

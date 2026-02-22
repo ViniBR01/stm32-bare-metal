@@ -206,16 +206,16 @@ void fault_handler_print(uint32_t *stack_frame)
         "b     fault_handler_print \n"               \
     )
 
-__attribute__((naked))
+__attribute__((naked, used))
 void HardFault_Handler(void)  { FAULT_TRAMPOLINE(); }
 
-__attribute__((naked))
+__attribute__((naked, used))
 void MemManage_Handler(void)  { FAULT_TRAMPOLINE(); }
 
-__attribute__((naked))
+__attribute__((naked, used))
 void BusFault_Handler(void)   { FAULT_TRAMPOLINE(); }
 
-__attribute__((naked))
+__attribute__((naked, used))
 void UsageFault_Handler(void) { FAULT_TRAMPOLINE(); }
 
 /* ------------------------------------------------------------------ */
