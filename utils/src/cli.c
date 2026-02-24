@@ -423,6 +423,9 @@ void cli_process_char(cli_context_t* ctx, char c, void (*echo_fn)(char)) {
             
         case '\r':
         case '\n':
+            if (echo_fn) {
+                echo_fn('\n');
+            }
             break;
             
         default:
