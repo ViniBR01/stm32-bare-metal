@@ -2,7 +2,9 @@
 #include "fault_handler.h"
 #include "led2.h"
 #include "printf.h"
+#include "rcc.h"
 #include "spi_perf.h"
+#include "timer.h"
 
 // Command implementations
 // NOTE: These are called from main loop context (not ISR),
@@ -127,11 +129,97 @@ static int cmd_fault_test(const char* args) {
     return 0;
 }
 
+/* ---- led_blink command ------------------------------------------------- */
+
+/**
+ * @brief Simple string-to-unsigned-int parser (local helper).
+ * @return Pointer past the parsed digits, or NULL on error.
+ */
+static const char* parse_uint(const char* s, uint32_t* out) {
+    if (*s < '0' || *s > '9') return 0;
+    uint32_t val = 0;
+    while (*s >= '0' && *s <= '9') {
+        val = val * 10 + (uint32_t)(*s - '0');
+        s++;
+    }
+    *out = val;
+    return s;
+}
+
+/* State shared between cmd_led_blink() and the TIM3 ISR callback */
+static volatile uint32_t blink_remaining;  /* toggles left (2 * count) */
+
+static void blink_timer_cb(void) {
+    led2_toggle();
+    if (blink_remaining > 0) {
+        blink_remaining--;
+    }
+    if (blink_remaining == 0) {
+        timer_stop(TIMER_3);
+        timer_register_callback(TIMER_3, (timer_callback_t)0);
+    }
+}
+
+/**
+ * @brief CLI command: led_blink <count> <interval_ms>
+ *
+ * Blinks LED2 <count> times with <interval_ms> between each toggle.
+ * Uses TIM3 in interrupt mode so the command returns immediately.
+ */
+static int cmd_led_blink(const char* args) {
+    /* Skip leading whitespace */
+    while (args && *args == ' ') args++;
+
+    if (args == NULL || *args == '\0') {
+        printf("Usage: led_blink <count> <interval_ms>\n");
+        return 1;
+    }
+
+    /* Parse count */
+    uint32_t count = 0;
+    const char* p = parse_uint(args, &count);
+    if (!p || count == 0) {
+        printf("Invalid count\n");
+        return 1;
+    }
+
+    /* Skip whitespace */
+    while (*p == ' ') p++;
+
+    /* Parse interval */
+    uint32_t interval_ms = 0;
+    p = parse_uint(p, &interval_ms);
+    if (!p || interval_ms == 0) {
+        printf("Invalid interval_ms\n");
+        return 1;
+    }
+
+    /* Each blink = on-toggle + off-toggle, so total toggles = 2 * count */
+    blink_remaining = count * 2;
+
+    /* Configure TIM3 to fire every interval_ms milliseconds.
+     * tick_hz  = timer_clk / (PSC+1)  -- we pick 10 000 Hz (0.1 ms resolution)
+     * period   = tick_hz * interval_ms / 1000  */
+    uint32_t timer_clk = rcc_get_apb1_timer_clk();
+    uint32_t tick_hz = 10000U;
+    uint32_t psc = (timer_clk / tick_hz) - 1;
+    uint32_t arr = (tick_hz * interval_ms) / 1000U - 1;
+
+    timer_init(TIMER_3, psc, arr);
+    timer_register_callback(TIMER_3, blink_timer_cb);
+    timer_start(TIMER_3);
+
+    printf("Blinking LED2 %lu times every %lu ms\n",
+           (unsigned long)count, (unsigned long)interval_ms);
+    return 0;
+}
+
 // Command table (help command is automatically added by CLI library)
 static const cli_command_t commands[] = {
     {"led_on",        "Turn on LED2",              cmd_led_on},
     {"led_off",       "Turn off LED2",             cmd_led_off},
     {"led_toggle",    "Toggle LED2 state",         cmd_led_toggle},
+    {"led_blink",     "Blink LED2 <count> <interval_ms>", cmd_led_blink},
     {"spi_perf_test", "SPI master TX perf test",   cmd_spi_perf_test},
     {"fault_test",    "Trigger a fault (nullptr|divzero|illegal)", cmd_fault_test},
 #ifdef ENABLE_HW_FPU
