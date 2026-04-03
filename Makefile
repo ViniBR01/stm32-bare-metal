@@ -34,7 +34,7 @@ ALL_EXAMPLES := \
 #==============================================================================
 # Phony targets
 #==============================================================================
-.PHONY: all clean $(SUBDIRS) flash debug openocd serial help $(EXAMPLE) $(ALL_EXAMPLES)
+.PHONY: all clean test $(SUBDIRS) flash debug openocd serial help $(EXAMPLE) $(ALL_EXAMPLES)
 
 #==============================================================================
 # Build all examples
@@ -79,6 +79,12 @@ utils: 3rd_party
 
 examples: startup utils drivers 3rd_party
 	$(MAKE) -C examples EXAMPLE=$(EXAMPLE)
+
+#==============================================================================
+# Host unit tests (no cross-compiler required)
+#==============================================================================
+test:
+	$(MAKE) -C tests run
 
 #==============================================================================
 # Clean all build artifacts
@@ -134,6 +140,7 @@ help:
 	@echo "  make EXAMPLE=<name>     - Build specific example"
 	@echo "  make all                - Build all examples"
 	@echo "  make clean              - Clean all build artifacts"
+	@echo "  make test               - Run host unit tests (no board needed)"
 	@echo "  make flash              - Flash current example to target"
 	@echo "  make debug              - Debug current example"
 	@echo "  make openocd            - Start OpenOCD server"
