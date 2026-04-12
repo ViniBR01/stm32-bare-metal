@@ -24,6 +24,20 @@ GitHub Actions workflow at `.github/workflows/ci.yml`.
 2. Print `gcc` and `make` versions
 3. `make test`
 
+### `firmware-build` (active)
+
+| Property | Value |
+|---|---|
+| Runner | `ubuntu-latest` (GitHub-hosted, free) |
+| Required check | Yes — add to branch protection after first run on `main` |
+| Dependency | none (runs in parallel with `host-tests`) |
+
+**Steps:**
+1. Checkout with `submodules: recursive`
+2. `apt-get install gcc-arm-none-eabi`
+3. Print `arm-none-eabi-gcc --version`
+4. `make all` (builds all examples; exits non-zero on any failure)
+
 ### `hil-tests` (planned — Issue #86)
 
 | Property | Value |
@@ -37,7 +51,9 @@ GitHub Actions workflow at `.github/workflows/ci.yml`.
 `main` branch requires `host-tests` to pass before merge. Configured in:
 **GitHub → Settings → Branches → Branch protection rules → main**
 
-When `hil-tests` is added: register it as a second required status check in the same rule.
+After PR #94 merges and `firmware-build` runs on `main` for the first time, add `Firmware Build` as a second required status check in the same rule.
+
+When `hil-tests` is added: register it as a third required status check in the same rule.
 
 ## Planned Improvements
 
@@ -45,7 +61,7 @@ When `hil-tests` is added: register it as a second required status check in the 
 |---|---|
 | ~~#89~~ | ~~Upgrade `actions/checkout` to Node.js 24-compatible version~~ — **Done**: upgraded to `actions/checkout@v6` |
 | ~~#85~~ | ~~Add JUnit XML test reporting~~ — **Done**: `tests/unity_to_junit.py` + `dorny/test-reporter@v3` |
-| #87 | Add `firmware-build` job — installs `arm-none-eabi-gcc`, runs `make all` |
+| ~~#87~~ | ~~Add `firmware-build` job~~ — **Done**: parallel job, `apt` ARM toolchain, `make all` |
 | #88 | Add code coverage step — gcov/lcov HTML report uploaded as artifact |
 | #86 | Add `hil-tests` job — self-hosted Pi runner, OpenOCD flash, serial assertion |
 

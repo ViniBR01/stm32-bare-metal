@@ -8,7 +8,7 @@
 |---|---|---|
 | ~~#89~~ | ~~Upgrade GitHub Actions to Node.js 24~~ | **Done** — `actions/checkout@v6` merged. |
 | ~~#84~~ | ~~Make Unity a direct project dependency~~ | **Done** — `3rd_party/unity/` added as direct submodule, test Makefiles updated. |
-| #87 | Build all firmware examples in CI | Add `firmware-build` job to CI. Parallel to `host-tests`. Catches cross-compilation errors on PRs. |
+| ~~#87~~ | ~~Build all firmware examples in CI~~ | **Done** — `firmware-build` job added, parallel to `host-tests`. |
 
 ### Medium — Developer experience
 

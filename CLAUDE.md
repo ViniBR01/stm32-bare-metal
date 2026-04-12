@@ -8,9 +8,9 @@ Every feature or fix follows this exact sequence:
 2. **Open a GitHub Issue** if none exists, describing the work clearly
 3. **Create a branch:** `git checkout -b <issue-number>-<short-description>`
 4. **Implement locally** — commit often with meaningful messages
-5. **Run `make test`** — all host tests must pass before pushing
-6. **Push branch and open PR** — only after local tests pass
-7. **Verify CI passes** — check the `host-tests` GitHub Actions job
+5. **Run `make test` and `make all`** — both must pass before pushing
+6. **Push branch and open PR** — only after local validation passes
+7. **Verify CI passes** — check both `host-tests` and `firmware-build` GitHub Actions jobs
 8. **Do NOT merge** — the user reviews and merges all PRs manually
 
 ## Build & Test Commands
