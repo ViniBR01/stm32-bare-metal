@@ -6,6 +6,10 @@ Types: `merge`, `decision`, `milestone`, `infra`
 
 ---
 
+## [2026-04-12] merge | Add host test coverage reporting (#88)
+
+Test Makefiles now accept `EXTRA_CFLAGS`. `tests/Makefile` gains a `coverage` target: clean rebuild with `--coverage`, `lcov --capture`, `lcov --extract '*/utils/src/*'`, `genhtml`. CI installs `lcov` and runs `make -C tests coverage` after tests pass, uploading `tests/coverage-html/` as the `coverage-report` artifact via `actions/upload-artifact@v6` (Node.js 24). Coverage artifacts added to `.gitignore`.
+
 ## [2026-04-12] merge | Add firmware-build CI job; update CLAUDE.md pre-push rules (#87)
 
 Added `firmware-build` job to `ci.yml` — installs `gcc-arm-none-eabi` via apt, runs `make all` in parallel with `host-tests`. Catches cross-compilation errors on every PR. Updated `CLAUDE.md` to require both `make test` and `make all` to pass before pushing. `firmware-build` still needs to be added as a required check in branch protection after its first run on `main`.

@@ -62,7 +62,7 @@ When `hil-tests` is added: register it as a third required status check in the s
 | ~~#89~~ | ~~Upgrade `actions/checkout` to Node.js 24-compatible version~~ — **Done**: upgraded to `actions/checkout@v6` |
 | ~~#85~~ | ~~Add JUnit XML test reporting~~ — **Done**: `tests/unity_to_junit.py` + `dorny/test-reporter@v3` |
 | ~~#87~~ | ~~Add `firmware-build` job~~ — **Done**: parallel job, `apt` ARM toolchain, `make all` |
-| #88 | Add code coverage step — gcov/lcov HTML report uploaded as artifact |
+| ~~#88~~ | ~~Add code coverage~~ — **Done**: `lcov` + `genhtml`, uploaded via `actions/upload-artifact@v6` |
 | #86 | Add `hil-tests` job — self-hosted Pi runner, OpenOCD flash, serial assertion |
 
 ## Adding a New Required Check

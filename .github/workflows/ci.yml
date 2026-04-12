@@ -48,6 +48,18 @@ jobs:
           path: test-results.xml
           reporter: java-junit
 
+      - name: Install lcov
+        run: sudo apt-get install -y --no-install-recommends lcov
+
+      - name: Generate coverage report
+        run: make -C tests coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-report
+          path: tests/coverage-html/
+
   firmware-build:
     name: Firmware Build
     runs-on: ubuntu-latest

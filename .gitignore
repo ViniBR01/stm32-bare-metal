@@ -59,3 +59,10 @@ dkms.conf
 .vscode/
 *~
 \#*\#
+
+# Test coverage artifacts
+tests/**/*.gcda
+tests/**/*.gcno
+tests/coverage.info
+tests/coverage-filtered.info
+tests/coverage-html/
