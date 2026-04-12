@@ -14,7 +14,7 @@
 
 | Issue | Title | Notes |
 |---|---|---|
-| #85 | Add JUnit XML test reporting to CI | Post-process Unity stdout to JUnit XML; add GitHub Test Summary tab on PRs. Best after #84. |
+| ~~#85~~ | ~~Add JUnit XML test reporting to CI~~ | **Done** — `unity_to_junit.py` + `dorny/test-reporter@v3`. |
 | #88 | Add host test code coverage reporting | Use gcov/lcov. Upload HTML report as CI artifact. Best after #84. |
 
 ### Low — Hardware integration
