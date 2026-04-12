@@ -6,6 +6,10 @@ Types: `merge`, `decision`, `milestone`, `infra`
 
 ---
 
+## [2026-04-12] merge | Build driver host test infrastructure + GPIO tests (#98)
+
+Created `tests/driver_stubs/` — a test-only header layer that intercepts `#include "stm32f4xx.h"` via include path ordering, includes the real `stm32f411xe.h` for accurate TypeDefs and bit-flag constants, then overrides all peripheral instance macros to point at global fake structs in SRAM. Companion `core_cm4.h` stub provides fake NVIC (inspectable struct), SysTick, SCB, DWT and stubs for Cortex-M intrinsics. `test_periph_reset()` zeroes all fakes in setUp(). GPIO driver test suite: 44 tests covering clock enable/disable, MODER, BSRR, ODR, IDR, AFR, OTYPER, OSPEEDR, PUPDR and port routing. Driver code is unchanged. Total host tests: 108.
+
 ## [2026-04-12] infra | Refresh roadmap + define driver host testing strategy (#97)
 
 Rewrote `roadmap.md` with all 15 open GitHub issues categorised and prioritised. Added "Testing Architecture" section to `architecture.md` documenting the three-layer test pyramid and the fake peripheral stub mechanism. Added "Driver Testing Strategy" section to `testing.md` covering both tiers (fake stubs + pure function extraction) with the include-path override mechanism and pre-seeding pattern. Opened 4 new issues: #98 (infra), #99 (GPIO/EXTI), #100 (UART), #101 (RCC/Timer).

@@ -29,7 +29,8 @@ make test        # Build and run all host test suites
 |---|---|---|---|
 | `string_utils` | `tests/string_utils/` | 23 | Custom string functions in `utils/src/string_utils.c` |
 | `cli` | `tests/cli/` | 41 | CLI engine in `utils/src/cli.c` |
-| **Total** | | **64** | |
+| `gpio` | `tests/gpio/` | 44 | GPIO driver in `drivers/src/gpio_handler.c` |
+| **Total** | | **108** | |
 
 ### Architecture
 
