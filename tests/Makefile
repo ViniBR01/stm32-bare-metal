@@ -1,6 +1,10 @@
 SUBDIRS = string_utils cli
 
-.PHONY: all run clean
+COVERAGE_INFO = coverage.info
+COVERAGE_FILT = coverage-filtered.info
+COVERAGE_HTML = coverage-html
+
+.PHONY: all run clean coverage
 
 all:
 	@for dir in $(SUBDIRS); do \
@@ -24,3 +28,25 @@ clean:
 	@for dir in $(SUBDIRS); do \
 		$(MAKE) -C $$dir clean; \
 	done
+	@rm -f $(COVERAGE_INFO) $(COVERAGE_FILT)
+	@rm -rf $(COVERAGE_HTML)
+
+coverage: clean
+	@echo "========================================"
+	@echo "Building with coverage instrumentation"
+	@echo "========================================"
+	@for dir in $(SUBDIRS); do \
+		$(MAKE) -C $$dir run EXTRA_CFLAGS="--coverage" || exit 1; \
+	done
+	@echo "========================================"
+	@echo "Generating coverage report"
+	@echo "========================================"
+	lcov --capture --directory . --output-file $(COVERAGE_INFO)
+	lcov --extract $(COVERAGE_INFO) '*/utils/src/*' \
+		--output-file $(COVERAGE_FILT)
+	genhtml $(COVERAGE_FILT) \
+		--output-directory $(COVERAGE_HTML) \
+		--title "STM32 Bare Metal Host Tests"
+	@echo "========================================"
+	@echo "Coverage report: tests/$(COVERAGE_HTML)/"
+	@echo "========================================"
