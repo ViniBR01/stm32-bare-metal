@@ -8,6 +8,7 @@
 
 #ifdef HIL_TEST_MODE
 #include "test_output.h"
+#include "printf_dma.h"
 #endif
 
 // Command implementations
