@@ -7,7 +7,7 @@
 | Issue | Title | Notes |
 |---|---|---|
 | ~~#89~~ | ~~Upgrade GitHub Actions to Node.js 24~~ | **Done** — `actions/checkout@v6` merged. |
-| #84 | Make Unity a direct project dependency | Unity is currently a submodule-of-submodule. Add as root-level submodule at `3rd_party/unity/`. Unblocks #85 and #88. |
+| ~~#84~~ | ~~Make Unity a direct project dependency~~ | **Done** — `3rd_party/unity/` added as direct submodule, test Makefiles updated. |
 | #87 | Build all firmware examples in CI | Add `firmware-build` job to CI. Parallel to `host-tests`. Catches cross-compilation errors on PRs. |
 
 ### Medium — Developer experience

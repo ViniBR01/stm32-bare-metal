@@ -6,6 +6,10 @@ Types: `merge`, `decision`, `milestone`, `infra`
 
 ---
 
+## [2026-04-12] merge | Make Unity a direct root-level submodule (#84)
+
+Added `3rd_party/unity/` as a direct submodule (ViniBR01/Unity fork, commit 36e9b19), replacing the fragile nested path `3rd_party/log_c/3rd-party/unity/`. Updated both test Makefiles. The Unity copy inside log_c is untouched.
+
 ## [2026-04-12] merge | Add JUnit XML test reporting to CI (#85)
 
 Added `tests/unity_to_junit.py` to convert Unity stdout (`file:line:name:PASS/FAIL`) to JUnit XML. Updated `ci.yml` to capture `make test` output with `tee` (preserving exit code via `set -o pipefail`), convert to XML, and publish via `dorny/test-reporter@v3` (Node.js 24). Every PR now shows a Test Summary tab with per-test pass/fail detail.
