@@ -70,5 +70,5 @@ Exit code is non-zero on any test failure, which fails the CI job.
 `make test` is the entry point for CI. See [ci.md](ci.md) for the full pipeline.
 
 Planned improvements:
-- Issue #85: JUnit XML output for GitHub PR Test Summary tab
+- ~~Issue #85: JUnit XML output~~ — **Done**: `tests/unity_to_junit.py` converts Unity stdout to JUnit XML; `dorny/test-reporter@v3` publishes a Test Summary tab on every PR
 - Issue #88: gcov/lcov coverage reporting uploaded as CI artifact

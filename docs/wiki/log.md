@@ -6,6 +6,10 @@ Types: `merge`, `decision`, `milestone`, `infra`
 
 ---
 
+## [2026-04-12] merge | Add JUnit XML test reporting to CI (#85)
+
+Added `tests/unity_to_junit.py` to convert Unity stdout (`file:line:name:PASS/FAIL`) to JUnit XML. Updated `ci.yml` to capture `make test` output with `tee` (preserving exit code via `set -o pipefail`), convert to XML, and publish via `dorny/test-reporter@v3` (Node.js 24). Every PR now shows a Test Summary tab with per-test pass/fail detail.
+
 ## [2026-04-12] merge | Upgrade actions/checkout to v6 (Node.js 24) (#89)
 
 Replaced `actions/checkout@v4` (Node.js 20, deprecated) with `actions/checkout@v6.0.2` (Node.js 24). Eliminates the deprecation warning that appeared in every CI run. Resolves before the forced cutover deadline of 2026-06-02.
