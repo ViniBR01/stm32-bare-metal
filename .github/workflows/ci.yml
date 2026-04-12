@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel any in-progress run for the same branch when a new commit is pushed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-tests:
+    name: Host Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Submodules use SSH URLs in .gitmodules; actions/checkout rewrites
+          # them to HTTPS automatically using the default GITHUB_TOKEN.
+          submodules: recursive
+
+      - name: Print build tool versions
+        run: |
+          gcc --version
+          make --version
+
+      - name: Run host tests
+        run: make test
