@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # Submodules use SSH URLs in .gitmodules; actions/checkout rewrites
           # them to HTTPS automatically using the default GITHUB_TOKEN.

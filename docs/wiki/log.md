@@ -6,6 +6,10 @@ Types: `merge`, `decision`, `milestone`, `infra`
 
 ---
 
+## [2026-04-12] merge | Upgrade actions/checkout to v6 (Node.js 24) (#89)
+
+Replaced `actions/checkout@v4` (Node.js 20, deprecated) with `actions/checkout@v6.0.2` (Node.js 24). Eliminates the deprecation warning that appeared in every CI run. Resolves before the forced cutover deadline of 2026-06-02.
+
 ## [2026-04-12] infra | Add CLAUDE.md and project wiki (#90)
 
 Set up Claude Code project customization. Added `CLAUDE.md` with development workflow rules, build commands, and wiki schema. Created `docs/wiki/` with initial pages covering architecture, roadmap, testing, CI, all drivers, and ADR 001.
