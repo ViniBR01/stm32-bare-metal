@@ -58,6 +58,10 @@ CFLAGS_BASE := $(MCU_FLAGS) -c -std=gnu11 -Wall -g -O2 -flto -fno-builtin -DSTM3
 # Set via: make EXAMPLE=serial_simple LOG_LEVEL=LOG_LEVEL_DEBUG
 LOG_LEVEL ?= LOG_LEVEL_INFO
 
+# HIL test mode flag (includes Unity and test harness code)
+# Set via: make EXAMPLE=cli_simple HIL_TEST=1
+HIL_TEST ?= 0
+
 # Common include paths
 COMMON_INCLUDES := \
 	-I$(DRIVERS_DIR)/inc \
@@ -67,8 +71,16 @@ COMMON_INCLUDES := \
 	-I$(THIRD_PARTY_DIR)/log_c/src \
 	-I$(UTILS_DIR)/inc
 
-# Full C flags (includes LOG_LEVEL definition)
-CFLAGS := $(CFLAGS_BASE) $(COMMON_INCLUDES) -DLOG_LEVEL=$(LOG_LEVEL)
+# Add Unity includes when HIL_TEST is enabled
+ifeq ($(HIL_TEST),1)
+  COMMON_INCLUDES += -I$(THIRD_PARTY_DIR)/unity/src
+  HIL_TEST_CFLAGS := -DHIL_TEST_MODE
+else
+  HIL_TEST_CFLAGS :=
+endif
+
+# Full C flags (includes LOG_LEVEL and HIL_TEST definitions)
+CFLAGS := $(CFLAGS_BASE) $(COMMON_INCLUDES) -DLOG_LEVEL=$(LOG_LEVEL) $(HIL_TEST_CFLAGS)
 
 #==============================================================================
 # Linker configuration
@@ -77,7 +89,7 @@ CFLAGS := $(CFLAGS_BASE) $(COMMON_INCLUDES) -DLOG_LEVEL=$(LOG_LEVEL)
 LDSCRIPT := $(LINKER_DIR)/stm32_ls.ld
 
 # Linker flags
-LDFLAGS := $(MCU_FLAGS) -nostdlib -flto -T $(LDSCRIPT) -Wl,--gc-sections
+LDFLAGS := $(MCU_FLAGS) -flto -T $(LDSCRIPT) -Wl,--gc-sections --specs=nosys.specs
 
 #==============================================================================
 # Library paths
@@ -87,6 +99,7 @@ STARTUP_OBJ := $(BUILD_DIR)/startup/stm32f411_startup.o
 PRINTF_LIB := $(BUILD_DIR)/3rd_party/libprintf.a
 LOG_C_LIB := $(BUILD_DIR)/3rd_party/liblog_c.a
 UTILS_LIB := $(BUILD_DIR)/utils/libutils.a
+UNITY_ARM_LIB := $(BUILD_DIR)/3rd_party/libunity_arm.a
 
 #==============================================================================
 # Common build rules
@@ -134,5 +147,5 @@ clean-module:
 #==============================================================================
 export CC CP OD SZ AR
 export MCU_FLAGS CFLAGS LDFLAGS LDSCRIPT
-export ROOT_DIR BUILD_DIR
-export DRIVERS_LIB STARTUP_OBJ PRINTF_LIB LOG_C_LIB UTILS_LIB
+export ROOT_DIR BUILD_DIR HIL_TEST
+export DRIVERS_LIB STARTUP_OBJ PRINTF_LIB LOG_C_LIB UTILS_LIB UNITY_ARM_LIB

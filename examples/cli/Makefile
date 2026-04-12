@@ -29,7 +29,13 @@ EXAMPLES := cli_simple
 # Source files for multi-file examples
 #==============================================================================
 # cli_simple is a multi-file example with all .c files in this directory
-CLI_SRCS := $(wildcard *.c)
+# Exclude test_harness.c unless HIL_TEST=1
+ifeq ($(HIL_TEST),1)
+  CLI_SRCS := $(wildcard *.c)
+else
+  CLI_SRCS := $(filter-out test_harness.c, $(wildcard *.c))
+endif
+
 CLI_OBJS := $(patsubst %.c,$(LOCAL_BUILD_DIR)/cli_simple/%.o,$(CLI_SRCS))
 
 #==============================================================================
@@ -37,6 +43,11 @@ CLI_OBJS := $(patsubst %.c,$(LOCAL_BUILD_DIR)/cli_simple/%.o,$(CLI_SRCS))
 #==============================================================================
 # Define explicit dependencies for each example
 cli_simple_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(LOG_C_LIB) $(PRINTF_LIB) $(UTILS_LIB)
+
+# Add Unity library when HIL_TEST is enabled
+ifeq ($(HIL_TEST),1)
+  cli_simple_DEPS += $(UNITY_ARM_LIB)
+endif
 
 #==============================================================================
 # Build rules
@@ -72,7 +83,7 @@ $(LOCAL_BUILD_DIR)/cli_simple/%.o: %.c
 $(LOCAL_BUILD_DIR)/cli_simple/cli_simple.elf: $(CLI_OBJS) $(cli_simple_DEPS)
 	$(make-build-dir)
 	@echo "Linking cli_simple..."
-	$(CC) $(LDFLAGS) -Wl,-Map=$(LOCAL_BUILD_DIR)/cli_simple/cli_simple.map,--cref -o $@ $(CLI_OBJS) -Wl,--start-group $(cli_simple_DEPS) -Wl,--end-group
+	$(CC) $(LDFLAGS) -Wl,-Map=$(LOCAL_BUILD_DIR)/cli_simple/cli_simple.map,--cref -o $@ $(CLI_OBJS) -Wl,--start-group $(cli_simple_DEPS) -Wl,--end-group -lc -lm -lgcc
 	@echo "Linking complete."
 
 # Create binary from ELF

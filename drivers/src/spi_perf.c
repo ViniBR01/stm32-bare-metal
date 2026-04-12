@@ -1,6 +1,7 @@
 #include "spi_perf.h"
 #include "spi.h"
 #include "printf.h"
+#include "test_output.h"
 
 /* Only include hardware headers when compiling for target */
 #ifndef SPI_PERF_HOST_TEST
@@ -298,6 +299,25 @@ int spi_perf_run(spi_instance_t instance, uint16_t prescaler,
         printf(" (FAIL - %u errors)\n", buffer_size - match_count);
     }
     printf("---------------------------\n");
+
+    /* Emit machine-parseable output for HIL test automation */
+#ifdef HIL_TEST_MODE
+    printf_dma_flush();
+    {
+        const char* mode_str = use_dma ? "dma" : "polled";
+        char test_name[48];
+        snprintf(test_name, sizeof(test_name), "spi%u_%s_psc%u_%uB",
+                 (unsigned)(instance + 1), mode_str,
+                 (unsigned)prescaler, (unsigned)buffer_size);
+
+        TEST_OUTPUT_RESULT(test_name,
+                          match_count == buffer_size,
+                          cycles,
+                          "throughput_kbps",
+                          throughput_kbps);
+    }
+    printf_dma_flush();
+#endif
 
     /* Cleanup */
     spi_deinit(&spi);

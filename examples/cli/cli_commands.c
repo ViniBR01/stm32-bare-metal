@@ -6,6 +6,11 @@
 #include "spi_perf.h"
 #include "timer.h"
 
+#ifdef HIL_TEST_MODE
+#include "test_output.h"
+#include "printf_dma.h"
+#endif
+
 // Command implementations
 // NOTE: These are called from main loop context (not ISR),
 // so we can safely use printf() which accumulates to buffer
@@ -214,6 +219,48 @@ static int cmd_led_blink(const char* args) {
     return 0;
 }
 
+/* ---- run_all_tests command (HIL test mode only) ------------------------ */
+
+#ifdef HIL_TEST_MODE
+/**
+ * @brief Run all hardware-in-the-loop tests
+ *
+ * Executes the complete HIL test suite:
+ * 1. Unity test cases (from test_harness.c)
+ * 2. Performance benchmarks (SPI throughput)
+ *
+ * Emits machine-parseable output for automation via START_TESTS/END_TESTS
+ * markers and TEST:name:PASS/FAIL:metrics lines.
+ *
+ * This command is only available when compiled with HIL_TEST=1.
+ */
+static int cmd_run_all_tests(const char* args) {
+    (void)args;
+    
+    printf("\n");
+    printf("========================================\n");
+    printf("  HIL Test Suite\n");
+    printf("========================================\n");
+    
+    TEST_OUTPUT_START();
+    printf_dma_flush();
+    
+    /* Run all Unity tests (SPI sweep + FPU) from test_harness.c */
+    run_unity_tests();
+    
+    TEST_OUTPUT_END();
+    printf_dma_flush();
+    
+    printf("\n");
+    printf("========================================\n");
+    printf("  All tests complete\n");
+    printf("========================================\n");
+    printf_dma_flush();
+    
+    return 0;
+}
+#endif /* HIL_TEST_MODE */
+
 // Command table (help command is automatically added by CLI library)
 static const cli_command_t commands[] = {
     {"led_on",        "Turn on LED2",              cmd_led_on},
@@ -224,6 +271,9 @@ static const cli_command_t commands[] = {
     {"fault_test",    "Trigger a fault (nullptr|divzero|illegal)", cmd_fault_test},
 #ifdef ENABLE_HW_FPU
     {"fpu_test",      "Validate HW FPU is working", cmd_fpu_test},
+#endif
+#ifdef HIL_TEST_MODE
+    {"run_all_tests", "Execute all HIL tests", cmd_run_all_tests},
 #endif
 };
 

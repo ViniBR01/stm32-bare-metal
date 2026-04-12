@@ -46,6 +46,8 @@ GitHub Actions workflow at `.github/workflows/ci.yml`.
 | Required check | Yes — will be added to branch protection when implemented |
 | Dependency | `needs: host-tests` |
 
+**Infrastructure ready:** The HIL test harness, machine-parseable output format, automation script (`scripts/run_hil_tests.py`), and performance baselines (`tests/baselines/performance.json`) are all implemented and validated locally. Only the Pi runner registration and CI workflow job addition remain.
+
 ## Branch Protection
 
 `main` branch requires `host-tests` to pass before merge. Configured in:

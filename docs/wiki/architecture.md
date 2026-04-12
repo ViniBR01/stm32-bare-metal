@@ -21,24 +21,29 @@ stm32-bare-metal/
 ├── linker/                Custom linker script (stm32_ls.ld) with stack/heap overflow detection
 ├── startup/               Vector table and startup code (stm32f411_startup.c)
 ├── drivers/               Peripheral drivers (see Drivers section below)
-│   ├── inc/               Public headers
+│   ├── inc/               Public headers + test_output.h (HIL machine-parseable output macros)
 │   └── src/               Implementations
 ├── utils/                 Reusable utility libraries
 │   ├── inc/               Public headers
 │   └── src/               cli.c, printf_dma.c, string_utils.c
 ├── 3rd_party/             External libraries (git submodules)
 │   ├── printf/            Lightweight printf (mpaland/printf fork)
-│   └── log_c/             Minimal logging library (contains Unity as nested submodule)
+│   ├── log_c/             Minimal logging library (contains Unity as nested submodule)
+│   └── unity/             Unity test framework (used for host tests + HIL target tests)
 ├── examples/              Application firmware examples
 │   ├── basic/             Standalone peripheral demos
-│   └── cli_app/           Interactive CLI application (default build target)
+│   └── cli/               Interactive CLI application (default build target)
+│       └── test_harness.c HIL test suite (compiled only with HIL_TEST=1)
 ├── tests/                 Host unit tests (compiled with native gcc, not ARM toolchain)
 │   ├── cli/               Tests for utils/src/cli.c
-│   └── string_utils/      Tests for utils/src/string_utils.c
+│   ├── string_utils/      Tests for utils/src/string_utils.c
+│   └── baselines/         Performance baseline JSON for HIL regression detection
+├── scripts/               Automation scripts
+│   └── run_hil_tests.py   HIL test runner (build → flash → serial → validate)
 ├── docs/wiki/             Project knowledge base (this wiki)
 ├── .github/workflows/     CI pipeline
 ├── Makefile               Root build orchestrator
-└── Makefile.common        Shared toolchain config, flags, common rules
+└── Makefile.common        Shared toolchain config, flags, common rules (HIL_TEST flag)
 ```
 
 ## Build System
@@ -46,8 +51,10 @@ stm32-bare-metal/
 - **Toolchain:** `arm-none-eabi-gcc`, Cortex-M4 + hard FPU (`-mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard`)
 - **C standard:** `gnu11`
 - **Optimisation:** `-O2 -flto -ffunction-sections -fdata-sections` (dead-code elimination via `--gc-sections`)
+- **Linker:** `--specs=nosys.specs` for syscall stubs; `-lc -lm -lgcc` for libc/math/compiler-rt
 - **Hierarchical Makefiles:** Each subdirectory compiles to a static library (`.a`); the top-level Makefile links them.
-- **Host tests:** Compiled with native `gcc` (no ARM toolchain needed). Unity framework from `3rd_party/log_c/3rd-party/unity/`.
+- **Host tests:** Compiled with native `gcc` (no ARM toolchain needed). Unity framework from `3rd_party/unity/`.
+- **HIL tests:** `HIL_TEST=1` flag adds `-DHIL_TEST_MODE`, links `libunity_arm.a`, includes `test_harness.c`. Always `make clean` when switching.
 - **Log level:** Controlled at compile time via `LOG_LEVEL=LOG_LEVEL_DEBUG` (default: `LOG_LEVEL_INFO`).
 
 ## Module Map
@@ -82,7 +89,7 @@ Application (examples/)
 | STM32F4xx headers | `chip_headers/CMSIS/Device/ST/STM32F4xx/` | Register definitions |
 | printf (mpaland) | `3rd_party/printf/` | Lightweight printf, no stdlib dependency |
 | log_c | `3rd_party/log_c/` | Minimal levelled logging (~1.8 KB) |
-| Unity | `3rd_party/unity/` | C unit test framework (for host tests) |
+| Unity | `3rd_party/unity/` | C unit test framework (host tests + HIL target tests) |
 
 ## Testing Architecture
 
@@ -90,8 +97,10 @@ Application (examples/)
 
 ```
 ┌─────────────────────────────────────────────┐
-│  Layer 3: HIL tests (future, Issue #86)     │  Real board + Pi runner
-│  Flash firmware → assert serial output      │  Catches hardware-specific bugs
+│  Layer 3: HIL tests (implemented)           │  Real board + serial capture
+│  Unity on target → assert via UART output   │  Catches hardware-specific bugs
+│  60 tests: SPI sweep (all 5 instances,      │  + performance regression detection
+│  prescaler/size matrix) + FPU               │
 ├─────────────────────────────────────────────┤
 │  Layer 2: Driver logic tests (Issues #98–101)│  Host, native gcc
 │  Fake peripheral stubs + pure fn extraction │  Catches register config bugs

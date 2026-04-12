@@ -6,6 +6,10 @@ Types: `merge`, `decision`, `milestone`, `infra`
 
 ---
 
+## [2026-04-12] milestone | HIL test infrastructure with Unity on target (#86)
+
+Implemented hardware-in-the-loop testing framework. Unity compiled for ARM target with `UNITY_OUTPUT_CHAR=_putchar` to route output through UART (avoids libc putchar Hard Fault on bare-metal). Build controlled by `HIL_TEST=1` flag — production builds unchanged (~19 KB), HIL builds ~24 KB. Test harness uses parameterized `RUN_SPI_TEST` macro for 60 tests: all 5 SPI interfaces at max speed (Tier 1), deep prescaler/buffer-size sweep on SPI2 (APB1) and SPI1 (APB2) (Tier 2), plus FPU tests (Tier 3). Machine-parseable output format (`TEST:name:PASS:cycles=N:metric=N`) with `START_TESTS`/`END_TESTS` markers. Python automation script (`scripts/run_hil_tests.py`) handles build → flash → serial capture → parse → baseline validation. Performance baselines stored in `tests/baselines/performance.json` with per-test tolerance thresholds. Key finding: DMA crossover at ~16 bytes (below that, polled is faster due to DMA setup overhead). All infrastructure ready for CI integration — only Pi runner registration remains (#86).
+
 ## [2026-04-12] merge | Build driver host test infrastructure + GPIO tests (#98)
 
 Created `tests/driver_stubs/` — a test-only header layer that intercepts `#include "stm32f4xx.h"` via include path ordering, includes the real `stm32f411xe.h` for accurate TypeDefs and bit-flag constants, then overrides all peripheral instance macros to point at global fake structs in SRAM. Companion `core_cm4.h` stub provides fake NVIC (inspectable struct), SysTick, SCB, DWT and stubs for Cortex-M intrinsics. `test_periph_reset()` zeroes all fakes in setUp(). GPIO driver test suite: 44 tests covering clock enable/disable, MODER, BSRR, ODR, IDR, AFR, OTYPER, OSPEEDR, PUPDR and port routing. Driver code is unchanged. Total host tests: 108.
