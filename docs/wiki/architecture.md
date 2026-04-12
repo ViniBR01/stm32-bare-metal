@@ -82,9 +82,7 @@ Application (examples/)
 | STM32F4xx headers | `chip_headers/CMSIS/Device/ST/STM32F4xx/` | Register definitions |
 | printf (mpaland) | `3rd_party/printf/` | Lightweight printf, no stdlib dependency |
 | log_c | `3rd_party/log_c/` | Minimal levelled logging (~1.8 KB) |
-| Unity | `3rd_party/log_c/3rd-party/unity/` | C unit test framework (for host tests) |
-
-> **Note:** Unity is a nested submodule inside log_c. Issue #84 tracks making it a direct root-level submodule.
+| Unity | `3rd_party/unity/` | C unit test framework (for host tests) |
 
 ## RCC / Clock
 

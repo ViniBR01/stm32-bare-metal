@@ -15,8 +15,7 @@ Tests are split into two categories:
 
 [Unity](https://github.com/ThrowTheSwitch/Unity) v2.6.2 — lightweight C unit test framework designed for embedded systems.
 
-Unity source lives at `3rd_party/log_c/3rd-party/unity/src/` (nested submodule).
-> Issue #84 tracks moving Unity to a direct root-level submodule at `3rd_party/unity/`.
+Unity source lives at `3rd_party/unity/src/` (direct root-level submodule, same fork as used internally by log_c, pinned to the same commit).
 
 ### Running tests
 

@@ -4,3 +4,6 @@
 [submodule "3rd_party/log_c"]
 	path = 3rd_party/log_c
 	url = git@github.com:ViniBR01/log-c.git
+[submodule "3rd_party/unity"]
+	path = 3rd_party/unity
+	url = git@github.com:ViniBR01/Unity.git
