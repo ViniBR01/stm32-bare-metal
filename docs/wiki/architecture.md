@@ -84,6 +84,67 @@ Application (examples/)
 | log_c | `3rd_party/log_c/` | Minimal levelled logging (~1.8 KB) |
 | Unity | `3rd_party/unity/` | C unit test framework (for host tests) |
 
+## Testing Architecture
+
+### Three-layer test pyramid
+
+```
+┌─────────────────────────────────────────────┐
+│  Layer 3: HIL tests (future, Issue #86)     │  Real board + Pi runner
+│  Flash firmware → assert serial output      │  Catches hardware-specific bugs
+├─────────────────────────────────────────────┤
+│  Layer 2: Driver logic tests (Issues #98–101)│  Host, native gcc
+│  Fake peripheral stubs + pure fn extraction │  Catches register config bugs
+├─────────────────────────────────────────────┤
+│  Layer 1: Pure unit tests (existing)        │  Host, native gcc, no mocking
+│  CLI engine, string utils                   │  Catches algorithmic bugs
+└─────────────────────────────────────────────┘
+```
+
+### Layer 2: Fake peripheral stubs mechanism
+
+Every driver uses peripheral instance macros from `stm32f4xx.h` (e.g. `GPIOA`, `RCC`, `USART2`) that resolve to fixed hardware addresses. In a host process, those addresses crash.
+
+The solution: shadow the chip header at the include path level. Driver test Makefiles put `tests/driver_stubs/` **before** `chip_headers/` in their `-I` flags. When a driver `.c` does `#include "stm32f4xx.h"`, the stub is found first.
+
+```
+tests/driver_stubs/
+├── stm32f4xx.h      ← includes real stm32f411xe.h (for TypeDefs + bit flags),
+│                      then #undef/#define all peripheral instance macros to
+│                      point at global fake structs in SRAM
+├── core_cm4.h       ← stubs NVIC (with inspectable fake struct), SysTick,
+│                      and all Cortex-M intrinsics (__get_PRIMASK etc.)
+├── test_periph.h    ← declares fake_GPIOA, fake_RCC, fake_USART2 ... (extern)
+└── test_periph.c    ← defines all fake struct instances + test_periph_reset()
+```
+
+Driver code is **completely unchanged**. Tests pre-seed fake struct fields to simulate hardware state (e.g. set ready flags before init functions that busy-wait), call the driver function, then assert on the fake struct fields.
+
+### Layer 2: Pure function extraction (Tier 2)
+
+For complex computation logic buried in register-writing functions, the logic is extracted into standalone pure functions declared in `drivers/inc/<driver>_calc.h`. These functions take plain values and return plain values — no register access, no mocking required.
+
+Examples:
+- `rcc_calc.h`: `rcc_compute_pll_config(src_hz, target_hz, *out)` — PLL factor solver
+- `uart_calc.h`: `uart_compute_baud_divisor(periph_clk, baudrate)`, `uart_circular_bytes_available(ndtr, last_ndtr, buf_size)`
+- `timer_calc.h`: `timer_compute_pwm_psc(timer_clk, freq, steps)`, `timer_compute_duty_ccr(arr, duty_pct)`
+
+The shell functions (hardware init/control) call the pure functions and apply their results to registers. Tests call the pure functions directly.
+
+### Directory layout (with driver tests)
+
+```
+tests/
+├── cli/               Existing — tests utils/src/cli.c
+├── string_utils/      Existing — tests utils/src/string_utils.c
+├── driver_stubs/      New — fake peripheral headers (shared by all driver test suites)
+├── gpio/              New — tests drivers/src/gpio_handler.c
+├── exti/              New — tests drivers/src/exti_handler.c
+├── uart/              New — tests drivers/src/uart.c
+├── rcc/               New — tests drivers/src/rcc.c
+└── timer/             New — tests drivers/src/timer.c
+```
+
 ## RCC / Clock
 
 - System clock: 100 MHz via PLL (HSI → PLL → SYSCLK)

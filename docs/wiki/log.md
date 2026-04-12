@@ -6,6 +6,10 @@ Types: `merge`, `decision`, `milestone`, `infra`
 
 ---
 
+## [2026-04-12] infra | Refresh roadmap + define driver host testing strategy (#97)
+
+Rewrote `roadmap.md` with all 15 open GitHub issues categorised and prioritised. Added "Testing Architecture" section to `architecture.md` documenting the three-layer test pyramid and the fake peripheral stub mechanism. Added "Driver Testing Strategy" section to `testing.md` covering both tiers (fake stubs + pure function extraction) with the include-path override mechanism and pre-seeding pattern. Opened 4 new issues: #98 (infra), #99 (GPIO/EXTI), #100 (UART), #101 (RCC/Timer).
+
 ## [2026-04-12] merge | Add host test coverage reporting (#88)
 
 Test Makefiles now accept `EXTRA_CFLAGS`. `tests/Makefile` gains a `coverage` target: clean rebuild with `--coverage`, `lcov --capture`, `lcov --extract '*/utils/src/*'`, `genhtml`. CI installs `lcov` and runs `make -C tests coverage` after tests pass, uploading `tests/coverage-html/` as the `coverage-report` artifact via `actions/upload-artifact@v6` (Node.js 24). Coverage artifacts added to `.gitignore`.
