@@ -17,14 +17,15 @@
 #include "spi_perf.h"
 #include "test_output.h"
 #include "printf.h"
+#include "printf_dma.h"
 
 /* Unity setup/teardown functions (required by Unity framework) */
 void setUp(void) {
-    /* Called before each test - currently no per-test setup needed */
+    printf_dma_flush();
 }
 
 void tearDown(void) {
-    /* Called after each test - currently no per-test cleanup needed */
+    printf_dma_flush();
 }
 
 /**
@@ -92,12 +93,14 @@ int run_unity_tests(void) {
     UNITY_BEGIN();
     
     printf("\n=== Running Unity Hardware Tests ===\n");
+    printf_dma_flush();
     
     RUN_TEST(test_spi_perf_polled_3bytes);
     RUN_TEST(test_spi_perf_dma_256bytes);
     RUN_TEST(test_fpu_operations);
     RUN_TEST(test_fpu_division);
     
+    printf_dma_flush();
     return UNITY_END();
 }
 

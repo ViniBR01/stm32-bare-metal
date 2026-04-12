@@ -68,7 +68,7 @@ $(LOG_C_LIB_OUT): $(LOG_C_OBJ)
 $(UNITY_OBJ): $(UNITY_SRC)
 	$(make-build-dir)
 	@echo "Compiling Unity for ARM target..."
-	$(CC) $(CFLAGS_BASE) -I$(UNITY_SRC_DIR) -o $@ $<
+	$(CC) $(CFLAGS_BASE) -I$(UNITY_SRC_DIR) -DUNITY_OUTPUT_CHAR=_putchar -DUNITY_OUTPUT_CHAR_HEADER_DECLARATION='_putchar(char)' -o $@ $<
 
 $(UNITY_LIB_OUT): $(UNITY_OBJ)
 	$(make-build-dir)

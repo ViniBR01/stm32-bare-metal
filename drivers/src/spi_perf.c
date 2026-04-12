@@ -302,6 +302,7 @@ int spi_perf_run(spi_instance_t instance, uint16_t prescaler,
 
     /* Emit machine-parseable output for HIL test automation */
 #ifdef HIL_TEST_MODE
+    printf_dma_flush();
     {
         /* Use simple predefined test names for common configurations */
         const char* test_name;
@@ -324,6 +325,7 @@ int spi_perf_run(spi_instance_t instance, uint16_t prescaler,
                           "throughput_kbps",
                           throughput_kbps);
     }
+    printf_dma_flush();
 #endif
 
     /* Cleanup */
