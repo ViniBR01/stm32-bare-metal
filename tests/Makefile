@@ -1,4 +1,4 @@
-SUBDIRS = string_utils cli
+SUBDIRS = string_utils cli gpio
 
 COVERAGE_INFO = coverage.info
 COVERAGE_FILT = coverage-filtered.info
@@ -21,6 +21,10 @@ run: all
 	@echo "========================================"
 	@$(MAKE) -C cli run
 	@echo "========================================"
+	@echo "Running gpio tests"
+	@echo "========================================"
+	@$(MAKE) -C gpio run
+	@echo "========================================"
 	@echo "All test suites passed"
 	@echo "========================================"
 
@@ -42,7 +46,7 @@ coverage: clean
 	@echo "Generating coverage report"
 	@echo "========================================"
 	lcov --capture --directory . --output-file $(COVERAGE_INFO)
-	lcov --extract $(COVERAGE_INFO) '*/utils/src/*' \
+	lcov --extract $(COVERAGE_INFO) '*/utils/src/*' '*/drivers/src/*' \
 		--output-file $(COVERAGE_FILT)
 	genhtml $(COVERAGE_FILT) \
 		--output-directory $(COVERAGE_HTML) \
