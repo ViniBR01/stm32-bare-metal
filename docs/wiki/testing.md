@@ -2,12 +2,13 @@
 
 ## Overview
 
-Tests are split into two categories:
+Tests are split into three categories:
 
 | Type | Location | Toolchain | Runs on |
 |---|---|---|---|
 | Host unit tests | `tests/` | Native `gcc` | Any Linux/macOS host, CI |
-| Hardware-in-the-loop (HIL) | _(future)_ | `arm-none-eabi-gcc` | Raspberry Pi + NUCLEO board |
+| Hardware-in-the-loop (HIL) | `examples/cli/test_harness.c` | `arm-none-eabi-gcc` | STM32 board + host serial |
+| HIL automation | `scripts/run_hil_tests.py` | Python 3 + pyserial | Host (Mac/Linux) |
 
 ## Host Unit Tests
 
@@ -151,3 +152,94 @@ Complex computation buried in register-writing functions is extracted into stand
 Planned improvements:
 - ~~Issue #85: JUnit XML output~~ — **Done**: `tests/unity_to_junit.py` converts Unity stdout to JUnit XML; `dorny/test-reporter@v3` publishes a Test Summary tab on every PR
 - ~~Issue #88: gcov/lcov coverage reporting~~ — **Done**: `make -C tests coverage` generates HTML via lcov; uploaded as `coverage-report` artifact on every CI run
+
+## Hardware-in-the-Loop (HIL) Testing
+
+### Overview
+
+HIL tests run Unity test cases directly on the STM32 target hardware. They verify real peripheral behaviour, DMA transfers, and performance characteristics that cannot be tested on the host.
+
+### Build flag
+
+The `HIL_TEST` build flag controls inclusion of the test harness and Unity library:
+
+```sh
+make EXAMPLE=cli_simple HIL_TEST=1    # ~24 KB — includes Unity + test harness
+make EXAMPLE=cli_simple               # ~19 KB — production binary, no test code
+```
+
+**Always `make clean` when switching between production and HIL_TEST builds.** The flag changes compiler defines (`-DHIL_TEST_MODE`); Make does not track flag changes.
+
+When `HIL_TEST=1`:
+- `-DHIL_TEST_MODE` is added to `CFLAGS`
+- Unity include path and `libunity_arm.a` are linked
+- `examples/cli/test_harness.c` is compiled (excluded in production builds)
+- `run_all_tests` CLI command becomes available
+- `spi_perf.c` emits machine-parseable `TEST:` output lines
+
+### Unity on target
+
+Unity is compiled for ARM with `UNITY_OUTPUT_CHAR=_putchar`, routing all Unity output through the project's mpaland printf `_putchar` function (UART). This avoids libc `putchar` which causes Hard Faults on bare-metal (no heap for stdio buffers).
+
+The Unity ARM library is built by `3rd_party/Makefile` and linked as `libunity_arm.a`.
+
+### Test harness
+
+`examples/cli/test_harness.c` contains all HIL test cases. It uses a parameterized macro `RUN_SPI_TEST(instance, prescaler, buffer_size, use_dma)` to run SPI tests across parameter combinations without code duplication.
+
+**Test tiers (60 tests total):**
+
+| Tier | Tests | What it covers |
+|---|---|---|
+| Tier 1: All-SPI smoke | 10 | All 5 SPI interfaces at max speed (psc=2, 256B), polled + DMA |
+| Tier 2a: SPI2 deep sweep | 24 | APB1 bus (50 MHz): all prescalers at 256B + buffer sizes 1/4/16/64B at psc=2 |
+| Tier 2b: SPI1 deep sweep | 24 | APB2 bus (100 MHz): same matrix as SPI2 |
+| Tier 3: FPU | 2 | Hardware FPU multiplication and division |
+
+### Machine-parseable output
+
+`drivers/inc/test_output.h` provides macros for automation:
+
+```
+START_TESTS                                               ← sequence start marker
+TEST:spi1_dma_psc2_256B:PASS:cycles=4811:throughput_kbps=5333  ← per-test result
+END_TESTS                                                 ← sequence end marker
+```
+
+Test names follow the pattern `spi<N>_<mode>_psc<P>_<S>B` (e.g., `spi2_dma_psc4_256B`).
+
+### Running HIL tests
+
+**Manual (via serial console):**
+```sh
+make clean && make flash EXAMPLE=cli_simple HIL_TEST=1
+make serial
+# Type: run_all_tests
+```
+
+**Automated (Python script):**
+```sh
+pip3 install pyserial          # one-time dependency
+python3 scripts/run_hil_tests.py
+```
+
+The script (`scripts/run_hil_tests.py`) automates the full workflow:
+1. `make clean && make EXAMPLE=cli_simple HIL_TEST=1`
+2. Flash via OpenOCD
+3. Connect to auto-detected serial port
+4. Send `run_all_tests`, capture output
+5. Parse `TEST:` and Unity result lines
+6. Validate metrics against `tests/baselines/performance.json`
+7. Exit 0 (pass), 1 (failure/regression), or 2 (error)
+
+Options: `--skip-build`, `--skip-flash`, `--timeout <seconds>`.
+
+### Performance baselines
+
+`tests/baselines/performance.json` stores expected cycle counts and throughput for each SPI test configuration, with tolerance thresholds (typically ±10%, wider for small transfers where overhead dominates).
+
+The HIL runner validates measured values against baselines. Regressions outside tolerance cause exit code 1. See `tests/baselines/README.md` for the update process.
+
+### Future: CI integration (Issue #86)
+
+When a Raspberry Pi self-hosted runner is set up, `scripts/run_hil_tests.py` will be called from a `hil-tests` CI job. All infrastructure is in place; only the runner registration and CI workflow addition remain.

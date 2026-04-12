@@ -15,7 +15,7 @@
 
 | Issue | Title | Notes |
 |---|---|---|
-| #86 | Self-hosted Raspberry Pi runner for HIL tests | Needed once hardware-only behaviour must be verified in CI. |
+| #86 | Self-hosted Raspberry Pi runner for HIL tests | **HIL test infra done** (test harness, automation script, baselines). Only Pi runner setup + CI job addition remain. |
 
 ### Architecture / Quality
 
@@ -82,3 +82,4 @@ See [log.md](log.md) for the full history. Key milestones:
 - ✅ lcov code coverage report uploaded as CI artifact
 - ✅ Unity as direct root-level submodule (`3rd_party/unity/`)
 - ✅ All GitHub Actions upgraded to Node.js 24
+- ✅ HIL test infrastructure: Unity on target, parameterized SPI test sweep (60 tests), machine-parseable output, Python automation script, performance baselines

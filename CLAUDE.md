@@ -26,6 +26,18 @@ make debug EXAMPLE=<name>    # Flash and attach GDB
 make serial                  # Connect to board serial port (115200 baud)
 ```
 
+### HIL (Hardware-in-the-Loop) Testing
+
+```sh
+make clean && make EXAMPLE=cli_simple HIL_TEST=1   # Build with Unity on target + test harness
+make flash EXAMPLE=cli_simple HIL_TEST=1           # Flash HIL firmware
+python3 scripts/run_hil_tests.py                   # Automated: build → flash → serial → validate
+python3 scripts/run_hil_tests.py --skip-build      # Skip build (use existing binary)
+```
+
+**Important:** Always `make clean` when switching between production and `HIL_TEST=1` builds.
+The `HIL_TEST` flag changes compiler defines; incremental builds will have stale objects.
+
 ## Project Wiki
 
 The wiki is the persistent knowledge base for this project. Read it at the start of any
