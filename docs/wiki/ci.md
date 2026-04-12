@@ -43,7 +43,7 @@ When `hil-tests` is added: register it as a second required status check in the 
 
 | Issue | Change |
 |---|---|
-| #89 | Upgrade `actions/checkout` to Node.js 24-compatible version (deadline: 2026-06-02) |
+| ~~#89~~ | ~~Upgrade `actions/checkout` to Node.js 24-compatible version~~ — **Done**: upgraded to `actions/checkout@v6` |
 | #85 | Add JUnit XML test reporting — GitHub PR Test Summary tab |
 | #87 | Add `firmware-build` job — installs `arm-none-eabi-gcc`, runs `make all` |
 | #88 | Add code coverage step — gcov/lcov HTML report uploaded as artifact |
