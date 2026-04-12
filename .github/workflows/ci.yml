@@ -15,6 +15,8 @@ jobs:
   host-tests:
     name: Host Tests
     runs-on: ubuntu-latest
+    permissions:
+      checks: write  # required by dorny/test-reporter to publish results
 
     steps:
       - name: Checkout repository
@@ -30,4 +32,18 @@ jobs:
           make --version
 
       - name: Run host tests
-        run: make test
+        run: |
+          set -o pipefail
+          make test | tee test-output.txt
+
+      - name: Convert test output to JUnit XML
+        if: always()
+        run: python3 tests/unity_to_junit.py test-output.txt test-results.xml
+
+      - name: Publish test results
+        if: always()
+        uses: dorny/test-reporter@v3
+        with:
+          name: Unity Tests
+          path: test-results.xml
+          reporter: java-junit
