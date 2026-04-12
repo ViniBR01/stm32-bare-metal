@@ -1,12 +1,6 @@
 #==============================================================================
-# 3rd Party Libraries Makefile
+# Third-party Libraries Makefile
 #==============================================================================
-
-# Module name for identification
-MODULE_NAME := 3rd_party
-
-# Default target
-.DEFAULT_GOAL := all
 
 # Include common definitions
 include ../Makefile.common
@@ -16,61 +10,73 @@ include ../Makefile.common
 #==============================================================================
 LOCAL_BUILD_DIR := $(BUILD_DIR)/3rd_party
 
+PRINTF_SRC_DIR := $(THIRD_PARTY_DIR)/printf
+LOG_C_SRC_DIR := $(THIRD_PARTY_DIR)/log_c/src
+UNITY_SRC_DIR := $(THIRD_PARTY_DIR)/unity/src
+
 #==============================================================================
-# Printf library configuration
+# Source files
 #==============================================================================
-PRINTF_SRC := printf/printf.c
+PRINTF_SRC := $(PRINTF_SRC_DIR)/printf.c
 PRINTF_OBJ := $(LOCAL_BUILD_DIR)/printf.o
-PRINTF_FLAGS := -DPRINTF_DISABLE_SUPPORT_FLOAT \
-                -DPRINTF_DISABLE_SUPPORT_EXPONENTIAL \
-                -DPRINTF_DISABLE_SUPPORT_LONG_LONG
+PRINTF_LIB_OUT := $(LOCAL_BUILD_DIR)/libprintf.a
 
-#==============================================================================
-# Log_c library configuration
-#==============================================================================
-LOG_C_SRC := log_c/src/log_c.c
+LOG_C_SRC := $(LOG_C_SRC_DIR)/log_c.c
 LOG_C_OBJ := $(LOCAL_BUILD_DIR)/log_c.o
+LOG_C_LIB_OUT := $(LOCAL_BUILD_DIR)/liblog_c.a
 
-#==============================================================================
-# Target libraries
-#==============================================================================
-# Note: printf library is kept for CLI and other direct printf usage,
-# but log_c no longer depends on it
-TARGETS := $(PRINTF_LIB) $(LOG_C_LIB)
+UNITY_SRC := $(UNITY_SRC_DIR)/unity.c
+UNITY_OBJ := $(LOCAL_BUILD_DIR)/unity.o
+UNITY_LIB_OUT := $(LOCAL_BUILD_DIR)/libunity_arm.a
 
 #==============================================================================
 # Build rules
 #==============================================================================
-.PHONY: all clean
+.PHONY: all clean unity_arm
 
-all: $(TARGETS)
+# Default target builds printf and log_c (Unity only when HIL_TEST=1)
+all: $(PRINTF_LIB_OUT) $(LOG_C_LIB_OUT)
+ifeq ($(HIL_TEST),1)
+	@$(MAKE) unity_arm
+endif
 
-# Build printf library (for CLI and direct printf usage)
-$(PRINTF_LIB): $(PRINTF_OBJ)
+unity_arm: $(UNITY_LIB_OUT)
+
+# Printf library
+$(PRINTF_OBJ): $(PRINTF_SRC)
+	$(make-build-dir)
+	@echo "Compiling printf for ARM target..."
+	$(CC) $(CFLAGS_BASE) -I$(PRINTF_SRC_DIR) -o $@ $<
+
+$(PRINTF_LIB_OUT): $(PRINTF_OBJ)
 	$(make-build-dir)
 	@echo "Creating printf library..."
 	$(AR) rcs $@ $^
-	@echo "Printf library created: $@"
 
-$(PRINTF_OBJ): $(PRINTF_SRC)
-	$(make-build-dir)
-	@echo "Compiling 3rd-party printf (no float/exp/long long): $<"
-	$(CC) $(CFLAGS) $(PRINTF_FLAGS) -o $@ $<
-
-# Build log_c library (now self-contained, no printf dependency)
-$(LOG_C_LIB): $(LOG_C_OBJ)
-	$(make-build-dir)
-	@echo "Creating log_c library (self-contained)..."
-	$(AR) rcs $@ $^
-	@echo "Log_c library created: $@"
-
+# Log_c library
 $(LOG_C_OBJ): $(LOG_C_SRC)
 	$(make-build-dir)
-	@echo "Compiling 3rd-party log_c (no dependencies): $<"
-	$(CC) $(CFLAGS) -o $@ $<
+	@echo "Compiling log_c for ARM target..."
+	$(CC) $(CFLAGS_BASE) -I$(LOG_C_SRC_DIR) -o $@ $<
 
-# Clean all 3rd party build artifacts
+$(LOG_C_LIB_OUT): $(LOG_C_OBJ)
+	$(make-build-dir)
+	@echo "Creating log_c library..."
+	$(AR) rcs $@ $^
+
+# Unity library (only built when HIL_TEST=1)
+$(UNITY_OBJ): $(UNITY_SRC)
+	$(make-build-dir)
+	@echo "Compiling Unity for ARM target..."
+	$(CC) $(CFLAGS_BASE) -I$(UNITY_SRC_DIR) -o $@ $<
+
+$(UNITY_LIB_OUT): $(UNITY_OBJ)
+	$(make-build-dir)
+	@echo "Creating Unity ARM library..."
+	$(AR) rcs $@ $^
+	@echo "Unity ARM library created: $@"
+
+# Clean
 clean:
-	@echo "Cleaning 3rd party libraries..."
+	@echo "Cleaning 3rd_party build artifacts..."
 	@rm -rf $(LOCAL_BUILD_DIR)
-	@rm -f $(TARGETS)

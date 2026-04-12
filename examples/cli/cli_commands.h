@@ -14,5 +14,17 @@
  */
 const cli_command_t* cli_commands_get_table(size_t* num_commands);
 
+#ifdef HIL_TEST_MODE
+/**
+ * @brief Run all Unity tests on the target hardware
+ * 
+ * Executes the Unity test suite defined in test_harness.c.
+ * Only available when compiled with HIL_TEST=1.
+ * 
+ * @return Unity exit code (0 = all tests passed)
+ */
+int run_unity_tests(void);
+#endif
+
 #endif /* CLI_COMMANDS_H */
 

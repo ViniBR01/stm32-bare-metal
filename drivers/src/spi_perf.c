@@ -1,6 +1,7 @@
 #include "spi_perf.h"
 #include "spi.h"
 #include "printf.h"
+#include "test_output.h"
 
 /* Only include hardware headers when compiling for target */
 #ifndef SPI_PERF_HOST_TEST
@@ -298,6 +299,61 @@ int spi_perf_run(spi_instance_t instance, uint16_t prescaler,
         printf(" (FAIL - %u errors)\n", buffer_size - match_count);
     }
     printf("---------------------------\n");
+
+    /* Emit machine-parseable output for HIL test automation */
+#ifdef HIL_TEST_MODE
+    {
+        /* Build test name from parameters */
+        const char* mode_str = use_dma ? "dma" : "polled";
+        char test_name[64];
+        
+        /* Manual string formatting without snprintf */
+        int pos = 0;
+        const char* prefix = "spi_perf_";
+        while (*prefix && pos < 63) {
+            test_name[pos++] = *prefix++;
+        }
+        while (*mode_str && pos < 63) {
+            test_name[pos++] = *mode_str++;
+        }
+        if (pos < 63) test_name[pos++] = '_';
+        
+        /* Convert buffer_size to string */
+        char size_buf[16];
+        int size_pos = 0;
+        uint16_t size = buffer_size;
+        if (size == 0) {
+            size_buf[size_pos++] = '0';
+        } else {
+            uint16_t divisor = 1;
+            while (divisor * 10 <= size) divisor *= 10;
+            while (divisor > 0) {
+                size_buf[size_pos++] = '0' + (size / divisor);
+                size -= (size / divisor) * divisor;
+                divisor /= 10;
+            }
+        }
+        size_buf[size_pos] = '\0';
+        
+        /* Append size */
+        for (int i = 0; i < size_pos && pos < 63; i++) {
+            test_name[pos++] = size_buf[i];
+        }
+        
+        /* Append "bytes" */
+        const char* suffix = "bytes";
+        while (*suffix && pos < 63) {
+            test_name[pos++] = *suffix++;
+        }
+        test_name[pos] = '\0';
+        
+        TEST_OUTPUT_RESULT(test_name, 
+                          match_count == buffer_size,
+                          cycles,
+                          "throughput_kbps",
+                          throughput_kbps);
+    }
+#endif
 
     /* Cleanup */
     spi_deinit(&spi);

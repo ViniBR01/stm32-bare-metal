@@ -72,7 +72,7 @@ drivers:
 	$(MAKE) -C drivers
 
 3rd_party:
-	$(MAKE) -C 3rd_party
+	$(MAKE) -C 3rd_party all
 
 utils: 3rd_party
 	$(MAKE) -C utils

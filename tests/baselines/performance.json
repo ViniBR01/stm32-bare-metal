@@ -1,0 +1,16 @@
+{
+  "spi_perf_polled_3bytes": {
+    "throughput_kbps": null,
+    "cycles": null,
+    "tolerance_percent": 10,
+    "last_updated": null,
+    "notes": "SPI2, prescaler=4, polled mode, 3-byte transfer"
+  },
+  "spi_perf_dma_256bytes": {
+    "throughput_kbps": null,
+    "cycles": null,
+    "tolerance_percent": 10,
+    "last_updated": null,
+    "notes": "SPI2, prescaler=4, DMA mode, 256-byte transfer"
+  }
+}
