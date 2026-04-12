@@ -244,23 +244,8 @@ static int cmd_run_all_tests(const char* args) {
     TEST_OUTPUT_START();
     printf_dma_flush();
     
-    /* Run Unity tests from test_harness.c */
+    /* Run all Unity tests (SPI sweep + FPU) from test_harness.c */
     run_unity_tests();
-    
-    printf("\n");
-    printf("========================================\n");
-    printf("  Performance Benchmarks\n");
-    printf("========================================\n");
-    printf_dma_flush();
-    
-    /* Run performance tests - they emit their own TEST_OUTPUT_RESULT lines */
-    printf("\nSPI Performance Test (polled, 3 bytes):\n");
-    printf_dma_flush();
-    spi_perf_run(SPI_INSTANCE_2, 4, 3, 0);
-    
-    printf("\nSPI Performance Test (DMA, 256 bytes):\n");
-    printf_dma_flush();
-    spi_perf_run(SPI_INSTANCE_2, 4, 256, 1);
     
     TEST_OUTPUT_END();
     printf_dma_flush();

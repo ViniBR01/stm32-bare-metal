@@ -304,22 +304,13 @@ int spi_perf_run(spi_instance_t instance, uint16_t prescaler,
 #ifdef HIL_TEST_MODE
     printf_dma_flush();
     {
-        /* Use simple predefined test names for common configurations */
-        const char* test_name;
-        if (!use_dma && buffer_size == 3) {
-            test_name = "spi_perf_polled_3bytes";
-        } else if (use_dma && buffer_size == 256) {
-            test_name = "spi_perf_dma_256bytes";
-        } else if (!use_dma && buffer_size == 256) {
-            test_name = "spi_perf_polled_256bytes";
-        } else if (use_dma && buffer_size == 3) {
-            test_name = "spi_perf_dma_3bytes";
-        } else {
-            /* Generic name for other configurations */
-            test_name = use_dma ? "spi_perf_dma" : "spi_perf_polled";
-        }
-        
-        TEST_OUTPUT_RESULT(test_name, 
+        const char* mode_str = use_dma ? "dma" : "polled";
+        char test_name[48];
+        snprintf(test_name, sizeof(test_name), "spi%u_%s_psc%u_%uB",
+                 (unsigned)(instance + 1), mode_str,
+                 (unsigned)prescaler, (unsigned)buffer_size);
+
+        TEST_OUTPUT_RESULT(test_name,
                           match_count == buffer_size,
                           cycles,
                           "throughput_kbps",
