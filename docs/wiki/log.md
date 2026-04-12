@@ -6,6 +6,10 @@ Types: `merge`, `decision`, `milestone`, `infra`
 
 ---
 
+## [2026-04-12] merge | Add firmware-build CI job; update CLAUDE.md pre-push rules (#87)
+
+Added `firmware-build` job to `ci.yml` — installs `gcc-arm-none-eabi` via apt, runs `make all` in parallel with `host-tests`. Catches cross-compilation errors on every PR. Updated `CLAUDE.md` to require both `make test` and `make all` to pass before pushing. `firmware-build` still needs to be added as a required check in branch protection after its first run on `main`.
+
 ## [2026-04-12] merge | Make Unity a direct root-level submodule (#84)
 
 Added `3rd_party/unity/` as a direct submodule (ViniBR01/Unity fork, commit 36e9b19), replacing the fragile nested path `3rd_party/log_c/3rd-party/unity/`. Updated both test Makefiles. The Unity copy inside log_c is untouched.
