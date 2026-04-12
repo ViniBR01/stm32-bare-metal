@@ -44,6 +44,18 @@ tests/<suite>/
 
 Stubs allow source files that `#include "printf.h"` or `#include "printf_dma.h"` to compile on the host without the full embedded stack.
 
+### Coverage reporting
+
+Run coverage locally (requires `lcov` and `genhtml`):
+
+```sh
+make -C tests coverage      # generates tests/coverage-html/index.html
+```
+
+In CI, the HTML report is uploaded as the `coverage-report` artifact on every successful run. Download it from the Actions run page to browse coverage interactively.
+
+The report covers `utils/src/cli.c` and `utils/src/string_utils.c` only — Unity and test files are excluded by `lcov --extract '*/utils/src/*'`.
+
 ### Adding a new test suite
 
 1. Create `tests/<module>/` with a `Makefile` modelled on an existing suite
@@ -70,4 +82,4 @@ Exit code is non-zero on any test failure, which fails the CI job.
 
 Planned improvements:
 - ~~Issue #85: JUnit XML output~~ — **Done**: `tests/unity_to_junit.py` converts Unity stdout to JUnit XML; `dorny/test-reporter@v3` publishes a Test Summary tab on every PR
-- Issue #88: gcov/lcov coverage reporting uploaded as CI artifact
+- ~~Issue #88: gcov/lcov coverage reporting~~ — **Done**: `make -C tests coverage` generates HTML via lcov; uploaded as `coverage-report` artifact on every CI run
