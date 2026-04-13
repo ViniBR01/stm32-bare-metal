@@ -29,7 +29,7 @@ GitHub Actions workflow at `.github/workflows/ci.yml`.
 | Property | Value |
 |---|---|
 | Runner | `ubuntu-latest` (GitHub-hosted, free) |
-| Required check | Yes — add to branch protection after first run on `main` |
+| Required check | Yes — blocks PR merge |
 | Dependency | none (runs in parallel with `host-tests`) |
 
 **Steps:**
@@ -43,7 +43,7 @@ GitHub Actions workflow at `.github/workflows/ci.yml`.
 | Property | Value |
 |---|---|
 | Runner | `[self-hosted, pi-hil]` (Raspberry Pi on local network) |
-| Required check | Yes — add to branch protection after first run on `main` |
+| Required check | Yes — blocks PR merge |
 | Dependency | `needs: host-tests` |
 
 **Steps:**
@@ -53,12 +53,10 @@ GitHub Actions workflow at `.github/workflows/ci.yml`.
 
 ## Branch Protection
 
-`main` branch requires `host-tests` to pass before merge. Configured in:
+`main` requires all three jobs to pass. Configured in:
 **GitHub → Settings → Branches → Branch protection rules → main**
 
-After PR #94 merges and `firmware-build` runs on `main` for the first time, add `Firmware Build` as a second required status check in the same rule.
-
-When `hil-tests` is added: register it as a third required status check in the same rule.
+Required checks: `Host Tests`, `Firmware Build`, `HIL Tests`.
 
 ## Planned Improvements
 

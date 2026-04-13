@@ -6,17 +6,9 @@
 
 | Issue | Title | Notes |
 |---|---|---|
-| #98 | Build driver host test infrastructure | Fake `stm32f4xx.h` + CMSIS stubs. **Prerequisite for all driver tests.** |
-| #99 | Driver host tests: GPIO and EXTI | Tier 1 register config tests. Validates infrastructure. |
-| #100 | Driver host tests: UART | Tier 1 + Tier 2. Circular buffer wrap logic, baud divisor. |
+| #99 | Driver host tests: GPIO and EXTI | Tier 1 register config tests. EXTI validates SYSCFG port mapping + NVIC enable. |
+| #100 | Driver host tests: UART | Tier 1 + Tier 2. Circular buffer wrap logic, baud divisor, init register setup. |
 | #101 | Driver host tests: RCC and Timer | Tier 1 + Tier 2. PLL solver — most complex logic in codebase. |
-
-### CI / Hardware
-
-| Issue | Title | Notes |
-|---|---|---|
-| ~~#86~~ | ~~Self-hosted Raspberry Pi runner for HIL tests~~ | **Done** — Pi registered with `pi-hil` label, `hil-tests` job added to CI, `needs: host-tests`. |
-| #105 | GCC 14 linker compat + HIL script fixes | PR #106 open — `.ARM.exidx` section, throughput formula fix, baseline updates. |
 
 ### Architecture / Quality
 
@@ -51,16 +43,15 @@
 
 ## Suggested Priority Order
 
-1. **#98** — driver test infrastructure (all other driver tests depend on this)
-2. **#99** — GPIO/EXTI tests (simplest drivers; validates the new infrastructure)
-3. **#100** — UART tests (circular buffer has non-obvious wrap edge cases)
-4. **#101** — RCC/Timer tests (PLL solver is the most complex logic in the codebase)
-5. **#62** — non-blocking SysTick tick counter
-6. **#26** — unified error codes
-7. **#69** — multi-instance UART
-8. **#73** — NVIC priority scheme
-9. Remaining drivers (#66, #67, #68, #70, #71, #72) after #26 and #73
-11. Examples (#14, #16, #22, #45) driven by driver availability
+1. **#99** — GPIO/EXTI driver tests (simplest drivers; validate the fake stub infrastructure)
+2. **#100** — UART driver tests (circular buffer has non-obvious wrap edge cases)
+3. **#101** — RCC/Timer driver tests (PLL solver is the most complex logic in the codebase)
+4. **#62** — non-blocking SysTick tick counter
+5. **#26** — unified error codes
+6. **#69** — multi-instance UART
+7. **#73** — NVIC priority scheme
+8. Remaining drivers (#66, #67, #68, #70, #71, #72) after #26 and #73
+9. Examples (#14, #16, #22, #45) driven by driver availability
 
 ---
 
@@ -72,15 +63,16 @@ See [log.md](log.md) for the full history. Key milestones:
 - ✅ RCC clock configuration (100 MHz via PLL)
 - ✅ Hardware FPU enabled in startup
 - ✅ Fault handlers with register dump
-- ✅ Hardened linker script with stack/heap overflow detection
+- ✅ Hardened linker script with stack/heap overflow detection + GCC 14 `.ARM.exidx` fix
 - ✅ CLI engine with tab completion, command history, ANSI escape handling
 - ✅ DMA-buffered printf (printf_dma)
 - ✅ Logging system (log_c) with runtime log level control
-- ✅ Host unit tests for CLI and string utils (64 tests total)
-- ✅ GitHub Actions CI pipeline: `host-tests` + `firmware-build`, branch protection
+- ✅ Host unit tests: CLI (41), string utils (23), GPIO driver (44) — 108 total
+- ✅ Driver host test infrastructure: fake `stm32f4xx.h` + `core_cm4.h` stubs, `test_periph_reset()`
+- ✅ GitHub Actions CI pipeline: `host-tests` + `firmware-build` + `hil-tests`, branch protection
 - ✅ JUnit XML test reporting (Unity → `unity_to_junit.py` → `dorny/test-reporter@v3`)
 - ✅ lcov code coverage report uploaded as CI artifact
 - ✅ Unity as direct root-level submodule (`3rd_party/unity/`)
 - ✅ All GitHub Actions upgraded to Node.js 24
-- ✅ HIL test infrastructure: Unity on target, parameterized SPI test sweep (60 tests), machine-parseable output, Python automation script, performance baselines
-- ✅ Self-hosted Raspberry Pi HIL runner with `pi-hil` label, `hil-tests` CI job
+- ✅ HIL test infrastructure: Unity on target (60 tests), machine-parseable output, Python automation, performance baselines
+- ✅ Self-hosted Raspberry Pi HIL runner (`pi-hil` label), `hil-tests` CI job with `needs: host-tests`
