@@ -259,19 +259,14 @@ int spi_perf_run(spi_instance_t instance, uint16_t prescaler,
     uint32_t cycles = spi_perf_timed_transfer(&spi, buffer_size, use_dma);
 
     /* Compute timing — DWT ticks at the core clock (HCLK), not bus clock */
-    uint32_t core_mhz = rcc_get_sysclk() / 1000000;
-    uint32_t elapsed_us = cycles / core_mhz;
+    uint32_t core_hz = rcc_get_sysclk();
+    float elapsed_s  = (float)cycles / (float)core_hz;
+    uint32_t elapsed_us = (uint32_t)(elapsed_s * 1e6f);
 
-    /*
-     * throughput = bytes / seconds = bytes * core_freq / cycles
-     * In KB/s:  (bytes * 1000 * core_mhz) / cycles
-     * This avoids truncation for sub-microsecond transfers where
-     * cycles < core_mhz would make elapsed_us = 0.
-     * Max intermediate: 256 * 1000 * 100 = 25.6M — fits uint32_t.
-     */
+    /* throughput in KB/s = bytes / elapsed_s / 1000 */
     uint32_t throughput_kbps = 0;
     if (cycles > 0) {
-        throughput_kbps = ((uint32_t)buffer_size * 1000u * core_mhz) / cycles;
+        throughput_kbps = (uint32_t)((float)buffer_size / elapsed_s / 1000.0f);
     }
 
     /* Compare TX and RX buffers */
