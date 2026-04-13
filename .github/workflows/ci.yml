@@ -78,3 +78,20 @@ jobs:
 
       - name: Build all firmware examples
         run: make all
+
+  hil-tests:
+    name: HIL Tests
+    runs-on: [self-hosted, pi-hil]
+    needs: host-tests
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Print toolchain version
+        run: arm-none-eabi-gcc --version
+
+      - name: Run HIL tests
+        run: python3 scripts/run_hil_tests.py --timeout 120 --baseline tests/baselines/performance.json

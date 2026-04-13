@@ -38,15 +38,18 @@ GitHub Actions workflow at `.github/workflows/ci.yml`.
 3. Print `arm-none-eabi-gcc --version`
 4. `make all` (builds all examples; exits non-zero on any failure)
 
-### `hil-tests` (planned — Issue #86)
+### `hil-tests` (active)
 
 | Property | Value |
 |---|---|
-| Runner | `[self-hosted, pi-hil]` (Raspberry Pi on local server) |
-| Required check | Yes — will be added to branch protection when implemented |
+| Runner | `[self-hosted, pi-hil]` (Raspberry Pi on local network) |
+| Required check | Yes — add to branch protection after first run on `main` |
 | Dependency | `needs: host-tests` |
 
-**Infrastructure ready:** The HIL test harness, machine-parseable output format, automation script (`scripts/run_hil_tests.py`), and performance baselines (`tests/baselines/performance.json`) are all implemented and validated locally. Only the Pi runner registration and CI workflow job addition remain.
+**Steps:**
+1. Checkout with `submodules: recursive`
+2. Print `arm-none-eabi-gcc --version`
+3. `python3 scripts/run_hil_tests.py --timeout 120 --baseline tests/baselines/performance.json` (build → flash → run 60 Unity tests → validate baselines)
 
 ## Branch Protection
 
@@ -65,7 +68,7 @@ When `hil-tests` is added: register it as a third required status check in the s
 | ~~#85~~ | ~~Add JUnit XML test reporting~~ — **Done**: `tests/unity_to_junit.py` + `dorny/test-reporter@v3` |
 | ~~#87~~ | ~~Add `firmware-build` job~~ — **Done**: parallel job, `apt` ARM toolchain, `make all` |
 | ~~#88~~ | ~~Add code coverage~~ — **Done**: `lcov` + `genhtml`, uploaded via `actions/upload-artifact@v6` |
-| #86 | Add `hil-tests` job — self-hosted Pi runner, OpenOCD flash, serial assertion |
+| ~~#86~~ | ~~Add `hil-tests` job — self-hosted Pi runner, OpenOCD flash, serial assertion~~ — **Done**: `[self-hosted, pi-hil]`, `needs: host-tests`, `run_hil_tests.py` |
 
 ## Adding a New Required Check
 

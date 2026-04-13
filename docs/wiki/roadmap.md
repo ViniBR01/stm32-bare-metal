@@ -15,7 +15,8 @@
 
 | Issue | Title | Notes |
 |---|---|---|
-| #86 | Self-hosted Raspberry Pi runner for HIL tests | **HIL test infra done** (test harness, automation script, baselines). Only Pi runner setup + CI job addition remain. |
+| ~~#86~~ | ~~Self-hosted Raspberry Pi runner for HIL tests~~ | **Done** — Pi registered with `pi-hil` label, `hil-tests` job added to CI, `needs: host-tests`. |
+| #105 | GCC 14 linker compat + HIL script fixes | PR #106 open — `.ARM.exidx` section, throughput formula fix, baseline updates. |
 
 ### Architecture / Quality
 
@@ -58,8 +59,7 @@
 6. **#26** — unified error codes
 7. **#69** — multi-instance UART
 8. **#73** — NVIC priority scheme
-9. **#86** — HIL Pi runner
-10. Remaining drivers (#66, #67, #68, #70, #71, #72) after #26 and #73
+9. Remaining drivers (#66, #67, #68, #70, #71, #72) after #26 and #73
 11. Examples (#14, #16, #22, #45) driven by driver availability
 
 ---
@@ -83,3 +83,4 @@ See [log.md](log.md) for the full history. Key milestones:
 - ✅ Unity as direct root-level submodule (`3rd_party/unity/`)
 - ✅ All GitHub Actions upgraded to Node.js 24
 - ✅ HIL test infrastructure: Unity on target, parameterized SPI test sweep (60 tests), machine-parseable output, Python automation script, performance baselines
+- ✅ Self-hosted Raspberry Pi HIL runner with `pi-hil` label, `hil-tests` CI job

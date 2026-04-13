@@ -6,6 +6,13 @@ Types: `merge`, `decision`, `milestone`, `infra`
 
 ---
 
+## [2026-04-13] infra | Add hil-tests CI job on self-hosted Pi runner (#86, #105)
+
+Added `hil-tests` job to `.github/workflows/ci.yml` running on `[self-hosted, pi-hil]`
+with `needs: host-tests`. The Pi runner is registered and idle. Also fixed GCC 14 linker
+compatibility (`.ARM.exidx` section), throughput calculation truncation (switched to float),
+and updated all performance baselines. PR #106.
+
 ## [2026-04-12] milestone | HIL test infrastructure with Unity on target (#86)
 
 Implemented hardware-in-the-loop testing framework. Unity compiled for ARM target with `UNITY_OUTPUT_CHAR=_putchar` to route output through UART (avoids libc putchar Hard Fault on bare-metal). Build controlled by `HIL_TEST=1` flag — production builds unchanged (~19 KB), HIL builds ~24 KB. Test harness uses parameterized `RUN_SPI_TEST` macro for 60 tests: all 5 SPI interfaces at max speed (Tier 1), deep prescaler/buffer-size sweep on SPI2 (APB1) and SPI1 (APB2) (Tier 2), plus FPU tests (Tier 3). Machine-parseable output format (`TEST:name:PASS:cycles=N:metric=N`) with `START_TESTS`/`END_TESTS` markers. Python automation script (`scripts/run_hil_tests.py`) handles build → flash → serial capture → parse → baseline validation. Performance baselines stored in `tests/baselines/performance.json` with per-test tolerance thresholds. Key finding: DMA crossover at ~16 bytes (below that, polled is faster due to DMA setup overhead). All infrastructure ready for CI integration — only Pi runner registration remains (#86).
