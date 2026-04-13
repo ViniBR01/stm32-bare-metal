@@ -262,10 +262,16 @@ int spi_perf_run(spi_instance_t instance, uint16_t prescaler,
     uint32_t core_mhz = rcc_get_sysclk() / 1000000;
     uint32_t elapsed_us = cycles / core_mhz;
 
-    /* Compute throughput: (bytes * 1000000) / elapsed_us = bytes/s */
+    /*
+     * throughput = bytes / seconds = bytes * core_freq / cycles
+     * In KB/s:  (bytes * 1000 * core_mhz) / cycles
+     * This avoids truncation for sub-microsecond transfers where
+     * cycles < core_mhz would make elapsed_us = 0.
+     * Max intermediate: 256 * 1000 * 100 = 25.6M — fits uint32_t.
+     */
     uint32_t throughput_kbps = 0;
-    if (elapsed_us > 0) {
-        throughput_kbps = ((uint32_t)buffer_size * 1000u) / elapsed_us;
+    if (cycles > 0) {
+        throughput_kbps = ((uint32_t)buffer_size * 1000u * core_mhz) / cycles;
     }
 
     /* Compare TX and RX buffers */
