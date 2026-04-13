@@ -9,7 +9,7 @@ Claude reads this file at session start via `CLAUDE.md`. Update it whenever a pa
 |---|---|
 | [architecture.md](architecture.md) | Module map, build system, directory layout, design principles |
 | [roadmap.md](roadmap.md) | Open issues by priority, future directions |
-| [testing.md](testing.md) | Test framework, how to add tests, test coverage status |
+| [testing.md](testing.md) | Host unit tests, driver fake-stub testing, HIL on-target testing, coverage |
 | [ci.md](ci.md) | CI pipeline, jobs, required checks, how to extend |
 
 ## Drivers
