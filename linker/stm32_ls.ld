@@ -42,6 +42,19 @@ SECTIONS
         _etext = .;
     } > FLASH
 
+    /* ARM exception unwind tables (required by GCC 14+ libgcc) */
+    .ARM.extab :
+    {
+        *(.ARM.extab* .gnu.linkonce.armextab.*)
+    } > FLASH
+
+    .ARM.exidx :
+    {
+        __exidx_start = .;
+        *(.ARM.exidx* .gnu.linkonce.armexidx.*)
+        __exidx_end = .;
+    } > FLASH
+
     /* Initialized data — LMA in FLASH, VMA in SRAM */
     .data :
     {
