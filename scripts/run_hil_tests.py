@@ -91,19 +91,20 @@ def build_firmware(project_root: Path) -> Path:
             capture_output=True,
             text=True,
             check=True,
-            timeout=60
+            timeout=120
         )
         
         # Find the built ELF file
-        elf_pattern = project_root / 'build' / 'examples' / '**' / 'cli_simple.elf'
-        elf_files = list(project_root.glob('build/examples/**/cli_simple.elf'))
+        elf_path = project_root / 'build' / 'examples' / 'cli' / 'cli_simple' / 'cli_simple.elf'
         
-        if not elf_files:
-            log_error("Build succeeded but ELF file not found")
+        if not elf_path.exists():
+            log_error("Build completed but ELF file not found")
             print(result.stdout)
+            if result.stderr:
+                log_error("Build stderr:")
+                print(result.stderr)
             return None
         
-        elf_path = elf_files[0]
         log_success(f"Build complete: {elf_path.relative_to(project_root)}")
         
         # Print binary size
@@ -122,7 +123,7 @@ def build_firmware(project_root: Path) -> Path:
         print(e.stderr)
         return None
     except subprocess.TimeoutExpired:
-        log_error("Build timed out after 60 seconds")
+        log_error("Build timed out after 120 seconds")
         return None
 
 def flash_firmware(elf_path: Path) -> bool:
@@ -453,12 +454,10 @@ def main():
                 return 2
         else:
             log_warning("Skipping build (--skip-build)")
-            elf_pattern = project_root / 'build' / 'examples' / '**' / 'cli_simple.elf'
-            elf_files = list(project_root.glob('build/examples/**/cli_simple.elf'))
-            if not elf_files:
+            elf_path = project_root / 'build' / 'examples' / 'cli' / 'cli_simple' / 'cli_simple.elf'
+            if not elf_path.exists():
                 log_error("No existing ELF file found - build required")
                 return 2
-            elf_path = elf_files[0]
         
         # Flash firmware
         if not args.skip_flash:
