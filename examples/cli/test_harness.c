@@ -27,6 +27,9 @@
 #include "test_output.h"
 #include "printf.h"
 #include "printf_dma.h"
+#include "rcc.h"
+#include "timer.h"
+#include "stm32f4xx.h"  /* DWT / CoreDebug for cycle counting */
 
 /* ====================================================================
  * Parameterized SPI test infrastructure
@@ -76,6 +79,69 @@ void setUp(void) {
 
 void tearDown(void) {
     printf_dma_flush();
+}
+
+/* ====================================================================
+ * RCC clock frequency tests
+ * ==================================================================== */
+
+/*
+ * These tests verify the clock tree configured by SystemInit() at
+ * startup: 100 MHz SYSCLK from HSI via PLL, APB1 /2 → 50 MHz,
+ * APB2 /1 → 100 MHz, APB1 timer clock = APB1 × 2 = 100 MHz.
+ */
+
+void test_rcc_sysclk_is_100mhz(void)
+{
+    TEST_ASSERT_EQUAL_UINT32(100000000U, rcc_get_sysclk());
+}
+
+void test_rcc_apb1_clk_is_50mhz(void)
+{
+    TEST_ASSERT_EQUAL_UINT32(50000000U, rcc_get_apb1_clk());
+}
+
+void test_rcc_apb2_clk_is_100mhz(void)
+{
+    TEST_ASSERT_EQUAL_UINT32(100000000U, rcc_get_apb2_clk());
+}
+
+void test_rcc_apb1_timer_clk_is_100mhz(void)
+{
+    /* APB1 prescaler = /2 → timer clock = APB1 × 2 per STM32 clock tree */
+    TEST_ASSERT_EQUAL_UINT32(100000000U, rcc_get_apb1_timer_clk());
+}
+
+/* ====================================================================
+ * Timer hardware tests
+ * ==================================================================== */
+
+/*
+ * Measure timer_delay_us(1000) against the DWT cycle counter.
+ *
+ * At 100 MHz, 1000 µs = 100 000 cycles. We allow ±2000 cycles (±20 µs)
+ * to accommodate DWT read overhead and minor timer startup latency.
+ */
+#define DELAY_TEST_US           1000U
+#define DELAY_EXPECTED_CYCLES   (DELAY_TEST_US * 100U)  /* 100 000 at 100 MHz */
+#define DELAY_TOLERANCE_CYCLES  2000U
+
+void test_timer_delay_us_accuracy(void)
+{
+    /* Enable DWT cycle counter (same pattern as spi_perf.c) */
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0;
+    DWT->CTRL  |= DWT_CTRL_CYCCNTENA_Msk;
+
+    uint32_t start = DWT->CYCCNT;
+    timer_delay_us(DELAY_TEST_US);
+    uint32_t elapsed = DWT->CYCCNT - start;
+
+    TEST_ASSERT_UINT32_WITHIN_MESSAGE(
+        DELAY_TOLERANCE_CYCLES,
+        DELAY_EXPECTED_CYCLES,
+        elapsed,
+        "timer_delay_us(1000) not within ±20 us of 1 ms");
 }
 
 /* ====================================================================
@@ -215,6 +281,22 @@ int run_unity_tests(void) {
 
     RUN_TEST(test_fpu_multiplication);
     RUN_TEST(test_fpu_division);
+
+    /* ----------------------------------------------------------
+     * Tier 4: RCC and Timer hardware tests
+     * ---------------------------------------------------------- */
+    printf("\n--- Tier 4: RCC clock tree ---\n");
+    printf_dma_flush();
+
+    RUN_TEST(test_rcc_sysclk_is_100mhz);
+    RUN_TEST(test_rcc_apb1_clk_is_50mhz);
+    RUN_TEST(test_rcc_apb2_clk_is_100mhz);
+    RUN_TEST(test_rcc_apb1_timer_clk_is_100mhz);
+
+    printf("\n--- Tier 4: Timer delay accuracy ---\n");
+    printf_dma_flush();
+
+    RUN_TEST(test_timer_delay_us_accuracy);
 
     printf_dma_flush();
     return UNITY_END();
