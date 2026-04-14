@@ -6,6 +6,17 @@ Types: `merge`, `decision`, `milestone`, `infra`
 
 ---
 
+## [2026-04-13] infra | Add Tailscale remote access and MCP HIL server (#109)
+
+Added `scripts/mcp_hil_server.py` — a Python stdio MCP server that exposes `hil_status` and
+`hil_run_tests` tools to Claude Code. Claude can now autonomously build, flash, and run HIL
+tests on the real NUCLEO board during development: it rsyncs the working tree to the Pi (so
+uncommitted changes are included), runs `run_hil_tests.py` remotely, and receives structured
+JSON results (pass/fail, metrics, regressions). Reuses `parse_test_output` and `load_baselines`
+from the existing script without duplication. Registered via `.mcp.json` at project root.
+Remote access enabled by Tailscale mesh VPN; configuration via `HIL_PI_SSH` env var.
+See `docs/wiki/hil-remote-access.md`.
+
 ## [2026-04-13] infra | Add hil-tests CI job on self-hosted Pi runner (#86, #105)
 
 Added `hil-tests` job to `.github/workflows/ci.yml` running on `[self-hosted, pi-hil]`

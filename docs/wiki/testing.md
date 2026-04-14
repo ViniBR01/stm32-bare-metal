@@ -240,6 +240,17 @@ Options: `--skip-build`, `--skip-flash`, `--timeout <seconds>`.
 
 The HIL runner validates measured values against baselines. Regressions outside tolerance cause exit code 1. See `tests/baselines/README.md` for the update process.
 
-### Future: CI integration (Issue #86)
+### Remote HIL via MCP tools (Claude Code)
 
-When a Raspberry Pi self-hosted runner is set up, `scripts/run_hil_tests.py` will be called from a `hil-tests` CI job. All infrastructure is in place; only the runner registration and CI workflow addition remain.
+`scripts/mcp_hil_server.py` exposes HIL tests as Claude Code tools via `.mcp.json`. Claude can build, flash, and run tests on the real board autonomously during development.
+
+**Tools available:**
+
+| Tool | Description |
+|---|---|
+| `hil_status()` | Check Pi reachability and board presence |
+| `hil_run_tests(skip_build, skip_flash)` | rsync → build → flash → run → return structured results |
+
+Before each build the server rsyncs the local working tree to the Pi, so uncommitted changes are tested immediately. Requires Tailscale for remote access and `HIL_PI_SSH` env var set to the Pi's Tailscale hostname.
+
+See [hil-remote-access.md](hil-remote-access.md) for full setup instructions.
