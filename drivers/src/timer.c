@@ -1,4 +1,5 @@
 #include "timer.h"
+#include "timer_calc.h"
 #include "rcc.h"
 #include "stm32f4xx.h"
 
@@ -43,6 +44,20 @@ static volatile uint32_t *ccr_reg(TIM_TypeDef *regs, timer_channel_t ch)
         case TIMER_CH3: return &regs->CCR3;
         default:        return &regs->CCR4;
     }
+}
+
+/* ---- Pure calculation functions (also declared in timer_calc.h) --------- */
+
+uint32_t timer_compute_pwm_psc(uint32_t timer_clk_hz, uint32_t pwm_freq_hz,
+                                uint32_t steps)
+{
+    return (timer_clk_hz / (pwm_freq_hz * steps)) - 1;
+}
+
+uint32_t timer_compute_duty_ccr(uint32_t arr, uint32_t duty_percent)
+{
+    if (duty_percent > 100) duty_percent = 100;
+    return (arr * duty_percent) / 100;
 }
 
 /* ---- Basic timer API --------------------------------------------------- */
@@ -99,7 +114,7 @@ void timer_pwm_init(timer_instance_t tim, timer_channel_t ch,
     TIM_TypeDef *r = get_regs(tim);
 
     uint32_t timer_clk = rcc_get_apb1_timer_clk();
-    r->PSC = (timer_clk / (pwm_freq_hz * steps)) - 1;
+    r->PSC = timer_compute_pwm_psc(timer_clk, pwm_freq_hz, steps);
     r->ARR = steps - 1;
 
     /*
@@ -133,11 +148,8 @@ void timer_pwm_init(timer_instance_t tim, timer_channel_t ch,
 void timer_pwm_set_duty(timer_instance_t tim, timer_channel_t ch,
                         uint32_t duty_percent)
 {
-    if (duty_percent > 100) duty_percent = 100;
-
     TIM_TypeDef *r = get_regs(tim);
-    uint32_t arr = r->ARR;
-    *ccr_reg(r, ch) = (arr * duty_percent) / 100;
+    *ccr_reg(r, ch) = timer_compute_duty_ccr(r->ARR, duty_percent);
 }
 
 /* ---- Microsecond delay (TIM5, 32-bit) --------------------------------- */

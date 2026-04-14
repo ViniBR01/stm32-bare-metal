@@ -1,4 +1,5 @@
 #include "rcc.h"
+#include "rcc_calc.h"
 #include "stm32f4xx.h"
 
 #define HSI_FREQ_HZ        16000000U
@@ -34,7 +35,7 @@ static const uint32_t flash_max_freq[] = {
 
 #define FLASH_WS_TABLE_SIZE  (sizeof(flash_max_freq) / sizeof(flash_max_freq[0]))
 
-static uint32_t compute_flash_latency(uint32_t hclk_hz) {
+uint32_t rcc_compute_flash_latency(uint32_t hclk_hz) {
     for (uint32_t ws = 0; ws < FLASH_WS_TABLE_SIZE; ws++) {
         if (hclk_hz <= flash_max_freq[ws])
             return ws;
@@ -65,6 +66,49 @@ static void compute_apb_prescaler(uint32_t hclk, uint32_t max_freq,
     *divider   = 16;
 }
 
+uint32_t rcc_compute_apb_divider(uint32_t hclk_hz, uint32_t max_hz)
+{
+    uint32_t bits, div;
+    compute_apb_prescaler(hclk_hz, max_hz, &bits, &div);
+    (void)bits;
+    return div;
+}
+
+int rcc_compute_pll_config(uint32_t src_hz, uint32_t target_hz,
+                           rcc_pll_factors_t *out)
+{
+    uint32_t pllm   = src_hz / VCO_INPUT_TARGET;
+    uint32_t vco_in = src_hz / pllm;
+
+    uint32_t plln = 0, pllp = 0;
+    for (uint32_t p = 2; p <= 8; p += 2) {
+        uint32_t vco_out = target_hz * p;
+        if (vco_out < VCO_OUTPUT_MIN || vco_out > VCO_OUTPUT_MAX)
+            continue;
+        uint32_t n = vco_out / vco_in;
+        if (n * vco_in != vco_out)
+            continue;
+        if (n < 50 || n > 432)
+            continue;
+        plln = n;
+        pllp = p;
+        break;
+    }
+    if (plln == 0)
+        return -1;
+
+    uint32_t vco_out = vco_in * plln;
+    uint32_t pllq    = vco_out / 48000000U;
+    if (pllq < 2)  pllq = 2;
+    if (pllq > 15) pllq = 15;
+
+    out->pllm = pllm;
+    out->plln = plln;
+    out->pllp = pllp;
+    out->pllq = pllq;
+    return 0;
+}
+
 static void cache_default_clocks(uint32_t source_freq) {
     s_sysclk        = source_freq;
     s_ahb_clk       = source_freq;
@@ -87,36 +131,14 @@ int rcc_init(rcc_clk_src_t source, uint32_t target_sysclk_hz) {
         return -1;
 
     /* --- Compute PLL factors --- */
-    uint32_t pllm = source_freq / VCO_INPUT_TARGET;     /* HSI: 8, HSE: 4 */
-    uint32_t vco_in = source_freq / pllm;
-
-    /*
-     * Try PLLP values 2, 4, 6, 8 (register encoding = PLLP/2 - 1).
-     * Pick the first one that yields a valid PLLN.
-     */
-    uint32_t plln = 0;
-    uint32_t pllp = 0;
-    for (uint32_t p = 2; p <= 8; p += 2) {
-        uint32_t vco_out = target_sysclk_hz * p;
-        if (vco_out < VCO_OUTPUT_MIN || vco_out > VCO_OUTPUT_MAX)
-            continue;
-        uint32_t n = vco_out / vco_in;
-        if (n * vco_in != vco_out)
-            continue;   /* Non-integer PLLN */
-        if (n < 50 || n > 432)
-            continue;
-        plln = n;
-        pllp = p;
-        break;
-    }
-    if (plln == 0)
+    rcc_pll_factors_t pll;
+    if (rcc_compute_pll_config(source_freq, target_sysclk_hz, &pll) != 0)
         return -1;
 
-    /* PLLQ: set to keep USB clock <= 48 MHz (best-effort, USB not used) */
-    uint32_t vco_out = vco_in * plln;
-    uint32_t pllq = vco_out / 48000000U;
-    if (pllq < 2) pllq = 2;
-    if (pllq > 15) pllq = 15;
+    uint32_t pllm = pll.pllm;
+    uint32_t plln = pll.plln;
+    uint32_t pllp = pll.pllp;
+    uint32_t pllq = pll.pllq;
 
     /* --- Compute bus prescalers --- */
     uint32_t ppre1_bits, ppre1_div;
@@ -125,7 +147,7 @@ int rcc_init(rcc_clk_src_t source, uint32_t target_sysclk_hz) {
     compute_apb_prescaler(target_sysclk_hz, APB2_MAX, &ppre2_bits, &ppre2_div);
 
     /* --- Set flash latency BEFORE increasing clock --- */
-    uint32_t latency = compute_flash_latency(target_sysclk_hz);
+    uint32_t latency = rcc_compute_flash_latency(target_sysclk_hz);
     FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY)
                | latency
                | FLASH_ACR_PRFTEN | FLASH_ACR_ICEN | FLASH_ACR_DCEN;
@@ -199,8 +221,11 @@ int rcc_init(rcc_clk_src_t source, uint32_t target_sysclk_hz) {
 /*
  * CMSIS-standard entry point called from Reset_Handler before main().
  * Configures system clock to 100 MHz from HSI via PLL.
+ *
+ * Declared weak so that test_periph.c (host unit tests) can provide an
+ * empty override without a linker duplicate-symbol error.
  */
-void SystemInit(void) {
+__attribute__((weak)) void SystemInit(void) {
     /* Pre-cache HSI defaults so drivers have valid clock values
      * even if rcc_init fails (e.g. unsupported target frequency). */
     cache_default_clocks(HSI_FREQ_HZ);
