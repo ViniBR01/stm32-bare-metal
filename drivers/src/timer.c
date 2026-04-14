@@ -171,7 +171,15 @@ void timer_delay_us(uint32_t us)
     uint32_t timer_clk = rcc_get_apb1_timer_clk();
     r->PSC = (timer_clk / 1000000U) - 1;
     r->ARR = us - 1;
-    r->CNT = 0;
+    /*
+     * PSC is always double-buffered: the write above only updates the
+     * preload register. Generate a software update event (UG) to
+     * immediately transfer PSC into the active (shadow) prescaler
+     * register before starting the timer. UG also resets CNT to 0.
+     * Then clear the UIF that the UEV just set.
+     */
+    r->EGR = TIM_EGR_UG;
+    r->SR  = 0;
 
     /* One-pulse mode + enable */
     r->CR1 = CR1_OPM | CR1_CEN;
