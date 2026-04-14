@@ -11,6 +11,7 @@ Claude reads this file at session start via `CLAUDE.md`. Update it whenever a pa
 | [roadmap.md](roadmap.md) | Open issues by priority, future directions |
 | [testing.md](testing.md) | Host unit tests, driver fake-stub testing, HIL on-target testing, coverage |
 | [ci.md](ci.md) | CI pipeline, jobs, required checks, how to extend |
+| [hil-remote-access.md](hil-remote-access.md) | Tailscale remote SSH setup, SSH key auth, MCP HIL server for Claude Code |
 
 ## Drivers
 
