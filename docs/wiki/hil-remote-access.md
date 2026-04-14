@@ -1,62 +1,68 @@
 # HIL Remote Access and MCP Tools
 
-This page covers two related setups that together let you (and Claude) run real hardware tests from anywhere:
+This page covers how to reach the Pi over SSH and expose HIL tests as Claude Code tools.
 
-1. **Tailscale** — reach the Pi over SSH from any network
-2. **MCP HIL server** — expose `hil_run_tests` and `hil_status` as Claude Code tools
+**Current setup: local network only.** The Pi (`pi-hil`) is reachable via mDNS on the local
+network. The SSH config uses `BindAddress` to bypass corporate VPN routing (see below).
 
 ---
 
-## Part 1 — Tailscale Remote SSH
+## Part 1 — SSH Setup (local network)
 
-### Why Tailscale
+### Pi details
 
-The Pi is normally only reachable on the local network. Tailscale creates a mesh VPN: both machines join the same Tailscale network and each gets a stable MagicDNS hostname. No router port-forwarding needed, works from any network in the world.
+- Hostname: `pi-hil.local` (mDNS), IP: `10.0.0.245`
+- Username: `pi`
+- Board: `/dev/ttyACM0`
 
-### Install on the Pi
+### SSH key
 
-```sh
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up
-```
-
-Follow the auth URL printed to the terminal. Once authenticated, the Pi will appear in your Tailscale admin panel.
-
-### Install on macOS (dev machine)
-
-```sh
-brew install tailscale
-sudo tailscale up
-```
-
-Or download the macOS app from tailscale.com. Sign in to the **same Tailscale account**.
-
-### Find the Pi's hostname
-
-```sh
-tailscale status
-```
-
-The Pi will have a MagicDNS name like `raspberrypi.tail-abc123.ts.net` or just `raspberrypi` if MagicDNS is enabled. Either form works with SSH.
-
-### Set up SSH key auth (required)
-
-Automation tools (rsync, the MCP server) need passwordless SSH. Set up a dedicated key:
+Generate a dedicated key and install it on the Pi:
 
 ```sh
 ssh-keygen -t ed25519 -f ~/.ssh/hil_pi -N ""
-ssh-copy-id -i ~/.ssh/hil_pi.pub <user>@<pi-tailscale-hostname>
+ssh-copy-id -i ~/.ssh/hil_pi.pub pi@pi-hil.local
 ```
 
-Optional: add to `~/.ssh/config` to avoid specifying the key each time:
+### SSH config entry
+
+Add to `~/.ssh/config`. The `BindAddress` is required on this machine because the corporate
+VPN routes `10.0.0.x` traffic through `utun4` instead of `en0` — binding the source IP forces
+the connection through the local network interface.
 
 ```
 Host hil-pi
-    HostName <pi-tailscale-hostname>
-    User <user>
+    HostName 10.0.0.245
+    User pi
     IdentityFile ~/.ssh/hil_pi
+    BindAddress 10.0.0.218
     BatchMode yes
+    ConnectTimeout 10
 ```
+
+> **Note:** `BindAddress 10.0.0.218` is the dev machine's local IP. If it changes (DHCP),
+> update this line. To make it stable, reserve the MAC address in your router's DHCP config.
+
+### Verify
+
+```sh
+ssh hil-pi "uname -a && ls /dev/ttyACM*"
+```
+
+Should print the Pi's kernel string and `/dev/ttyACM0`.
+
+### Set the env var
+
+```sh
+echo 'export HIL_PI_SSH=hil-pi' >> ~/.zshrc
+export HIL_PI_SSH=hil-pi
+```
+
+### Future: remote access
+
+If remote access is ever needed from the work laptop, the recommended option for
+corporate environments is **Cloudflare Tunnel** (`cloudflared`) — outbound HTTPS from the Pi,
+no VPN or port-forwarding required. See Cloudflare Zero Trust docs for setup.
 
 ### Set the env var
 
