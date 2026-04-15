@@ -32,6 +32,96 @@
 #include "stm32f4xx.h"  /* DWT / CoreDebug for cycle counting */
 
 /* ====================================================================
+ * UART loopback test helpers
+ *
+ * Two loopback pairs are wired on the board:
+ *   USART1: PA9 (TX, AF7) <-> PB7 (RX, AF7)
+ *   USART6: PC6 (TX, AF8) <-> PC7 (RX, AF8)
+ *
+ * Both UARTs are on APB2 (100 MHz).
+ * BRR = (100_000_000 + 57_600) / 115_200 = 868.
+ *
+ * Tests use polled TX/RX with a generous timeout guard so that a
+ * disconnected jumper produces a clean FAIL rather than a hang.
+ * ==================================================================== */
+
+#define UART_LB_SR_TXE    (1U << 7)
+#define UART_LB_SR_RXNE   (1U << 5)
+#define UART_LB_CR1_UE    (1U << 13)
+#define UART_LB_CR1_TE    (1U << 3)
+#define UART_LB_CR1_RE    (1U << 2)
+#define UART_LB_BRR       868U          /* 115200 baud @ APB2 100 MHz */
+#define UART_LB_TIMEOUT   1000000U      /* ~10 ms spin at 100 MHz     */
+
+static void uart_lb_init_usart1(void)
+{
+    /* Clocks: GPIOA (PA9), GPIOB (PB7), USART1 */
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOBEN;
+    RCC->APB2ENR |= RCC_APB2ENR_USART1EN;
+
+    /* PA9: AF7 (USART1_TX) — MODER bits [19:18] = 10, AFR[1] bits [7:4] = 7 */
+    GPIOA->MODER  = (GPIOA->MODER  & ~(3U << 18)) | (2U << 18);
+    GPIOA->AFR[1] = (GPIOA->AFR[1] & ~(0xFU << 4)) | (7U << 4);
+
+    /* PB7: AF7 (USART1_RX) — MODER bits [15:14] = 10, AFR[0] bits [31:28] = 7 */
+    GPIOB->MODER  = (GPIOB->MODER  & ~(3U << 14)) | (2U << 14);
+    GPIOB->AFR[0] = (GPIOB->AFR[0] & ~(0xFU << 28)) | (7U << 28);
+
+    /* USART1: 115200 baud, 8N1, TX+RX enabled */
+    USART1->CR1 = 0;
+    USART1->BRR = UART_LB_BRR;
+    USART1->CR1 = UART_LB_CR1_TE | UART_LB_CR1_RE | UART_LB_CR1_UE;
+}
+
+static void uart_lb_init_usart6(void)
+{
+    /* Clocks: GPIOC (PC6, PC7), USART6 */
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
+    RCC->APB2ENR |= RCC_APB2ENR_USART6EN;
+
+    /* PC6: AF8 (USART6_TX) — MODER bits [13:12] = 10, AFR[0] bits [27:24] = 8 */
+    GPIOC->MODER  = (GPIOC->MODER  & ~(3U << 12)) | (2U << 12);
+    GPIOC->AFR[0] = (GPIOC->AFR[0] & ~(0xFU << 24)) | (8U << 24);
+
+    /* PC7: AF8 (USART6_RX) — MODER bits [15:14] = 10, AFR[0] bits [31:28] = 8 */
+    GPIOC->MODER  = (GPIOC->MODER  & ~(3U << 14)) | (2U << 14);
+    GPIOC->AFR[0] = (GPIOC->AFR[0] & ~(0xFU << 28)) | (8U << 28);
+
+    /* USART6: 115200 baud, 8N1, TX+RX enabled */
+    USART6->CR1 = 0;
+    USART6->BRR = UART_LB_BRR;
+    USART6->CR1 = UART_LB_CR1_TE | UART_LB_CR1_RE | UART_LB_CR1_UE;
+}
+
+/* Returns 1 on success, 0 on timeout */
+static int uart_lb_send(USART_TypeDef *u, uint8_t byte)
+{
+    uint32_t n = UART_LB_TIMEOUT;
+    while (!(u->SR & UART_LB_SR_TXE)) { if (!--n) return 0; }
+    u->DR = byte;
+    return 1;
+}
+
+/* Returns 1 on success, 0 on timeout */
+static int uart_lb_recv(USART_TypeDef *u, uint8_t *out)
+{
+    uint32_t n = UART_LB_TIMEOUT;
+    while (!(u->SR & UART_LB_SR_RXNE)) { if (!--n) return 0; }
+    *out = (uint8_t)(u->DR & 0xFFU);
+    return 1;
+}
+
+/* Send one byte and receive it back; assert both operations succeed and
+ * that the received value matches what was sent. */
+static void uart_lb_check(USART_TypeDef *u, uint8_t byte)
+{
+    uint8_t rx = ~byte;
+    TEST_ASSERT_MESSAGE(uart_lb_send(u, byte), "TX timeout — check jumper");
+    TEST_ASSERT_MESSAGE(uart_lb_recv(u, &rx),  "RX timeout — check jumper");
+    TEST_ASSERT_EQUAL_HEX8(byte, rx);
+}
+
+/* ====================================================================
  * Parameterized SPI test infrastructure
  * ==================================================================== */
 
@@ -162,6 +252,71 @@ void test_fpu_division(void) {
     volatile float result = a / b;
     TEST_ASSERT_FLOAT_WITHIN_MESSAGE(0.001f, 2.5f, result,
                                      "FPU division incorrect");
+}
+
+/* ====================================================================
+ * USART1 loopback tests (PA9=TX/AF7, PB7=RX/AF7)
+ * ==================================================================== */
+
+void test_usart1_loopback_0xa5(void)
+{
+    uart_lb_init_usart1();
+    uart_lb_check(USART1, 0xA5);
+}
+
+void test_usart1_loopback_0x00(void)
+{
+    uart_lb_init_usart1();
+    uart_lb_check(USART1, 0x00);
+}
+
+void test_usart1_loopback_0xff(void)
+{
+    uart_lb_init_usart1();
+    uart_lb_check(USART1, 0xFF);
+}
+
+void test_usart1_loopback_sequence(void)
+{
+    uart_lb_init_usart1();
+    /* Walking-bit and alternating patterns */
+    static const uint8_t seq[] = { 0xAA, 0x55, 0x01, 0x02, 0x04, 0x08,
+                                   0x10, 0x20, 0x40, 0x80, 0x12, 0x34 };
+    for (uint32_t i = 0; i < sizeof(seq); i++) {
+        uart_lb_check(USART1, seq[i]);
+    }
+}
+
+/* ====================================================================
+ * USART6 loopback tests (PC6=TX/AF8, PC7=RX/AF8)
+ * ==================================================================== */
+
+void test_usart6_loopback_0xa5(void)
+{
+    uart_lb_init_usart6();
+    uart_lb_check(USART6, 0xA5);
+}
+
+void test_usart6_loopback_0x00(void)
+{
+    uart_lb_init_usart6();
+    uart_lb_check(USART6, 0x00);
+}
+
+void test_usart6_loopback_0xff(void)
+{
+    uart_lb_init_usart6();
+    uart_lb_check(USART6, 0xFF);
+}
+
+void test_usart6_loopback_sequence(void)
+{
+    uart_lb_init_usart6();
+    static const uint8_t seq[] = { 0xAA, 0x55, 0x01, 0x02, 0x04, 0x08,
+                                   0x10, 0x20, 0x40, 0x80, 0x12, 0x34 };
+    for (uint32_t i = 0; i < sizeof(seq); i++) {
+        uart_lb_check(USART6, seq[i]);
+    }
 }
 
 /* ====================================================================
@@ -297,6 +452,28 @@ int run_unity_tests(void) {
     printf_dma_flush();
 
     RUN_TEST(test_timer_delay_us_accuracy);
+
+    /* ----------------------------------------------------------
+     * Tier 5: UART loopback hardware tests
+     *   USART1: PA9 (TX/AF7) wired to PB7 (RX/AF7)
+     *   USART6: PC6 (TX/AF8) wired to PC7 (RX/AF8)
+     *   115200 baud, polled, no DMA/interrupts.
+     * ---------------------------------------------------------- */
+    printf("\n--- Tier 5: USART1 loopback (PA9/PB7) ---\n");
+    printf_dma_flush();
+
+    RUN_TEST(test_usart1_loopback_0xa5);
+    RUN_TEST(test_usart1_loopback_0x00);
+    RUN_TEST(test_usart1_loopback_0xff);
+    RUN_TEST(test_usart1_loopback_sequence);
+
+    printf("\n--- Tier 5: USART6 loopback (PC6/PC7) ---\n");
+    printf_dma_flush();
+
+    RUN_TEST(test_usart6_loopback_0xa5);
+    RUN_TEST(test_usart6_loopback_0x00);
+    RUN_TEST(test_usart6_loopback_0xff);
+    RUN_TEST(test_usart6_loopback_sequence);
 
     printf_dma_flush();
     return UNITY_END();
