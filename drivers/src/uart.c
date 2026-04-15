@@ -6,6 +6,7 @@
 #include "rcc.h"
 #include "stm32f4xx.h"
 #include "uart.h"
+#include "uart_calc.h"
 
 /* Register bit definitions - USART */
 #define UART2EN                (1U<<17)
@@ -49,7 +50,6 @@ static volatile uint16_t rx_dma_last_ndtr = 0;
 static volatile uint8_t  rx_dma_active = 0;
 
 /* Private function prototypes */
-static uint16_t compute_uart_bd(uint32_t periph_clk, uint32_t baudrate);
 static void uart_set_baudrate(uint32_t periph_clk, uint32_t baudrate);
 static void uart_tx_dma_init(void);
 static void uart_nvic_init(void);
@@ -305,12 +305,24 @@ void __attribute__((used)) USART2_IRQHandler(void) {
 
 /* Private function implementations */
 
-static uint16_t compute_uart_bd(uint32_t periph_clk, uint32_t baudrate) {
-    return ((periph_clk + (baudrate / 2U)) / baudrate);
+static void uart_set_baudrate(uint32_t periph_clk, uint32_t baudrate) {
+    USART2->BRR = uart_compute_baud_divisor(periph_clk, baudrate);
 }
 
-static void uart_set_baudrate(uint32_t periph_clk, uint32_t baudrate) {
-    USART2->BRR = compute_uart_bd(periph_clk, baudrate);
+/* Pure calculation functions — also declared in uart_calc.h for testing */
+
+uint16_t uart_compute_baud_divisor(uint32_t periph_clk, uint32_t baudrate) {
+    return (uint16_t)((periph_clk + (baudrate / 2U)) / baudrate);
+}
+
+uint16_t uart_circ_bytes_available(uint16_t ndtr, uint16_t last_ndtr,
+                                   uint16_t buf_size) {
+    uint16_t head = buf_size - ndtr;
+    uint16_t tail = buf_size - last_ndtr;
+    if (head >= tail) {
+        return head - tail;
+    }
+    return (buf_size - tail) + head;
 }
 
 /**
