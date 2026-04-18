@@ -13,6 +13,55 @@ Every feature or fix follows this exact sequence:
 7. **Verify CI passes** — check both `host-tests` and `firmware-build` GitHub Actions jobs
 8. **Do NOT merge** — the user reviews and merges all PRs manually
 
+## Parallel Agent Workflow (Worktrees)
+
+When multiple agents work in parallel, each gets an isolated git worktree with its own
+branch. The main working tree is never modified during parallel work.
+
+### When to use
+- You are dispatched alongside other agents on independent issues
+- The `Agent` tool was invoked with `isolation: "worktree"` (harness handles setup automatically)
+- Any time you need a clean branch without affecting the main working tree
+
+### Step-by-step
+
+1. **Confirm or create the GitHub Issue** — every branch needs an issue number.
+
+2. **Create the worktree and branch:**
+   ```sh
+   bash scripts/worktree_new.sh <issue-number> <short-description>
+   # Prints the worktree path, e.g.:
+   # Worktree ready: /path/to/stm32-bare-metal-worktrees/115-add-i2c-driver
+   ```
+
+3. **Enter the worktree** using the `EnterWorktree` tool with the printed path.
+   All work (reads, writes, git commits, make commands) happens inside this directory.
+
+4. **Implement and commit** — commit often with meaningful messages.
+
+5. **Validate locally** — both must pass before pushing:
+   ```sh
+   make test   # host unit tests
+   make all    # all firmware examples
+   ```
+   Do **not** run HIL tests locally — the physical board is a shared resource. CI handles it.
+
+6. **Push and open the PR:**
+   ```sh
+   git push -u origin <branch-name>
+   gh pr create --title "..." --body "..."
+   ```
+
+7. **Report the PR URL to the user and stop.** Do not merge. Do not modify the worktree
+   after the PR is open unless asked to address review feedback or CI failures.
+
+8. **Cleanup after merge** (when the user confirms the PR is merged):
+   ```sh
+   bash scripts/worktree_clean.sh <branch-name>
+   ```
+
+See `docs/wiki/agents.md` for parallelism rules, HIL constraints, and troubleshooting.
+
 ## Build & Test Commands
 
 ```sh

@@ -6,6 +6,19 @@ Types: `merge`, `decision`, `milestone`, `infra`
 
 ---
 
+## [2026-04-17] infra | Add parallel agent worktree workflow (#114)
+
+Added `scripts/worktree_new.sh` and `scripts/worktree_clean.sh` for creating and cleaning
+isolated git worktrees for parallel agent work. Each worktree gets its own branch based on
+`origin/main` and lives at `../stm32-bare-metal-worktrees/<branch>/`. Updated `CLAUDE.md`
+with a `## Parallel Agent Workflow (Worktrees)` section covering the full 8-step workflow,
+HIL serialisation constraint, and cleanup procedure. Added `docs/wiki/agents.md` with
+detailed parallelism rules and troubleshooting.
+Compatible with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and the `Agent` tool's
+`isolation: "worktree"` parameter (harness auto-creates worktrees in that case).
+
+---
+
 ## [2026-04-13] infra | Add Tailscale remote access and MCP HIL server (#109)
 
 Added `scripts/mcp_hil_server.py` — a Python stdio MCP server that exposes `hil_status` and
