@@ -6,7 +6,7 @@
 
 | Issue | Title | Notes |
 |---|---|---|
-| #99 | Driver host tests: GPIO and EXTI | Tier 1 register config tests. EXTI validates SYSCFG port mapping + NVIC enable. |
+| ~~#99~~ | ~~Driver host tests: GPIO and EXTI~~ | ✅ Done — 44 GPIO tests + 56 EXTI tests. |
 | #100 | Driver host tests: UART | Tier 1 + Tier 2. Circular buffer wrap logic, baud divisor, init register setup. |
 | #101 | Driver host tests: RCC and Timer | Tier 1 + Tier 2. PLL solver — most complex logic in codebase. |
 
@@ -67,7 +67,7 @@ See [log.md](log.md) for the full history. Key milestones:
 - ✅ CLI engine with tab completion, command history, ANSI escape handling
 - ✅ DMA-buffered printf (printf_dma)
 - ✅ Logging system (log_c) with runtime log level control
-- ✅ Host unit tests: CLI (41), string utils (23), GPIO driver (44) — 108 total
+- ✅ Host unit tests: CLI (41), string utils (23), GPIO (44), EXTI (56), RCC (36), Timer (52), UART (46) — 298 total
 - ✅ Driver host test infrastructure: fake `stm32f4xx.h` + `core_cm4.h` stubs, `test_periph_reset()`
 - ✅ GitHub Actions CI pipeline: `host-tests` + `firmware-build` + `hil-tests`, branch protection
 - ✅ JUnit XML test reporting (Unity → `unity_to_junit.py` → `dorny/test-reporter@v3`)
