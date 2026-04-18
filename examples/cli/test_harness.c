@@ -412,48 +412,35 @@ static void gpio_lb_deinit_pc6_pc7(void)
 }
 
 /* ====================================================================
- * GPIO loopback tests — PA9 output / PB7 input
+ * GPIO loopback tests
+ *
+ * Each function covers one loopback pair end-to-end: HIGH, LOW, and
+ * toggle — all in a single init/settle/deinit cycle to minimise
+ * register-write overhead and serial output volume.
  * ==================================================================== */
 
-void test_gpio_pa9_high_reads_pb7_high(void)
+void test_gpio_loopback_pa9_pb7(void)
 {
     gpio_lb_init_pa9_pb7();
+
+    /* HIGH */
     gpio_set_pin(GPIO_PORT_A, 9);
     gpio_lb_settle();
-    uint8_t level = gpio_read_pin(GPIO_PORT_B, 7);
-    gpio_lb_deinit_pa9_pb7();
-    TEST_ASSERT_EQUAL_MESSAGE(1, level,
+    TEST_ASSERT_EQUAL_MESSAGE(1, gpio_read_pin(GPIO_PORT_B, 7),
         "PA9=HIGH should read PB7=HIGH — check jumper PA9<->PB7");
-}
 
-void test_gpio_pa9_low_reads_pb7_low(void)
-{
-    gpio_lb_init_pa9_pb7();
-    gpio_clear_pin(GPIO_PORT_A, 9);
-    gpio_lb_settle();
-    uint8_t level = gpio_read_pin(GPIO_PORT_B, 7);
-    gpio_lb_deinit_pa9_pb7();
-    TEST_ASSERT_EQUAL_MESSAGE(0, level,
-        "PA9=LOW should read PB7=LOW — check jumper PA9<->PB7");
-}
-
-void test_gpio_pa9_toggle_reads_back(void)
-{
-    gpio_lb_init_pa9_pb7();
-
-    /* Start LOW */
+    /* LOW */
     gpio_clear_pin(GPIO_PORT_A, 9);
     gpio_lb_settle();
     TEST_ASSERT_EQUAL_MESSAGE(0, gpio_read_pin(GPIO_PORT_B, 7),
-        "PA9 start LOW: PB7 should be LOW");
+        "PA9=LOW should read PB7=LOW — check jumper PA9<->PB7");
 
-    /* Toggle to HIGH */
+    /* Toggle HIGH → LOW */
     gpio_toggle_pin(GPIO_PORT_A, 9);
     gpio_lb_settle();
     TEST_ASSERT_EQUAL_MESSAGE(1, gpio_read_pin(GPIO_PORT_B, 7),
         "PA9 after toggle: PB7 should be HIGH");
 
-    /* Toggle back to LOW */
     gpio_toggle_pin(GPIO_PORT_A, 9);
     gpio_lb_settle();
     TEST_ASSERT_EQUAL_MESSAGE(0, gpio_read_pin(GPIO_PORT_B, 7),
@@ -462,30 +449,23 @@ void test_gpio_pa9_toggle_reads_back(void)
     gpio_lb_deinit_pa9_pb7();
 }
 
-/* ====================================================================
- * GPIO loopback tests — PC6 output / PC7 input
- * ==================================================================== */
-
-void test_gpio_pc6_high_reads_pc7_high(void)
+void test_gpio_loopback_pc6_pc7(void)
 {
     gpio_lb_init_pc6_pc7();
+
+    /* HIGH */
     gpio_set_pin(GPIO_PORT_C, 6);
     gpio_lb_settle();
-    uint8_t level = gpio_read_pin(GPIO_PORT_C, 7);
-    gpio_lb_deinit_pc6_pc7();
-    TEST_ASSERT_EQUAL_MESSAGE(1, level,
+    TEST_ASSERT_EQUAL_MESSAGE(1, gpio_read_pin(GPIO_PORT_C, 7),
         "PC6=HIGH should read PC7=HIGH — check jumper PC6<->PC7");
-}
 
-void test_gpio_pc6_low_reads_pc7_low(void)
-{
-    gpio_lb_init_pc6_pc7();
+    /* LOW */
     gpio_clear_pin(GPIO_PORT_C, 6);
     gpio_lb_settle();
-    uint8_t level = gpio_read_pin(GPIO_PORT_C, 7);
-    gpio_lb_deinit_pc6_pc7();
-    TEST_ASSERT_EQUAL_MESSAGE(0, level,
+    TEST_ASSERT_EQUAL_MESSAGE(0, gpio_read_pin(GPIO_PORT_C, 7),
         "PC6=LOW should read PC7=LOW — check jumper PC6<->PC7");
+
+    gpio_lb_deinit_pc6_pc7();
 }
 
 /* ====================================================================
@@ -534,70 +514,6 @@ static int exti_lb_wait_count(uint32_t prev_count)
         if (g_exti9_5_count != prev_count) return 1;
     }
     return 0;
-}
-
-void test_exti_rising_edge_pb7(void)
-{
-    /* PA9 = output (drive signal), PB7 = input (EXTI line 7 port B) */
-    gpio_lb_init_pa9_pb7();
-
-    /* Drive output LOW before arming the edge detector */
-    gpio_clear_pin(GPIO_PORT_A, 9);
-    gpio_lb_settle();
-
-    int ret = exti_configure_gpio_interrupt(GPIO_PORT_B, 7,
-                                            EXTI_TRIGGER_RISING,
-                                            EXTI_MODE_INTERRUPT);
-    TEST_ASSERT_EQUAL_MESSAGE(0, ret,
-        "exti_configure_gpio_interrupt(PB7, RISING) failed");
-
-    exti_clear_pending(7);
-    uint32_t prev = g_exti9_5_count;
-
-    /* Trigger: drive PA9 HIGH (rising edge on PB7) */
-    gpio_set_pin(GPIO_PORT_A, 9);
-
-    /* Observe: ISR should fire and increment the counter */
-    int fired = exti_lb_wait_count(prev);
-
-    /* Cleanup */
-    exti_clear_pending(7);
-    exti_disable_line(7);
-    exti_set_interrupt_mask(7, 0);
-    gpio_lb_deinit_pa9_pb7();
-
-    TEST_ASSERT_MESSAGE(fired,
-        "EXTI line 7 rising edge did not fire — check jumper PA9<->PB7");
-}
-
-void test_exti_falling_edge_pb7(void)
-{
-    /* Start with PA9 HIGH so a falling edge can be generated */
-    gpio_lb_init_pa9_pb7();
-    gpio_set_pin(GPIO_PORT_A, 9);
-    gpio_lb_settle();
-
-    int ret = exti_configure_gpio_interrupt(GPIO_PORT_B, 7,
-                                            EXTI_TRIGGER_FALLING,
-                                            EXTI_MODE_INTERRUPT);
-    TEST_ASSERT_EQUAL_MESSAGE(0, ret,
-        "exti_configure_gpio_interrupt(PB7, FALLING) failed");
-
-    exti_clear_pending(7);
-    uint32_t prev = g_exti9_5_count;
-
-    /* Drive PA9 LOW → falling edge on PB7 */
-    gpio_clear_pin(GPIO_PORT_A, 9);
-
-    int fired = exti_lb_wait_count(prev);
-
-    exti_clear_pending(7);
-    exti_disable_line(7);
-    exti_set_interrupt_mask(7, 0);
-    gpio_lb_deinit_pa9_pb7();
-
-    TEST_ASSERT_MESSAGE(fired,
-        "EXTI line 7 falling edge did not fire — check jumper PA9<->PB7");
 }
 
 void test_exti_both_edges_pb7(void)
@@ -836,28 +752,20 @@ int run_unity_tests(void) {
      *   PA9 (output) wired to PB7 (input) — UART1 loopback cable
      *   PC6 (output) wired to PC7 (input) — UART6 loopback cable
      * ---------------------------------------------------------- */
-    printf("\n--- Tier 5: GPIO loopback (PA9/PB7) ---\n");
+    printf("\n--- Tier 5: GPIO loopback ---\n");
     printf_dma_flush();
 
-    RUN_TEST(test_gpio_pa9_high_reads_pb7_high);
-    RUN_TEST(test_gpio_pa9_low_reads_pb7_low);
-    RUN_TEST(test_gpio_pa9_toggle_reads_back);
-
-    printf("\n--- Tier 5: GPIO loopback (PC6/PC7) ---\n");
-    printf_dma_flush();
-
-    RUN_TEST(test_gpio_pc6_high_reads_pc7_high);
-    RUN_TEST(test_gpio_pc6_low_reads_pc7_low);
+    RUN_TEST(test_gpio_loopback_pa9_pb7);   /* HIGH, LOW, toggle — PA9<->PB7 */
+    RUN_TEST(test_gpio_loopback_pc6_pc7);   /* HIGH, LOW         — PC6<->PC7 */
 
     /* ----------------------------------------------------------
      * Tier 5: EXTI interrupt tests
      *   PA9 (output) wired to PB7 (input, EXTI line 7 port B)
+     *   Both edges tested in one function; software trigger separate.
      * ---------------------------------------------------------- */
     printf("\n--- Tier 5: EXTI loopback (PA9->PB7, line 7) ---\n");
     printf_dma_flush();
 
-    RUN_TEST(test_exti_rising_edge_pb7);
-    RUN_TEST(test_exti_falling_edge_pb7);
     RUN_TEST(test_exti_both_edges_pb7);
     RUN_TEST(test_exti_software_trigger_pb7);
 
