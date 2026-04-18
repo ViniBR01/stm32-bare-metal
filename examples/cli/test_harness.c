@@ -491,12 +491,16 @@ void test_gpio_pc6_low_reads_pc7_low(void)
 /* ====================================================================
  * EXTI interrupt tests — PA9 output triggers EXTI line 7 (port B, PB7)
  *
- * Strategy: use the EXTI pending register (EXTI->PR) as an ISR-free
- * indicator rather than relying on a volatile flag set inside an ISR.
- * This avoids linking an ISR handler into the test harness and keeps
- * interrupt latency off the critical path.  After asserting the
- * pending bit we clear it and disable the line to leave hardware clean
- * for subsequent tests.
+ * Strategy: configure lines in EXTI_MODE_EVENT (EMR set, IMR cleared).
+ * In event mode the EXTI->PR pending bit is still set on the selected
+ * edge, but no interrupt request reaches the NVIC — so the CPU never
+ * vectors to EXTI9_5_IRQHandler and the Default_Handler (infinite loop)
+ * is never entered.  We poll EXTI->PR directly to observe each edge.
+ *
+ * Note: exti_configure_gpio_interrupt() always enables the NVIC IRQ
+ * regardless of mode.  That is safe here because with IMR=0 the NVIC
+ * interrupt request is gated at the EXTI peripheral; the NVIC enable
+ * bit has no effect while IMR is clear.
  *
  * Timeout guard: spin up to ~1 ms (100 000 cycles at 100 MHz) before
  * declaring a failure — long enough for any reasonable signal path but
@@ -520,39 +524,33 @@ static int exti_lb_wait_pending(uint8_t line)
 
 void test_exti_rising_edge_pb7(void)
 {
-    /* --- Setup ---
-     * PA9 = output (drive signal)
-     * PB7 = input + EXTI line 7 rising-edge interrupt mask only
-     *        (NVIC enable via exti_configure_gpio_interrupt, but we poll
-     *         EXTI->PR directly — no ISR body needed)
-     */
+    /* PA9 = output (drive signal), PB7 = input (EXTI line 7 port B)
+     * Use EVENT mode so PR is set on edge but no NVIC interrupt fires. */
     gpio_lb_init_pa9_pb7();
 
     /* Drive output LOW before arming the edge detector */
     gpio_clear_pin(GPIO_PORT_A, 9);
     gpio_lb_settle();
 
-    /* Configure EXTI line 7 (PB7) for rising edge, interrupt mode.
-     * exti_configure_gpio_interrupt also enables the NVIC IRQ.        */
     int ret = exti_configure_gpio_interrupt(GPIO_PORT_B, 7,
                                             EXTI_TRIGGER_RISING,
-                                            EXTI_MODE_INTERRUPT);
+                                            EXTI_MODE_EVENT);
     TEST_ASSERT_EQUAL_MESSAGE(0, ret,
-        "exti_configure_gpio_interrupt(PB7, RISING) failed");
+        "exti_configure_gpio_interrupt(PB7, RISING, EVENT) failed");
 
     /* Clear any stale pending flag */
     exti_clear_pending(7);
 
-    /* --- Trigger: drive PA9 HIGH (rising edge on PB7) --- */
+    /* Trigger: drive PA9 HIGH (rising edge on PB7) */
     gpio_set_pin(GPIO_PORT_A, 9);
 
-    /* --- Observe: EXTI->PR bit 7 should be set --- */
+    /* Observe: EXTI->PR bit 7 should be set */
     int fired = exti_lb_wait_pending(7);
 
-    /* --- Cleanup --- */
+    /* Cleanup */
     exti_clear_pending(7);
     exti_disable_line(7);
-    exti_set_interrupt_mask(7, 0);
+    exti_set_event_mask(7, 0);
     gpio_lb_deinit_pa9_pb7();
 
     TEST_ASSERT_MESSAGE(fired,
@@ -568,9 +566,9 @@ void test_exti_falling_edge_pb7(void)
 
     int ret = exti_configure_gpio_interrupt(GPIO_PORT_B, 7,
                                             EXTI_TRIGGER_FALLING,
-                                            EXTI_MODE_INTERRUPT);
+                                            EXTI_MODE_EVENT);
     TEST_ASSERT_EQUAL_MESSAGE(0, ret,
-        "exti_configure_gpio_interrupt(PB7, FALLING) failed");
+        "exti_configure_gpio_interrupt(PB7, FALLING, EVENT) failed");
 
     exti_clear_pending(7);
 
@@ -581,7 +579,7 @@ void test_exti_falling_edge_pb7(void)
 
     exti_clear_pending(7);
     exti_disable_line(7);
-    exti_set_interrupt_mask(7, 0);
+    exti_set_event_mask(7, 0);
     gpio_lb_deinit_pa9_pb7();
 
     TEST_ASSERT_MESSAGE(fired,
@@ -596,9 +594,9 @@ void test_exti_both_edges_pb7(void)
 
     int ret = exti_configure_gpio_interrupt(GPIO_PORT_B, 7,
                                             EXTI_TRIGGER_BOTH,
-                                            EXTI_MODE_INTERRUPT);
+                                            EXTI_MODE_EVENT);
     TEST_ASSERT_EQUAL_MESSAGE(0, ret,
-        "exti_configure_gpio_interrupt(PB7, BOTH) failed");
+        "exti_configure_gpio_interrupt(PB7, BOTH, EVENT) failed");
 
     exti_clear_pending(7);
 
@@ -613,7 +611,7 @@ void test_exti_both_edges_pb7(void)
     exti_clear_pending(7);
 
     exti_disable_line(7);
-    exti_set_interrupt_mask(7, 0);
+    exti_set_event_mask(7, 0);
     gpio_lb_deinit_pa9_pb7();
 
     TEST_ASSERT_MESSAGE(fired_rising,
@@ -624,24 +622,25 @@ void test_exti_both_edges_pb7(void)
 
 void test_exti_software_trigger_pb7(void)
 {
-    /* Software trigger does not require a loopback cable — tests the
-     * EXTI->SWIER register and the pending-bit mechanism directly.    */
+    /* Software trigger test: no loopback cable needed.
+     * EXTI->SWIER sets the PR pending bit when IMR or EMR is enabled.
+     * Use EVENT mode (EMR set, IMR cleared) to avoid Default_Handler. */
     gpio_clock_enable(GPIO_PORT_B);
     gpio_configure_pin(GPIO_PORT_B, 7, GPIO_MODE_INPUT);
 
     /* Enable SYSCFG clock (needed by exti_configure_gpio_interrupt) */
     RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
 
-    /* Configure for rising edge so SWIER can set the pending bit */
+    /* Configure for rising edge, event mode, so SWIER can set PR */
     int ret = exti_configure_gpio_interrupt(GPIO_PORT_B, 7,
                                             EXTI_TRIGGER_RISING,
-                                            EXTI_MODE_INTERRUPT);
+                                            EXTI_MODE_EVENT);
     TEST_ASSERT_EQUAL_MESSAGE(0, ret,
         "exti_configure_gpio_interrupt for software trigger test failed");
 
     exti_clear_pending(7);
 
-    /* Fire software interrupt */
+    /* Fire software trigger */
     int sw_ret = exti_software_trigger(7);
     TEST_ASSERT_EQUAL_MESSAGE(0, sw_ret,
         "exti_software_trigger(7) returned error");
@@ -652,7 +651,7 @@ void test_exti_software_trigger_pb7(void)
     /* Cleanup */
     exti_clear_pending(7);
     exti_disable_line(7);
-    exti_set_interrupt_mask(7, 0);
+    exti_set_event_mask(7, 0);
     gpio_configure_pin(GPIO_PORT_B, 7, GPIO_MODE_ANALOG);
 
     TEST_ASSERT_MESSAGE(fired,
