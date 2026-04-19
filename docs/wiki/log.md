@@ -6,6 +6,22 @@ Types: `merge`, `decision`, `milestone`, `infra`
 
 ---
 
+## [2026-04-17] milestone | Add driver host tests for GPIO and EXTI (#99)
+
+Added `tests/gpio/` (44 tests) and `tests/exti/` (56 tests) using the fake peripheral stub
+infrastructure. GPIO tests cover all public API functions: clock enable/disable (RCC AHB1ENR
+bits), `gpio_configure_pin` (MODER 2-bit fields), set/clear/toggle (BSRR/ODR), read (IDR),
+`gpio_set_af` (AFR nibbles), output type (OTYPER), speed (OSPEEDR), pull (PUPDR), and
+`gpio_configure_full` combined call. Also validates port routing (each port maps to its own
+fake struct). EXTI tests cover: `exti_configure_gpio_interrupt` (SYSCFG EXTICR port mapping
+for all 6 GPIO ports across all 4 EXTICR registers, RTSR/FTSR trigger types, IMR/EMR mode,
+NVIC enable via `NVIC_EnableIRQ`), `exti_enable_line`/`exti_disable_line` (NVIC ISER/ICER),
+`exti_set_interrupt_mask`/`exti_set_event_mask` (EXTI IMR/EMR), `exti_is_pending`/
+`exti_clear_pending` (EXTI PR), and `exti_software_trigger` (EXTI SWIER). Updated
+`tests/Makefile` to include the `exti` suite. Total host tests: 247.
+
+---
+
 ## [2026-04-17] infra | Add parallel agent worktree workflow (#114)
 
 Added `scripts/worktree_new.sh` and `scripts/worktree_clean.sh` for creating and cleaning

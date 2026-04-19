@@ -275,7 +275,7 @@ async def _hil_run_tests(skip_build: bool = False, skip_flash: bool = False) -> 
 
     remote_cmd = (
         f"cd {REMOTE_DIR} && "
-        f"python3 scripts/run_hil_tests.py --timeout 120 {flags_str}"
+        f"python3 scripts/run_hil_tests.py --timeout 180 {flags_str}"
     )
 
     # 3. Run on Pi — capture stdout for parsing

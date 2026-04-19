@@ -1,4 +1,4 @@
-SUBDIRS = string_utils cli gpio rcc timer uart
+SUBDIRS = string_utils cli gpio exti rcc timer uart
 
 COVERAGE_INFO = coverage.info
 COVERAGE_FILT = coverage-filtered.info
@@ -24,6 +24,10 @@ run: all
 	@echo "Running gpio tests"
 	@echo "========================================"
 	@$(MAKE) -C gpio run
+	@echo "========================================"
+	@echo "Running exti tests"
+	@echo "========================================"
+	@$(MAKE) -C exti run
 	@echo "========================================"
 	@echo "Running rcc tests"
 	@echo "========================================"

@@ -18,6 +18,15 @@
  *            characterize throughput across the operating range.
  *
  *   Tier 3 — Non-SPI hardware tests (FPU, etc.)
+ *
+ *   Tier 4 — RCC clock tree and Timer accuracy tests.
+ *
+ *   Tier 5 — UART, GPIO output/input loopback and EXTI interrupt tests.
+ *            GPIO loopback pairs (same wires as UART loopback):
+ *              PA9 (output) <-> PB7 (input)  — UART1 loopback cable
+ *              PC6 (output) <-> PC7 (input)  — UART6 loopback cable
+ *            EXTI tests use PA9→PB7 pair (EXTI line 7, port B):
+ *              rising edge, falling edge, and software trigger.
  */
 
 #ifdef HIL_TEST_MODE
@@ -29,6 +38,8 @@
 #include "printf_dma.h"
 #include "rcc.h"
 #include "timer.h"
+#include "gpio_handler.h"
+#include "exti_handler.h"
 #include "stm32f4xx.h"  /* DWT / CoreDebug for cycle counting */
 
 /* ====================================================================
@@ -320,6 +331,267 @@ void test_usart6_loopback_sequence(void)
 }
 
 /* ====================================================================
+ * GPIO output/input loopback test helpers
+ *
+ * Loopback wiring (same jumper cables used for UART loopback tests):
+ *   PA9 (output) <-> PB7 (input)   — UART1 cable
+ *   PC6 (output) <-> PC7 (input)   — UART6 cable
+ *
+ * Each test reconfigures the pins as plain push-pull GPIO output and
+ * floating input, drives the output, and reads back the input.  Pins
+ * are cleaned up (re-set to analog/hi-Z) after each test so they do
+ * not interfere with the UART loopback tests that follow.
+ * ==================================================================== */
+
+/* Short busy-wait: ~10 µs at 100 MHz — allows the signal to propagate
+ * through the loopback cable before we sample the input pin.           */
+#define GPIO_LB_SETTLE_CYCLES  1000U
+
+static void gpio_lb_settle(void)
+{
+    volatile uint32_t n = GPIO_LB_SETTLE_CYCLES;
+    while (n--) { /* spin */ }
+}
+
+/**
+ * @brief Configure the PA9/PB7 loopback pair as plain GPIO output/input.
+ *
+ * PA9 — push-pull output, no pull
+ * PB7 — floating input, no pull
+ */
+static void gpio_lb_init_pa9_pb7(void)
+{
+    gpio_clock_enable(GPIO_PORT_A);
+    gpio_clock_enable(GPIO_PORT_B);
+
+    gpio_configure_full(GPIO_PORT_A, 9,
+                        GPIO_MODE_OUTPUT, GPIO_OUTPUT_PUSH_PULL,
+                        GPIO_SPEED_FAST, GPIO_PULL_NONE);
+
+    gpio_configure_full(GPIO_PORT_B, 7,
+                        GPIO_MODE_INPUT, GPIO_OUTPUT_PUSH_PULL,
+                        GPIO_SPEED_LOW, GPIO_PULL_NONE);
+}
+
+/**
+ * @brief Release the PA9/PB7 pair back to analog (hi-Z).
+ * Called after each GPIO test so UART tests on the same pins work.
+ */
+static void gpio_lb_deinit_pa9_pb7(void)
+{
+    gpio_configure_pin(GPIO_PORT_A, 9, GPIO_MODE_ANALOG);
+    gpio_configure_pin(GPIO_PORT_B, 7, GPIO_MODE_ANALOG);
+}
+
+/**
+ * @brief Configure the PC6/PC7 loopback pair as plain GPIO output/input.
+ *
+ * PC6 — push-pull output, no pull
+ * PC7 — floating input, no pull
+ */
+static void gpio_lb_init_pc6_pc7(void)
+{
+    gpio_clock_enable(GPIO_PORT_C);
+
+    gpio_configure_full(GPIO_PORT_C, 6,
+                        GPIO_MODE_OUTPUT, GPIO_OUTPUT_PUSH_PULL,
+                        GPIO_SPEED_FAST, GPIO_PULL_NONE);
+
+    gpio_configure_full(GPIO_PORT_C, 7,
+                        GPIO_MODE_INPUT, GPIO_OUTPUT_PUSH_PULL,
+                        GPIO_SPEED_LOW, GPIO_PULL_NONE);
+}
+
+/**
+ * @brief Release the PC6/PC7 pair back to analog (hi-Z).
+ */
+static void gpio_lb_deinit_pc6_pc7(void)
+{
+    gpio_configure_pin(GPIO_PORT_C, 6, GPIO_MODE_ANALOG);
+    gpio_configure_pin(GPIO_PORT_C, 7, GPIO_MODE_ANALOG);
+}
+
+/* ====================================================================
+ * GPIO loopback tests
+ *
+ * Each function covers one loopback pair end-to-end: HIGH, LOW, and
+ * toggle — all in a single init/settle/deinit cycle to minimise
+ * register-write overhead and serial output volume.
+ * ==================================================================== */
+
+void test_gpio_loopback_pa9_pb7(void)
+{
+    gpio_lb_init_pa9_pb7();
+
+    /* HIGH */
+    gpio_set_pin(GPIO_PORT_A, 9);
+    gpio_lb_settle();
+    TEST_ASSERT_EQUAL_MESSAGE(1, gpio_read_pin(GPIO_PORT_B, 7),
+        "PA9=HIGH should read PB7=HIGH — check jumper PA9<->PB7");
+
+    /* LOW */
+    gpio_clear_pin(GPIO_PORT_A, 9);
+    gpio_lb_settle();
+    TEST_ASSERT_EQUAL_MESSAGE(0, gpio_read_pin(GPIO_PORT_B, 7),
+        "PA9=LOW should read PB7=LOW — check jumper PA9<->PB7");
+
+    /* Toggle HIGH → LOW */
+    gpio_toggle_pin(GPIO_PORT_A, 9);
+    gpio_lb_settle();
+    TEST_ASSERT_EQUAL_MESSAGE(1, gpio_read_pin(GPIO_PORT_B, 7),
+        "PA9 after toggle: PB7 should be HIGH");
+
+    gpio_toggle_pin(GPIO_PORT_A, 9);
+    gpio_lb_settle();
+    TEST_ASSERT_EQUAL_MESSAGE(0, gpio_read_pin(GPIO_PORT_B, 7),
+        "PA9 after second toggle: PB7 should be LOW");
+
+    gpio_lb_deinit_pa9_pb7();
+}
+
+void test_gpio_loopback_pc6_pc7(void)
+{
+    gpio_lb_init_pc6_pc7();
+
+    /* HIGH */
+    gpio_set_pin(GPIO_PORT_C, 6);
+    gpio_lb_settle();
+    TEST_ASSERT_EQUAL_MESSAGE(1, gpio_read_pin(GPIO_PORT_C, 7),
+        "PC6=HIGH should read PC7=HIGH — check jumper PC6<->PC7");
+
+    /* LOW */
+    gpio_clear_pin(GPIO_PORT_C, 6);
+    gpio_lb_settle();
+    TEST_ASSERT_EQUAL_MESSAGE(0, gpio_read_pin(GPIO_PORT_C, 7),
+        "PC6=LOW should read PC7=LOW — check jumper PC6<->PC7");
+
+    gpio_lb_deinit_pc6_pc7();
+}
+
+/* ====================================================================
+ * EXTI interrupt tests — PA9 output triggers EXTI line 7 (port B, PB7)
+ *
+ * Strategy: use EXTI_MODE_INTERRUPT so that EXTI->PR is set on each
+ * detected edge (the pending register is only updated in interrupt mode).
+ * A minimal EXTI9_5_IRQHandler defined here overrides the Default_Handler
+ * (infinite loop) weak alias: it increments a volatile counter and clears
+ * the pending bit, then returns — allowing the test to observe how many
+ * times the handler fired.
+ *
+ * Timeout guard: spin up to ~1 ms (100 000 cycles at 100 MHz) before
+ * declaring a failure — long enough for any reasonable signal path but
+ * short enough to avoid a multi-second hang on a disconnected jumper.
+ * ==================================================================== */
+
+/* Shared ISR counter — incremented by EXTI9_5_IRQHandler on each fire */
+static volatile uint32_t g_exti9_5_count = 0;
+
+/**
+ * @brief Minimal EXTI9_5 handler: count the interrupt and clear pending.
+ *
+ * Overrides the Default_Handler weak alias in startup code.
+ * Clears only line 7 (PB7) pending bit; other lines in the [5-9] group
+ * are left untouched (none are armed in these tests).
+ */
+void EXTI9_5_IRQHandler(void)
+{
+    if (EXTI->PR & (1U << 7)) {
+        EXTI->PR = (1U << 7);   /* write 1 to clear */
+        g_exti9_5_count++;
+    }
+}
+
+#define EXTI_LB_TIMEOUT_CYCLES  100000U
+
+/**
+ * @brief Spin until g_exti9_5_count exceeds prev_count, or timeout.
+ * @return 1 if count increased, 0 on timeout.
+ */
+static int exti_lb_wait_count(uint32_t prev_count)
+{
+    uint32_t n = EXTI_LB_TIMEOUT_CYCLES;
+    while (n--) {
+        if (g_exti9_5_count != prev_count) return 1;
+    }
+    return 0;
+}
+
+void test_exti_both_edges_pb7(void)
+{
+    gpio_lb_init_pa9_pb7();
+    gpio_clear_pin(GPIO_PORT_A, 9);
+    gpio_lb_settle();
+
+    int ret = exti_configure_gpio_interrupt(GPIO_PORT_B, 7,
+                                            EXTI_TRIGGER_BOTH,
+                                            EXTI_MODE_INTERRUPT);
+    TEST_ASSERT_EQUAL_MESSAGE(0, ret,
+        "exti_configure_gpio_interrupt(PB7, BOTH) failed");
+
+    exti_clear_pending(7);
+    uint32_t prev = g_exti9_5_count;
+
+    /* Rising edge */
+    gpio_set_pin(GPIO_PORT_A, 9);
+    int fired_rising = exti_lb_wait_count(prev);
+    prev = g_exti9_5_count;
+
+    /* Falling edge */
+    gpio_clear_pin(GPIO_PORT_A, 9);
+    int fired_falling = exti_lb_wait_count(prev);
+
+    exti_clear_pending(7);
+    exti_disable_line(7);
+    exti_set_interrupt_mask(7, 0);
+    gpio_lb_deinit_pa9_pb7();
+
+    TEST_ASSERT_MESSAGE(fired_rising,
+        "EXTI BOTH: rising edge did not fire — check jumper PA9<->PB7");
+    TEST_ASSERT_MESSAGE(fired_falling,
+        "EXTI BOTH: falling edge did not fire — check jumper PA9<->PB7");
+}
+
+void test_exti_software_trigger_pb7(void)
+{
+    /* Software trigger: no loopback cable required.
+     * Writes to EXTI->SWIER to generate a synthetic rising edge.
+     * The EXTI9_5_IRQHandler defined above will fire and increment
+     * g_exti9_5_count, confirming end-to-end EXTI machinery works.  */
+    gpio_clock_enable(GPIO_PORT_B);
+    gpio_configure_pin(GPIO_PORT_B, 7, GPIO_MODE_INPUT);
+
+    /* Enable SYSCFG clock (needed by exti_configure_gpio_interrupt) */
+    RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
+
+    /* Configure for rising edge, interrupt mode */
+    int ret = exti_configure_gpio_interrupt(GPIO_PORT_B, 7,
+                                            EXTI_TRIGGER_RISING,
+                                            EXTI_MODE_INTERRUPT);
+    TEST_ASSERT_EQUAL_MESSAGE(0, ret,
+        "exti_configure_gpio_interrupt for software trigger test failed");
+
+    exti_clear_pending(7);
+    uint32_t prev = g_exti9_5_count;
+
+    /* Fire software trigger */
+    int sw_ret = exti_software_trigger(7);
+    TEST_ASSERT_EQUAL_MESSAGE(0, sw_ret,
+        "exti_software_trigger(7) returned error");
+
+    /* Wait for ISR to fire */
+    int fired = exti_lb_wait_count(prev);
+
+    /* Cleanup */
+    exti_clear_pending(7);
+    exti_disable_line(7);
+    exti_set_interrupt_mask(7, 0);
+    gpio_configure_pin(GPIO_PORT_B, 7, GPIO_MODE_ANALOG);
+
+    TEST_ASSERT_MESSAGE(fired,
+        "EXTI software trigger: ISR did not fire");
+}
+
+/* ====================================================================
  * Main test runner
  * ==================================================================== */
 
@@ -474,6 +746,28 @@ int run_unity_tests(void) {
     RUN_TEST(test_usart6_loopback_0x00);
     RUN_TEST(test_usart6_loopback_0xff);
     RUN_TEST(test_usart6_loopback_sequence);
+
+    /* ----------------------------------------------------------
+     * Tier 5: GPIO output/input loopback tests
+     *   PA9 (output) wired to PB7 (input) — UART1 loopback cable
+     *   PC6 (output) wired to PC7 (input) — UART6 loopback cable
+     * ---------------------------------------------------------- */
+    printf("\n--- Tier 5: GPIO loopback ---\n");
+    printf_dma_flush();
+
+    RUN_TEST(test_gpio_loopback_pa9_pb7);   /* HIGH, LOW, toggle — PA9<->PB7 */
+    RUN_TEST(test_gpio_loopback_pc6_pc7);   /* HIGH, LOW         — PC6<->PC7 */
+
+    /* ----------------------------------------------------------
+     * Tier 5: EXTI interrupt tests
+     *   PA9 (output) wired to PB7 (input, EXTI line 7 port B)
+     *   Both edges tested in one function; software trigger separate.
+     * ---------------------------------------------------------- */
+    printf("\n--- Tier 5: EXTI loopback (PA9->PB7, line 7) ---\n");
+    printf_dma_flush();
+
+    RUN_TEST(test_exti_both_edges_pb7);
+    RUN_TEST(test_exti_software_trigger_pb7);
 
     printf_dma_flush();
     return UNITY_END();
