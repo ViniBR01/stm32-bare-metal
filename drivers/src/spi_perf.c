@@ -283,6 +283,14 @@ int spi_perf_run(spi_instance_t instance, uint16_t prescaler,
         return -1;
     }
 
+    /* Warm-up transfer: pays the one-time DMA stream-init cost
+     * (spi_dma_init_streams: clock enable, CR/PAR config, NVIC setup)
+     * outside the measurement window.  All 5 measured samples then
+     * reflect steady-state per-transfer cost — matching production
+     * usage where DMA is initialised once at startup, not per transfer. */
+    spi_perf_fill_patterns(buffer_size);
+    spi_perf_timed_transfer(&spi, buffer_size, use_dma);
+
     /* ---------------------------------------------------------------
      * Repeated-sampling loop
      *
