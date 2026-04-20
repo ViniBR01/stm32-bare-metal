@@ -261,18 +261,22 @@ def run_test_suite(port: str, baudrate: int = 115200, timeout: int = 30) -> Tupl
 def parse_test_output(lines: List[str]) -> Dict:
     """
     Parse test output and extract results + metrics
-    
-    Parses lines in format:
+
+    Parses lines in format (single-sample, legacy):
         TEST:<name>:<PASS|FAIL>:cycles=<value>:<metric>=<value>
-    
+
+    And the extended repeated-sampling format:
+        TEST:<name>:<PASS|FAIL>:cycles=<value>:<metric>=<value>:samples=<N>:integrity_passes=<M>
+
     And Unity format:
         filename.c:line:test_name:PASS
         filename.c:line:test_name:FAIL:message
-    
+
     Returns:
         Dict with structure:
         {
-            'tests': [{'name': ..., 'status': ..., 'cycles': ..., 'metrics': {...}}, ...],
+            'tests': [{'name': ..., 'status': ..., 'cycles': ..., 'metrics': {...},
+                       'samples': N, 'integrity_passes': M}, ...],
             'summary': {'total': N, 'passed': N, 'failed': N}
         }
     """
@@ -280,25 +284,35 @@ def parse_test_output(lines: List[str]) -> Dict:
         'tests': [],
         'summary': {'total': 0, 'passed': 0, 'failed': 0}
     }
-    
+
     for line in lines:
-        # Parse TEST: format (performance tests)
-        match = re.match(r'^TEST:([^:]+):(PASS|FAIL):cycles=(\d+):([^=]+)=(\d+)', line)
+        # Parse TEST: format (performance tests — single-sample or sampled)
+        # Extended format:  TEST:<name>:<PASS|FAIL>:cycles=<v>:<metric>=<v>:samples=<N>:integrity_passes=<M>
+        # Legacy format:    TEST:<name>:<PASS|FAIL>:cycles=<v>:<metric>=<v>
+        match = re.match(r'^TEST:([^:]+):(PASS|FAIL):cycles=(\d+):([^=:]+)=(\d+)(.*)', line)
         if match:
-            name, status, cycles, metric_name, metric_value = match.groups()
-            results['tests'].append({
+            name, status, cycles, metric_name, metric_value, extra = match.groups()
+            entry = {
                 'name': name,
                 'status': status,
                 'cycles': int(cycles),
                 'metrics': {metric_name: int(metric_value)}
-            })
+            }
+            # Parse optional extended fields: :samples=N:integrity_passes=M
+            samples_match = re.search(r':samples=(\d+)', extra)
+            integrity_match = re.search(r':integrity_passes=(\d+)', extra)
+            if samples_match:
+                entry['samples'] = int(samples_match.group(1))
+            if integrity_match:
+                entry['integrity_passes'] = int(integrity_match.group(1))
+            results['tests'].append(entry)
             results['summary']['total'] += 1
             if status == 'PASS':
                 results['summary']['passed'] += 1
             else:
                 results['summary']['failed'] += 1
             continue
-        
+
         # Parse Unity format
         match = re.match(r'^([^:]+\.c):(\d+):(\w+):(PASS|FAIL)(.*)$', line)
         if match:
@@ -315,7 +329,7 @@ def parse_test_output(lines: List[str]) -> Dict:
                 results['summary']['passed'] += 1
             else:
                 results['summary']['failed'] += 1
-    
+
     return results
 
 def load_baselines(baseline_path: Path) -> Dict:
@@ -348,28 +362,40 @@ def check_baselines(results: Dict, baselines: Dict) -> bool:
     
     for test in results['tests']:
         test_name = test['name']
-        
+
+        # Report integrity pass rate for sampled tests regardless of baseline
+        if 'samples' in test and 'integrity_passes' in test:
+            n = test['samples']
+            m = test['integrity_passes']
+            if m >= n:
+                log_success(f"  {test_name}: Integrity {m}/{n} (all clean)")
+            elif m >= (n - 1):
+                log_warning(f"  {test_name}: Integrity {m}/{n} (1 transient error — within tolerance)")
+            else:
+                log_error(f"  {test_name}: Integrity {m}/{n} — too many corruptions, treating as FAIL")
+                all_pass = False
+
         if test_name not in baselines:
             log_info(f"  {test_name}: No baseline (new test)")
             continue
-        
+
         baseline = baselines[test_name]
-        
+
         # Check if baseline has values (not null)
         if baseline.get('cycles') is None:
             log_info(f"  {test_name}: Baseline not populated yet")
             continue
-        
+
         # Get tolerance
         tolerance_pct = baseline.get('tolerance_percent', 10)
-        
-        # Check cycles
+
+        # Check cycles (median for sampled tests)
         if 'cycles' in test:
             expected_cycles = baseline['cycles']
             actual_cycles = test['cycles']
             min_cycles = expected_cycles * (100 - tolerance_pct) / 100
             max_cycles = expected_cycles * (100 + tolerance_pct) / 100
-            
+
             if actual_cycles < min_cycles or actual_cycles > max_cycles:
                 log_error(f"  {test_name}: Cycle count regression")
                 log_error(f"    Expected: {expected_cycles} ±{tolerance_pct}%")
@@ -377,7 +403,7 @@ def check_baselines(results: Dict, baselines: Dict) -> bool:
                 all_pass = False
             else:
                 log_success(f"  {test_name}: Cycles OK ({actual_cycles})")
-        
+
         # Check other metrics
         if 'metrics' in test:
             for metric_name, metric_value in test['metrics'].items():
@@ -386,7 +412,7 @@ def check_baselines(results: Dict, baselines: Dict) -> bool:
                     if expected is not None:
                         min_val = expected * (100 - tolerance_pct) / 100
                         max_val = expected * (100 + tolerance_pct) / 100
-                        
+
                         if metric_value < min_val or metric_value > max_val:
                             log_error(f"  {test_name}: {metric_name} regression")
                             log_error(f"    Expected: {expected} ±{tolerance_pct}%")
