@@ -2,14 +2,6 @@
 
 ## Open Issues by Priority
 
-### Testing & Quality (highest priority)
-
-| Issue | Title | Notes |
-|---|---|---|
-| ~~#99~~ | ~~Driver host tests: GPIO and EXTI~~ | ✅ Done — 44 GPIO tests + 56 EXTI tests. |
-| #100 | Driver host tests: UART | Tier 1 + Tier 2. Circular buffer wrap logic, baud divisor, init register setup. |
-| #101 | Driver host tests: RCC and Timer | Tier 1 + Tier 2. PLL solver — most complex logic in codebase. |
-
 ### Architecture / Quality
 
 | Issue | Title | Notes |
@@ -43,15 +35,12 @@
 
 ## Suggested Priority Order
 
-1. **#99** — GPIO/EXTI driver tests (simplest drivers; validate the fake stub infrastructure)
-2. **#100** — UART driver tests (circular buffer has non-obvious wrap edge cases)
-3. **#101** — RCC/Timer driver tests (PLL solver is the most complex logic in the codebase)
-4. **#62** — non-blocking SysTick tick counter
-5. **#26** — unified error codes
-6. **#69** — multi-instance UART
-7. **#73** — NVIC priority scheme
-8. Remaining drivers (#66, #67, #68, #70, #71, #72) after #26 and #73
-9. Examples (#14, #16, #22, #45) driven by driver availability
+1. **#62** — non-blocking SysTick tick counter
+2. **#26** — unified error codes
+3. **#69** — multi-instance UART
+4. **#73** — NVIC priority scheme
+5. Remaining drivers (#66, #67, #68, #70, #71, #72) after #26 and #73
+6. Examples (#14, #16, #22, #45) driven by driver availability
 
 ---
 
@@ -74,5 +63,9 @@ See [log.md](log.md) for the full history. Key milestones:
 - ✅ lcov code coverage report uploaded as CI artifact
 - ✅ Unity as direct root-level submodule (`3rd_party/unity/`)
 - ✅ All GitHub Actions upgraded to Node.js 24
-- ✅ HIL test infrastructure: Unity on target (60 tests), machine-parseable output, Python automation, performance baselines
+- ✅ HIL test infrastructure: Unity on target (77 tests), machine-parseable output, Python automation, performance baselines
 - ✅ Self-hosted Raspberry Pi HIL runner (`pi-hil` label), `hil-tests` CI job with `needs: host-tests`
+- ✅ HIL Tier 5: UART loopback (USART1 + USART6), GPIO output/input loopback, EXTI edge + software-trigger tests
+- ✅ HIL SPI throughput: 5-sample median with warm-up transfer, majority-vote integrity check, recalibrated baselines (#112)
+- ✅ Parallel agent worktree workflow: `worktree_new.sh` / `worktree_clean.sh`, CLAUDE.md instructions, agents wiki page (#114)
+- ✅ Tailscale remote access + MCP HIL server (`scripts/mcp_hil_server.py`) for Claude Code integration (#109)
