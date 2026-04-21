@@ -4,6 +4,7 @@
 #include "printf.h"
 #include "rcc.h"
 #include "spi_perf.h"
+#include "systick.h"
 #include "timer.h"
 
 #ifdef HIL_TEST_MODE
@@ -261,8 +262,21 @@ static int cmd_run_all_tests(const char* args) {
 }
 #endif /* HIL_TEST_MODE */
 
+static int cmd_uptime(const char* args) {
+    (void)args;
+    uint32_t ms = systick_get_ms();
+    uint32_t s  = ms / 1000U;
+    uint32_t h  = s / 3600U; s %= 3600U;
+    uint32_t m  = s / 60U;   s %= 60U;
+    printf("%02lu:%02lu:%02lu.%03lu\n",
+           (unsigned long)h, (unsigned long)m,
+           (unsigned long)s, (unsigned long)(ms % 1000U));
+    return 0;
+}
+
 // Command table (help command is automatically added by CLI library)
 static const cli_command_t commands[] = {
+    {"uptime",        "Print uptime (hh:mm:ss.mmm)", cmd_uptime},
     {"led_on",        "Turn on LED2",              cmd_led_on},
     {"led_off",       "Turn off LED2",             cmd_led_off},
     {"led_toggle",    "Toggle LED2 state",         cmd_led_toggle},

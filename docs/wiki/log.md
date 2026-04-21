@@ -6,6 +6,22 @@ Types: `merge`, `decision`, `milestone`, `infra`
 
 ---
 
+## [2026-04-17] milestone | SysTick tick counter with non-blocking API (#62)
+
+Refactored the SysTick driver from a polled-COUNTFLAG blocking loop to an
+ISR-driven millisecond counter. `systick_init()` configures SysTick for 1 ms
+interrupts using the processor clock and sets priority to `IRQ_PRIO_TIMER` via
+`NVIC_SetPriority(SysTick_IRQn, ...)`. `SysTick_Handler` increments a static
+`volatile uint32_t s_tick_ms` counter. `systick_get_ms()` returns the counter
+value; `systick_elapsed_since(start)` uses unsigned subtraction for
+wraparound-safe elapsed time measurement. `systick_delay_ms()` now polls the
+tick counter instead of COUNTFLAG, and returns immediately for delay == 0.
+Added `uptime` CLI command that prints boot time as `hh:mm:ss.mmm`.
+Added `systick_reset_for_test()` (guarded by `#ifdef UNIT_TEST`) and 14 new
+host unit tests in `tests/systick/`. Extended `tests/driver_stubs/core_cm4.h`
+with `SysTick_CTRL_*` constants and negative-IRQn handling in
+`NVIC_SetPriority`.
+
 ## [2026-04-20] milestone | HIL SPI throughput: warm-up run + 5-sample median (#112)
 
 Made HIL SPI performance tests robust against transient loopback corruption and measurement

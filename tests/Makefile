@@ -1,4 +1,4 @@
-SUBDIRS = string_utils cli gpio exti rcc timer uart
+SUBDIRS = string_utils cli gpio exti rcc timer uart systick
 
 COVERAGE_INFO = coverage.info
 COVERAGE_FILT = coverage-filtered.info
@@ -40,6 +40,10 @@ run: all
 	@echo "Running uart tests"
 	@echo "========================================"
 	@$(MAKE) -C uart run
+	@echo "========================================"
+	@echo "Running systick tests"
+	@echo "========================================"
+	@$(MAKE) -C systick run
 	@echo "========================================"
 	@echo "All test suites passed"
 	@echo "========================================"

@@ -159,9 +159,14 @@ static inline void NVIC_DisableIRQ(IRQn_Type IRQn)
 
 static inline void NVIC_SetPriority(IRQn_Type IRQn, uint32_t priority)
 {
-    if ((int32_t)IRQn >= 0)
+    if ((int32_t)IRQn >= 0) {
         fake_NVIC.IP[(uint32_t)IRQn] =
             (uint8_t)((priority << (8U - __NVIC_PRIO_BITS)) & 0xFFU);
+    } else {
+        /* System exception: write to SCB->SHP (indices 0-11 map to IRQn -12..-1) */
+        fake_SCB.SHP[((uint32_t)IRQn & 0xFUL) - 4UL] =
+            (uint8_t)((priority << (8U - __NVIC_PRIO_BITS)) & 0xFFU);
+    }
 }
 
 static inline uint32_t NVIC_GetPriority(IRQn_Type IRQn)
@@ -193,6 +198,17 @@ static inline void NVIC_SetPriorityGrouping(uint32_t PriorityGroup)
 {
     (void)PriorityGroup;  /* no-op in host tests */
 }
+
+/* ---- SysTick bit constants (used by systick.c) -------------------------- */
+
+#define SysTick_CTRL_COUNTFLAG_Pos    16U
+#define SysTick_CTRL_COUNTFLAG_Msk    (1UL << SysTick_CTRL_COUNTFLAG_Pos)
+#define SysTick_CTRL_CLKSOURCE_Pos     2U
+#define SysTick_CTRL_CLKSOURCE_Msk    (1UL << SysTick_CTRL_CLKSOURCE_Pos)
+#define SysTick_CTRL_TICKINT_Pos       1U
+#define SysTick_CTRL_TICKINT_Msk      (1UL << SysTick_CTRL_TICKINT_Pos)
+#define SysTick_CTRL_ENABLE_Pos        0U
+#define SysTick_CTRL_ENABLE_Msk       (1UL /*<< SysTick_CTRL_ENABLE_Pos*/)
 
 /* ---- DWT / CoreDebug bit constants (used by spi_perf.c) ----------------- */
 
