@@ -24,21 +24,45 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 WORKTREES_BASE="$(dirname "${REPO_ROOT}")/stm32-bare-metal-worktrees"
 WORKTREE_PATH="${WORKTREES_BASE}/${BRANCH}"
 
-# Warn if branch isn't merged into origin/main
-if git -C "${REPO_ROOT}" fetch origin main --quiet 2>/dev/null; then
-    if ! git -C "${REPO_ROOT}" branch --merged origin/main | grep -qE "^[[:space:]]*${BRANCH}$"; then
-        echo "Warning: branch '${BRANCH}' does not appear merged into origin/main." >&2
-        read -r -p "  Proceed anyway? [y/N] " confirm
-        if [[ "${confirm}" != "y" && "${confirm}" != "Y" ]]; then
-            echo "Aborted." >&2
-            exit 1
-        fi
+# Verify the branch has been merged before cleaning up.
+# Two checks are needed because squash-merge creates a new commit with no
+# shared history with the branch tip, so `git branch --merged` misses it.
+#
+#   1. Fast-forward / regular merge: branch tip is an ancestor of origin/main
+#   2. Squash merge: a merged PR for this branch exists on GitHub
+is_merged=0
+
+git -C "${REPO_ROOT}" fetch origin main --quiet 2>/dev/null || true
+
+if git -C "${REPO_ROOT}" branch --merged origin/main \
+        | grep -qE "^[[:space:]]*${BRANCH}$"; then
+    is_merged=1
+fi
+
+if [ "${is_merged}" -eq 0 ]; then
+    # Fall back to GitHub PR state (handles squash merges)
+    REPO_SLUG="$(git -C "${REPO_ROOT}" remote get-url origin \
+                 | sed 's|.*github\.com[:/]\(.*\)\.git|\1|;s|.*github\.com[:/]\(.*\)|\1|')"
+    if gh pr list --repo "${REPO_SLUG}" \
+            --head "${BRANCH}" --state merged --json number \
+            --jq '.[0].number' 2>/dev/null | grep -q '[0-9]'; then
+        is_merged=1
+        echo "Branch '${BRANCH}' was squash-merged (confirmed via GitHub PR)."
+    fi
+fi
+
+if [ "${is_merged}" -eq 0 ]; then
+    echo "Warning: branch '${BRANCH}' does not appear merged into origin/main." >&2
+    read -r -p "  Proceed anyway? [y/N] " confirm
+    if [[ "${confirm}" != "y" && "${confirm}" != "Y" ]]; then
+        echo "Aborted." >&2
+        exit 1
     fi
 fi
 
 # Remove the worktree
 if [ -d "${WORKTREE_PATH}" ]; then
-    git -C "${REPO_ROOT}" worktree remove "${WORKTREE_PATH}"
+    git -C "${REPO_ROOT}" worktree remove --force "${WORKTREE_PATH}"
     echo "Removed worktree: ${WORKTREE_PATH}"
 else
     echo "Worktree path not found (already removed?): ${WORKTREE_PATH}"
@@ -49,7 +73,7 @@ git -C "${REPO_ROOT}" worktree prune
 
 # Delete the local branch
 if git -C "${REPO_ROOT}" show-ref --verify --quiet "refs/heads/${BRANCH}"; then
-    git -C "${REPO_ROOT}" branch -d "${BRANCH}"
+    git -C "${REPO_ROOT}" branch -D "${BRANCH}"
     echo "Deleted local branch: ${BRANCH}"
 fi
 
