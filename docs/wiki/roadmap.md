@@ -14,7 +14,6 @@
 | Issue | Title | Notes |
 |---|---|---|
 | #62 | SysTick-based tick counter with non-blocking API | Small. Enables time-based patterns. |
-| #69 | Enhance UART: multiple instances + configurable baud rate | High utility. Depends on #26. |
 | #66 | Implement I2C master driver | Depends on #26 and #73. |
 | #67 | Implement ADC driver | Depends on #26. |
 | #68 | Implement IWDG watchdog driver | Depends on #26. |
@@ -37,9 +36,8 @@
 
 1. **#62** — non-blocking SysTick tick counter
 2. **#26** — unified error codes
-3. **#69** — multi-instance UART
-4. **#73** — NVIC priority scheme
-5. Remaining drivers (#66, #67, #68, #70, #71, #72) after #26 and #73
+3. **#73** — NVIC priority scheme
+4. Remaining drivers (#66, #67, #68, #70, #71, #72) after #26 and #73
 6. Examples (#14, #16, #22, #45) driven by driver availability
 
 ---
@@ -56,7 +54,7 @@ See [log.md](log.md) for the full history. Key milestones:
 - ✅ CLI engine with tab completion, command history, ANSI escape handling
 - ✅ DMA-buffered printf (printf_dma)
 - ✅ Logging system (log_c) with runtime log level control
-- ✅ Host unit tests: CLI (41), string utils (23), GPIO (44), EXTI (56), RCC (36), Timer (52), UART (46) — 298 total
+- ✅ Host unit tests: CLI (41), string utils (23), GPIO (44), EXTI (56), RCC (36), Timer (52), UART (76) — 328 total
 - ✅ Driver host test infrastructure: fake `stm32f4xx.h` + `core_cm4.h` stubs, `test_periph_reset()`
 - ✅ GitHub Actions CI pipeline: `host-tests` + `firmware-build` + `hil-tests`, branch protection
 - ✅ JUnit XML test reporting (Unity → `unity_to_junit.py` → `dorny/test-reporter@v3`)
@@ -69,3 +67,4 @@ See [log.md](log.md) for the full history. Key milestones:
 - ✅ HIL SPI throughput: 5-sample median with warm-up transfer, majority-vote integrity check, recalibrated baselines (#112)
 - ✅ Parallel agent worktree workflow: `worktree_new.sh` / `worktree_clean.sh`, CLAUDE.md instructions, agents wiki page (#114)
 - ✅ Tailscale remote access + MCP HIL server (`scripts/mcp_hil_server.py`) for Claude Code integration (#109)
+- ✅ Multi-instance UART driver: USART1/2/6, configurable baud rate, hardware table, `uart_init_config()` (#69)

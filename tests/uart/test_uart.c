@@ -55,7 +55,9 @@
 #define CR3_EIE    (1U << 0)
 
 /* Forward-declare ISRs so we can call them directly to simulate interrupts */
+extern void USART1_IRQHandler(void);
 extern void USART2_IRQHandler(void);
+extern void USART6_IRQHandler(void);
 extern void DMA1_Stream6_IRQHandler(void);
 
 /*
@@ -540,6 +542,212 @@ void test_critical_section_nesting(void)
 }
 
 /* ======================================================================== */
+/* uart_init_config — USART1 (APB2, PA9 TX / PB7 RX, DMA2 streams 7/2)      */
+/* ======================================================================== */
+
+/* APB2 clock = same as APB1 in HSI-direct config seeded in setUp()          */
+#define TEST_APB2_CLK_HZ  TEST_APB1_CLK_HZ
+
+void test_uart1_init_enables_gpioa_clock(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_1, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    TEST_ASSERT_BITS_HIGH(RCC_AHB1ENR_GPIOAEN, fake_RCC.AHB1ENR);
+}
+
+void test_uart1_init_enables_gpiob_clock(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_1, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    TEST_ASSERT_BITS_HIGH(RCC_AHB1ENR_GPIOBEN, fake_RCC.AHB1ENR);
+}
+
+void test_uart1_init_enables_usart1_apb2_clock(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_1, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    TEST_ASSERT_BITS_HIGH(RCC_APB2ENR_USART1EN, fake_RCC.APB2ENR);
+}
+
+void test_uart1_init_pa9_mode_is_af(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_1, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    /* PA9 MODER bits [19:18] = 0b10 (AF) */
+    TEST_ASSERT_EQUAL_HEX32(0x80000U, fake_GPIOA.MODER & 0xC0000U);
+}
+
+void test_uart1_init_pb7_mode_is_af(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_1, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    /* PB7 MODER bits [15:14] = 0b10 (AF) */
+    TEST_ASSERT_EQUAL_HEX32(0x8000U, fake_GPIOB.MODER & 0xC000U);
+}
+
+void test_uart1_init_pa9_af7(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_1, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    /* PA9 AFR[1] bits [7:4] must be 7 (pin 9 in second AF register, offset (9%8)*4=4) */
+    TEST_ASSERT_EQUAL_HEX32(0x70U, fake_GPIOA.AFR[1] & 0xF0U);
+}
+
+void test_uart1_init_pb7_af7(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_1, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    /* PB7 AFR[0] bits [31:28] must be 7 (pin 7, offset (7%8)*4=28) */
+    TEST_ASSERT_EQUAL_HEX32(0x70000000U, fake_GPIOB.AFR[0] & 0xF0000000U);
+}
+
+void test_uart1_init_brr_uses_apb2_clk(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_1, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    /* APB2 = TEST_APB2_CLK_HZ (same as APB1 in this test setup) */
+    TEST_ASSERT_EQUAL(uart_compute_baud_divisor(TEST_APB2_CLK_HZ, 115200U),
+                      fake_USART1.BRR);
+}
+
+void test_uart1_init_cr1_te_re_ue_set(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_1, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    TEST_ASSERT_BITS_HIGH(CR1_TE | CR1_RE | CR1_UE, fake_USART1.CR1);
+}
+
+void test_uart1_init_nvic_usart1_irq_enabled(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_1, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    uint32_t irqn = (uint32_t)USART1_IRQn;
+    TEST_ASSERT_BITS_HIGH(1U << (irqn & 0x1FU), fake_NVIC.ISER[irqn >> 5U]);
+}
+
+void test_uart1_init_nvic_usart1_priority(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_1, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    TEST_ASSERT_EQUAL(IRQ_PRIO_UART << (8U - __NVIC_PRIO_BITS),
+                      fake_NVIC.IP[(uint32_t)USART1_IRQn]);
+}
+
+void test_uart1_init_nvic_dma_tx_priority(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_1, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    /* USART1 TX uses DMA2 Stream 7 */
+    TEST_ASSERT_EQUAL(IRQ_PRIO_DMA_HIGH << (8U - __NVIC_PRIO_BITS),
+                      fake_NVIC.IP[(uint32_t)DMA2_Stream7_IRQn]);
+}
+
+/* ======================================================================== */
+/* uart_init_config — USART6 (APB2, PC6 TX / PC7 RX, DMA2 streams 6/1)      */
+/* ======================================================================== */
+
+void test_uart6_init_enables_gpioc_clock(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_6, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    TEST_ASSERT_BITS_HIGH(RCC_AHB1ENR_GPIOCEN, fake_RCC.AHB1ENR);
+}
+
+void test_uart6_init_enables_usart6_apb2_clock(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_6, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    TEST_ASSERT_BITS_HIGH(RCC_APB2ENR_USART6EN, fake_RCC.APB2ENR);
+}
+
+void test_uart6_init_pc6_mode_is_af(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_6, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    /* PC6 MODER bits [13:12] = 0b10 (AF) */
+    TEST_ASSERT_EQUAL_HEX32(0x2000U, fake_GPIOC.MODER & 0x3000U);
+}
+
+void test_uart6_init_pc7_mode_is_af(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_6, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    /* PC7 MODER bits [15:14] = 0b10 (AF) */
+    TEST_ASSERT_EQUAL_HEX32(0x8000U, fake_GPIOC.MODER & 0xC000U);
+}
+
+void test_uart6_init_pc6_af8(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_6, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    /* PC6 AFR[0] bits [27:24] must be 8 (pin 6, offset (6%8)*4=24) */
+    TEST_ASSERT_EQUAL_HEX32(0x8000000U, fake_GPIOC.AFR[0] & 0xF000000U);
+}
+
+void test_uart6_init_pc7_af8(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_6, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    /* PC7 AFR[0] bits [31:28] must be 8 (pin 7, offset (7%8)*4=28) */
+    TEST_ASSERT_EQUAL_HEX32(0x80000000U, fake_GPIOC.AFR[0] & 0xF0000000U);
+}
+
+void test_uart6_init_brr_uses_apb2_clk(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_6, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    TEST_ASSERT_EQUAL(uart_compute_baud_divisor(TEST_APB2_CLK_HZ, 115200U),
+                      fake_USART6.BRR);
+}
+
+void test_uart6_init_cr1_te_re_ue_set(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_6, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    TEST_ASSERT_BITS_HIGH(CR1_TE | CR1_RE | CR1_UE, fake_USART6.CR1);
+}
+
+void test_uart6_init_nvic_usart6_irq_enabled(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_6, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    uint32_t irqn = (uint32_t)USART6_IRQn;
+    TEST_ASSERT_BITS_HIGH(1U << (irqn & 0x1FU), fake_NVIC.ISER[irqn >> 5U]);
+}
+
+void test_uart6_init_nvic_usart6_priority(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_6, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    TEST_ASSERT_EQUAL(IRQ_PRIO_UART << (8U - __NVIC_PRIO_BITS),
+                      fake_NVIC.IP[(uint32_t)USART6_IRQn]);
+}
+
+void test_uart6_init_nvic_dma_tx_priority(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_6, .baud_rate = 115200U };
+    uart_init_config(&cfg);
+    /* USART6 TX uses DMA2 Stream 6 */
+    TEST_ASSERT_EQUAL(IRQ_PRIO_DMA_HIGH << (8U - __NVIC_PRIO_BITS),
+                      fake_NVIC.IP[(uint32_t)DMA2_Stream6_IRQn]);
+}
+
+/* ======================================================================== */
+/* uart_init_config — invalid argument handling                               */
+/* ======================================================================== */
+
+void test_uart_init_config_null_returns_err(void)
+{
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, uart_init_config(NULL));
+}
+
+void test_uart_init_config_invalid_instance_returns_err(void)
+{
+    uart_config_t cfg = { .instance = UART_INSTANCE_COUNT, .baud_rate = 115200U };
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, uart_init_config(&cfg));
+}
+
+/* ======================================================================== */
 /* main                                                                       */
 /* ======================================================================== */
 
@@ -623,6 +831,37 @@ int main(void)
     RUN_TEST(test_critical_section_enter_sets_basepri);
     RUN_TEST(test_critical_section_exit_restores_basepri);
     RUN_TEST(test_critical_section_nesting);
+
+    /* uart_init_config — USART1 */
+    RUN_TEST(test_uart1_init_enables_gpioa_clock);
+    RUN_TEST(test_uart1_init_enables_gpiob_clock);
+    RUN_TEST(test_uart1_init_enables_usart1_apb2_clock);
+    RUN_TEST(test_uart1_init_pa9_mode_is_af);
+    RUN_TEST(test_uart1_init_pb7_mode_is_af);
+    RUN_TEST(test_uart1_init_pa9_af7);
+    RUN_TEST(test_uart1_init_pb7_af7);
+    RUN_TEST(test_uart1_init_brr_uses_apb2_clk);
+    RUN_TEST(test_uart1_init_cr1_te_re_ue_set);
+    RUN_TEST(test_uart1_init_nvic_usart1_irq_enabled);
+    RUN_TEST(test_uart1_init_nvic_usart1_priority);
+    RUN_TEST(test_uart1_init_nvic_dma_tx_priority);
+
+    /* uart_init_config — USART6 */
+    RUN_TEST(test_uart6_init_enables_gpioc_clock);
+    RUN_TEST(test_uart6_init_enables_usart6_apb2_clock);
+    RUN_TEST(test_uart6_init_pc6_mode_is_af);
+    RUN_TEST(test_uart6_init_pc7_mode_is_af);
+    RUN_TEST(test_uart6_init_pc6_af8);
+    RUN_TEST(test_uart6_init_pc7_af8);
+    RUN_TEST(test_uart6_init_brr_uses_apb2_clk);
+    RUN_TEST(test_uart6_init_cr1_te_re_ue_set);
+    RUN_TEST(test_uart6_init_nvic_usart6_irq_enabled);
+    RUN_TEST(test_uart6_init_nvic_usart6_priority);
+    RUN_TEST(test_uart6_init_nvic_dma_tx_priority);
+
+    /* uart_init_config — invalid args */
+    RUN_TEST(test_uart_init_config_null_returns_err);
+    RUN_TEST(test_uart_init_config_invalid_instance_returns_err);
 
     return UNITY_END();
 }
