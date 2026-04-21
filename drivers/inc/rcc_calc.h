@@ -11,6 +11,7 @@
 #define RCC_CALC_H
 
 #include <stdint.h>
+#include "error.h"
 
 /**
  * PLL factors computed by rcc_compute_pll_config().
@@ -38,10 +39,10 @@ typedef struct {
  * @param src_hz    Source oscillator frequency in Hz (e.g. 16 000 000 for HSI)
  * @param target_hz Desired SYSCLK frequency in Hz
  * @param out       Filled on success; undefined on failure
- * @return 0 on success, -1 if no valid configuration exists
+ * @return ERR_OK on success, ERR_INVALID_ARG if no valid configuration exists
  */
-int rcc_compute_pll_config(uint32_t src_hz, uint32_t target_hz,
-                           rcc_pll_factors_t *out);
+err_t rcc_compute_pll_config(uint32_t src_hz, uint32_t target_hz,
+                             rcc_pll_factors_t *out);
 
 /**
  * @brief Return the number of flash wait states needed for hclk_hz.

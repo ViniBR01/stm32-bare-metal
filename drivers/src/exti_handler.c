@@ -1,26 +1,27 @@
 #include <stdint.h>
 
+#include "error.h"
 #include "exti_handler.h"
 #include "gpio_handler.h" 
 #include "stm32f4xx.h"
 
 /* Private helper functions */
-static int is_valid_pin(uint8_t pin_num);
-static int is_valid_exti_line(uint8_t line);
-static int is_valid_gpio_port(gpio_port_t port);
+static int  is_valid_pin(uint8_t pin_num);
+static int  is_valid_exti_line(uint8_t line);
+static int  is_valid_gpio_port(gpio_port_t port);
 static uint8_t get_port_value(gpio_port_t port);
 static IRQn_Type get_exti_irq_number(uint8_t line);
 static void configure_syscfg_exti_port(uint8_t line, gpio_port_t port);
 
 /* Implementation of public functions */
 
-int exti_configure_gpio_interrupt(gpio_port_t port, uint8_t pin_num, 
-                                  exti_trigger_t trigger, exti_mode_t mode)
+err_t exti_configure_gpio_interrupt(gpio_port_t port, uint8_t pin_num,
+                                    exti_trigger_t trigger, exti_mode_t mode)
 {
     /* Parameter validation */
-    if (!is_valid_gpio_port(port) || !is_valid_pin(pin_num) || 
+    if (!is_valid_gpio_port(port) || !is_valid_pin(pin_num) ||
         trigger >= EXTI_TRIGGER_INVALID || mode >= EXTI_MODE_INVALID) {
-        return -1;
+        return ERR_INVALID_ARG;
     }
 
     /* __get_PRIMASK() returns 0 if interrupts are enabled, non-zero if disabled */
@@ -78,41 +79,41 @@ int exti_configure_gpio_interrupt(gpio_port_t port, uint8_t pin_num,
         __enable_irq();
     }
 
-    return 0;
+    return ERR_OK;
 }
 
-int exti_enable_line(uint8_t line)
+err_t exti_enable_line(uint8_t line)
 {
     if (!is_valid_exti_line(line)) {
-        return -1;
+        return ERR_INVALID_ARG;
     }
 
     IRQn_Type irq_num = get_exti_irq_number(line);
     if (irq_num != (IRQn_Type)-1) {
         NVIC_EnableIRQ(irq_num);
-        return 0;
+        return ERR_OK;
     }
-    return -1;
+    return ERR_INVALID_ARG;
 }
 
-int exti_disable_line(uint8_t line)
+err_t exti_disable_line(uint8_t line)
 {
     if (!is_valid_exti_line(line)) {
-        return -1;
+        return ERR_INVALID_ARG;
     }
 
     IRQn_Type irq_num = get_exti_irq_number(line);
     if (irq_num != (IRQn_Type)-1) {
         NVIC_DisableIRQ(irq_num);
-        return 0;
+        return ERR_OK;
     }
-    return -1;
+    return ERR_INVALID_ARG;
 }
 
-int exti_set_interrupt_mask(uint8_t line, uint8_t enable)
+err_t exti_set_interrupt_mask(uint8_t line, uint8_t enable)
 {
     if (!is_valid_exti_line(line)) {
-        return -1;
+        return ERR_INVALID_ARG;
     }
 
     if (enable) {
@@ -120,13 +121,13 @@ int exti_set_interrupt_mask(uint8_t line, uint8_t enable)
     } else {
         EXTI->IMR &= ~(1U << line);
     }
-    return 0;
+    return ERR_OK;
 }
 
-int exti_set_event_mask(uint8_t line, uint8_t enable)
+err_t exti_set_event_mask(uint8_t line, uint8_t enable)
 {
     if (!is_valid_exti_line(line)) {
-        return -1;
+        return ERR_INVALID_ARG;
     }
 
     if (enable) {
@@ -134,38 +135,38 @@ int exti_set_event_mask(uint8_t line, uint8_t enable)
     } else {
         EXTI->EMR &= ~(1U << line);
     }
-    return 0;
+    return ERR_OK;
 }
 
 int exti_is_pending(uint8_t line)
 {
     if (!is_valid_exti_line(line)) {
-        return -1;
+        return ERR_INVALID_ARG;
     }
 
     return (EXTI->PR & (1U << line)) ? 1 : 0;
 }
 
-int exti_clear_pending(uint8_t line)
+err_t exti_clear_pending(uint8_t line)
 {
     if (!is_valid_exti_line(line)) {
-        return -1;
+        return ERR_INVALID_ARG;
     }
 
     /* Clear pending bit by writing 1 to it */
     EXTI->PR = (1U << line);
-    return 0;
+    return ERR_OK;
 }
 
-int exti_software_trigger(uint8_t line)
+err_t exti_software_trigger(uint8_t line)
 {
     if (!is_valid_exti_line(line)) {
-        return -1;
+        return ERR_INVALID_ARG;
     }
 
     /* Generate software interrupt by writing to SWIER */
     EXTI->SWIER |= (1U << line);
-    return 0;
+    return ERR_OK;
 }
 
 /* Private helper function implementations */

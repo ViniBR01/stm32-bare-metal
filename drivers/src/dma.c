@@ -1,4 +1,5 @@
 #include "dma.h"
+#include "error.h"
 #include "stm32f4xx.h"
 
 /*===========================================================================
@@ -175,16 +176,16 @@ static dma_stream_state_t stream_state[DMA_STREAM_COUNT];
  * Public API
  *===========================================================================*/
 
-int dma_stream_init(const dma_stream_config_t *cfg) {
+err_t dma_stream_init(const dma_stream_config_t *cfg) {
     if (!cfg || cfg->stream >= DMA_STREAM_COUNT || cfg->channel > 7) {
-        return -1;
+        return ERR_INVALID_ARG;
     }
 
     dma_stream_id_t id = cfg->stream;
 
     /* Conflict detection: reject if already allocated */
     if (stream_state[id].allocated) {
-        return -1;
+        return ERR_BUSY;
     }
 
     const dma_hw_info_t *hw = &hw_table[id];
@@ -229,12 +230,12 @@ int dma_stream_init(const dma_stream_config_t *cfg) {
     NVIC_SetPriority(hw->irqn, cfg->nvic_priority);
     NVIC_EnableIRQ(hw->irqn);
 
-    return 0;
+    return ERR_OK;
 }
 
-int dma_stream_start(dma_stream_id_t id, uint32_t mem_addr, uint16_t count) {
+err_t dma_stream_start(dma_stream_id_t id, uint32_t mem_addr, uint16_t count) {
     if (id >= DMA_STREAM_COUNT || !stream_state[id].allocated) {
-        return -1;
+        return ERR_INVALID_ARG;
     }
 
     const dma_hw_info_t *hw = &hw_table[id];
@@ -254,7 +255,7 @@ int dma_stream_start(dma_stream_id_t id, uint32_t mem_addr, uint16_t count) {
     /* Enable stream */
     s->CR |= DMA_SxCR_EN;
 
-    return 0;
+    return ERR_OK;
 }
 
 void dma_stream_stop(dma_stream_id_t id) {
@@ -301,10 +302,10 @@ void dma_stream_set_mem_inc(dma_stream_id_t id, uint8_t enable) {
     s->CR = stream_state[id].cr_base;
 }
 
-int dma_stream_start_config(dma_stream_id_t id, uint32_t mem_addr,
-                            uint16_t count, uint8_t mem_inc) {
+err_t dma_stream_start_config(dma_stream_id_t id, uint32_t mem_addr,
+                              uint16_t count, uint8_t mem_inc) {
     if (id >= DMA_STREAM_COUNT || !stream_state[id].allocated) {
-        return -1;
+        return ERR_INVALID_ARG;
     }
 
     const dma_hw_info_t *hw = &hw_table[id];
@@ -330,7 +331,7 @@ int dma_stream_start_config(dma_stream_id_t id, uint32_t mem_addr,
     /* Enable stream -- single write, no read-modify-write */
     s->CR = cr | DMA_SxCR_EN;
 
-    return 0;
+    return ERR_OK;
 }
 
 int dma_stream_busy(dma_stream_id_t id) {

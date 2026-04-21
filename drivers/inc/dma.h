@@ -2,6 +2,7 @@
 #define DMA_H
 
 #include <stdint.h>
+#include "error.h"
 
 /**
  * @brief DMA stream identifiers
@@ -88,9 +89,10 @@ typedef struct {
  * priority, error interrupts, TC interrupt), and sets the peripheral address.
  *
  * @param cfg  Pointer to the stream configuration
- * @return 0 on success, -1 if the stream is invalid or already allocated
+ * @return ERR_OK on success, ERR_INVALID_ARG if the stream is invalid,
+ *         ERR_BUSY if the stream is already allocated
  */
-int dma_stream_init(const dma_stream_config_t *cfg);
+err_t dma_stream_init(const dma_stream_config_t *cfg);
 
 /**
  * @brief Start a DMA transfer on a previously initialized stream
@@ -101,9 +103,9 @@ int dma_stream_init(const dma_stream_config_t *cfg);
  * @param id        Stream identifier (must have been initialized)
  * @param mem_addr  Memory address (M0AR)
  * @param count     Number of data items to transfer (NDTR, 1-65535)
- * @return 0 on success, -1 if the stream is not allocated
+ * @return ERR_OK on success, ERR_INVALID_ARG if the stream is not allocated
  */
-int dma_stream_start(dma_stream_id_t id, uint32_t mem_addr, uint16_t count);
+err_t dma_stream_start(dma_stream_id_t id, uint32_t mem_addr, uint16_t count);
 
 /**
  * @brief Stop (disable) a DMA stream
@@ -149,10 +151,10 @@ void dma_stream_set_mem_inc(dma_stream_id_t id, uint8_t enable);
  * @param mem_addr  Memory address (M0AR)
  * @param count     Number of data items (NDTR, 1-65535)
  * @param mem_inc   1 = enable MINC, 0 = disable MINC
- * @return 0 on success, -1 if the stream is not allocated
+ * @return ERR_OK on success, ERR_INVALID_ARG if the stream is not allocated
  */
-int dma_stream_start_config(dma_stream_id_t id, uint32_t mem_addr,
-                            uint16_t count, uint8_t mem_inc);
+err_t dma_stream_start_config(dma_stream_id_t id, uint32_t mem_addr,
+                              uint16_t count, uint8_t mem_inc);
 
 /**
  * @brief Check whether a DMA stream is currently transferring

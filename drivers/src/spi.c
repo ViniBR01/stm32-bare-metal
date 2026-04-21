@@ -1,4 +1,5 @@
 #include "spi.h"
+#include "error.h"
 #include "gpio_handler.h"
 
 /* Only include hardware headers when compiling for target */
@@ -21,7 +22,7 @@ int spi_prescaler_to_br(uint16_t prescaler) {
         case 64:  return 5;
         case 128: return 6;
         case 256: return 7;
-        default:  return -1;
+        default:  return ERR_INVALID_ARG;
     }
 }
 
@@ -73,10 +74,10 @@ static void spi_gpio_init(const spi_config_t *cfg) {
     gpio_set_af(cfg->mosi_port, cfg->mosi_pin, cfg->mosi_af);
 }
 
-int spi_init(spi_handle_t *handle, const spi_config_t *config) {
-    if (!handle || !config) return -1;
-    if (config->instance >= SPI_INSTANCE_COUNT) return -1;
-    if (config->prescaler_br > 7) return -1;
+err_t spi_init(spi_handle_t *handle, const spi_config_t *config) {
+    if (!handle || !config) return ERR_INVALID_ARG;
+    if (config->instance >= SPI_INSTANCE_COUNT) return ERR_INVALID_ARG;
+    if (config->prescaler_br > 7) return ERR_INVALID_ARG;
 
     const spi_hw_info_t *hw = &spi_hw_table[config->instance];
 
@@ -99,7 +100,7 @@ int spi_init(spi_handle_t *handle, const spi_config_t *config) {
              | (config->cpol ? SPI_CR1_CPOL : 0)
              | (config->cpha ? SPI_CR1_CPHA : 0);
 
-    return 0;
+    return ERR_OK;
 }
 
 /* Forward declaration -- defined in the DMA section below */
@@ -140,8 +141,8 @@ void spi_disable(spi_handle_t *handle) {
     spi->CR1 &= ~SPI_CR1_SPE;
 }
 
-int spi_transfer(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint16_t len) {
-    if (!handle || !handle->regs || len == 0) return -1;
+err_t spi_transfer(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint16_t len) {
+    if (!handle || !handle->regs || len == 0) return ERR_INVALID_ARG;
 
     SPI_TypeDef *spi = (SPI_TypeDef *)handle->regs;
 
@@ -165,7 +166,7 @@ int spi_transfer(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint16_t 
     /* Disable SPI */
     spi->CR1 &= ~SPI_CR1_SPE;
 
-    return 0;
+    return ERR_OK;
 }
 
 /*===========================================================================
@@ -265,7 +266,7 @@ static void spi_dma_rx_complete_cb(dma_stream_id_t stream, void *ctx) {
  * Called on the first spi_transfer_dma() invocation.  Subsequent transfers
  * skip this and go straight to dma_stream_set_mem_inc() + dma_stream_start().
  */
-static int spi_dma_init_streams(spi_handle_t *handle) {
+static err_t spi_dma_init_streams(spi_handle_t *handle) {
     spi_instance_t inst = handle->config.instance;
     SPI_TypeDef *spi = (SPI_TypeDef *)handle->regs;
     const spi_dma_map_t *map = &spi_dma_map[inst];
@@ -285,7 +286,7 @@ static int spi_dma_init_streams(spi_handle_t *handle) {
         .cb_ctx        = handle,
         .nvic_priority = 1,
     };
-    if (dma_stream_init(&rx_cfg) != 0) return -1;
+    if (dma_stream_init(&rx_cfg) != ERR_OK) return ERR_INVALID_ARG;
 
     /* TX stream (memory-to-peripheral) */
     dma_stream_config_t tx_cfg = {
@@ -302,18 +303,18 @@ static int spi_dma_init_streams(spi_handle_t *handle) {
         .cb_ctx        = (void *)0,
         .nvic_priority = 1,
     };
-    if (dma_stream_init(&tx_cfg) != 0) {
+    if (dma_stream_init(&tx_cfg) != ERR_OK) {
         dma_stream_release(map->rx_stream);
-        return -1;
+        return ERR_INVALID_ARG;
     }
 
     spi_dma_initialized[inst] = 1;
-    return 0;
+    return ERR_OK;
 }
 
-int spi_transfer_dma(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint16_t len) {
-    if (!handle || !handle->regs || len == 0) return -1;
-    if (handle->config.instance >= SPI_INSTANCE_COUNT) return -1;
+err_t spi_transfer_dma(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint16_t len) {
+    if (!handle || !handle->regs || len == 0) return ERR_INVALID_ARG;
+    if (handle->config.instance >= SPI_INSTANCE_COUNT) return ERR_INVALID_ARG;
 
     spi_instance_t inst = handle->config.instance;
     SPI_TypeDef *spi = (SPI_TypeDef *)handle->regs;
@@ -321,7 +322,7 @@ int spi_transfer_dma(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint1
 
     /* One-time stream allocation (first transfer only) */
     if (!spi_dma_initialized[inst]) {
-        if (spi_dma_init_streams(handle) != 0) return -1;
+        if (spi_dma_init_streams(handle) != ERR_OK) return ERR_INVALID_ARG;
     }
 
     /* Store handle so the callback can find it */
@@ -342,17 +343,17 @@ int spi_transfer_dma(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint1
     dma_stream_start_config(map->rx_stream, rx_addr, len, rx != (void *)0);
     dma_stream_start_config(map->tx_stream, tx_addr, len, tx != (void *)0);
 
-    return 0;
+    return ERR_OK;
 }
 
-int spi_transfer_dma_blocking(spi_handle_t *handle, const uint8_t *tx,
-                              uint8_t *rx, uint16_t len) {
-    int rc = spi_transfer_dma(handle, tx, rx, len);
-    if (rc != 0) return rc;
+err_t spi_transfer_dma_blocking(spi_handle_t *handle, const uint8_t *tx,
+                                uint8_t *rx, uint16_t len) {
+    err_t rc = spi_transfer_dma(handle, tx, rx, len);
+    if (rc != ERR_OK) return rc;
 
     while (handle->dma_busy);
 
-    return 0;
+    return ERR_OK;
 }
 
 #endif /* SPI_HOST_TEST */
