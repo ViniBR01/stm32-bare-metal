@@ -4,6 +4,22 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-04-17] infra | Add JUnit XML reporting for HIL tests in CI (#123)
+
+Extended `scripts/run_hil_tests.py` with a `--junit-xml PATH` argument (default:
+`hil-test-results.xml`) and a `write_junit_xml(results, regressions, output_path)`
+function. Unity test lines map to `<testcase classname="test_harness">` elements;
+`TEST:` sampled performance lines map to `<testcase classname="spi_perf">` elements.
+Baseline regressions and integrity failures become `<failure>` child elements with
+descriptive messages. The XML is written in a `finally` block so it is always produced,
+even on serial timeout or build error, ensuring the report is always available in CI.
+Updated `check_baselines` to return regression details alongside the pass/fail bool.
+Updated `.github/workflows/ci.yml`: the `hil-tests` job now passes `--junit-xml
+hil-test-results.xml` and adds a `Publish HIL test results` step using
+`dorny/test-reporter@v3` (`if: always()`, `fail-on-error: false`) — every PR now
+shows a **HIL Tests** tab in the GitHub Test Summary UI, mirroring the existing
+**Unity Tests** tab from the `host-tests` job.
+
 ---
 
 ## [2026-04-17] milestone | HIL Tier 4: SysTick hardware tests (#62)
