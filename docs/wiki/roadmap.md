@@ -26,9 +26,8 @@
 
 ## Suggested Priority Order
 
-1. **#73** — NVIC priority scheme
-2. Remaining drivers (#66, #67, #68, #70, #71, #72) after #26 and #73
-3. Examples (#14, #16, #22, #45) driven by driver availability
+1. Remaining drivers (#66, #67, #68, #70, #71, #72) after #26 and #73
+2. Examples (#14, #16, #22, #45) driven by driver availability
 
 ---
 
