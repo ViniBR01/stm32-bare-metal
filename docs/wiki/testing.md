@@ -31,7 +31,11 @@ make test        # Build and run all host test suites
 | `string_utils` | `tests/string_utils/` | 23 | Custom string functions in `utils/src/string_utils.c` |
 | `cli` | `tests/cli/` | 41 | CLI engine in `utils/src/cli.c` |
 | `gpio` | `tests/gpio/` | 44 | GPIO driver in `drivers/src/gpio_handler.c` |
-| **Total** | | **108** | |
+| `exti` | `tests/exti/` | 56 | EXTI driver in `drivers/src/exti_handler.c` |
+| `uart` | `tests/uart/` | 46 | UART driver in `drivers/src/uart.c` |
+| `rcc` | `tests/rcc/` | 36 | RCC driver in `drivers/src/rcc.c` |
+| `timer` | `tests/timer/` | 52 | Timer driver in `drivers/src/timer.c` |
+| **Total** | | **298** | |
 
 ### Architecture
 
@@ -125,7 +129,7 @@ Complex computation buried in register-writing functions is extracted into stand
 
 **Convention:** Pure functions live in the existing driver `.c` file but are declared in a companion `<driver>_calc.h` header (not the main public header) to signal they are implementation-level utilities exposed for testing.
 
-**High-value extractions planned:**
+**Implemented extractions:**
 
 | Driver | Pure function | What it tests |
 |---|---|---|
@@ -187,7 +191,7 @@ The Unity ARM library is built by `3rd_party/Makefile` and linked as `libunity_a
 
 `examples/cli/test_harness.c` contains all HIL test cases. It uses a parameterized macro `RUN_SPI_TEST(instance, prescaler, buffer_size, use_dma)` to run SPI tests across parameter combinations without code duplication.
 
-**Test tiers (60 tests total):**
+**Test tiers (77 tests total):**
 
 | Tier | Tests | What it covers |
 |---|---|---|
@@ -195,6 +199,10 @@ The Unity ARM library is built by `3rd_party/Makefile` and linked as `libunity_a
 | Tier 2a: SPI2 deep sweep | 24 | APB1 bus (50 MHz): all prescalers at 256B + buffer sizes 1/4/16/64B at psc=2 |
 | Tier 2b: SPI1 deep sweep | 24 | APB2 bus (100 MHz): same matrix as SPI2 |
 | Tier 3: FPU | 2 | Hardware FPU multiplication and division |
+| Tier 4: RCC + Timer | 5 | Clock frequencies via `rcc_get_*` API; `timer_delay_us` accuracy (±20 µs @ 100 MHz) |
+| Tier 5: UART loopback | 8 | USART1 (PA9/PB7) + USART6 (PC6/PC7) at 115200 baud, polled, multiple byte patterns |
+| Tier 5: GPIO loopback | 2 | Output HIGH/LOW/toggle driving input pin through loopback cable |
+| Tier 5: EXTI loopback | 2 | Rising+falling edge ISR via loopback; software trigger via EXTI SWIER |
 
 ### Machine-parseable output
 
@@ -202,9 +210,11 @@ The Unity ARM library is built by `3rd_party/Makefile` and linked as `libunity_a
 
 ```
 START_TESTS                                               ← sequence start marker
-TEST:spi1_dma_psc2_256B:PASS:cycles=4811:throughput_kbps=5333  ← per-test result
+TEST:spi1_dma_psc2_256B:PASS:cycles=4413:throughput_kbps=5801:samples=5:integrity_passes=5
 END_TESTS                                                 ← sequence end marker
 ```
+
+The extended `samples=N:integrity_passes=M` fields are emitted by `spi_perf.c` for multi-sample tests. `run_hil_tests.py` accepts both the legacy single-value format and the extended format.
 
 Test names follow the pattern `spi<N>_<mode>_psc<P>_<S>B` (e.g., `spi2_dma_psc4_256B`).
 

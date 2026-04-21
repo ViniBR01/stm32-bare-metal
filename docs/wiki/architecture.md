@@ -37,9 +37,18 @@ stm32-bare-metal/
 ├── tests/                 Host unit tests (compiled with native gcc, not ARM toolchain)
 │   ├── cli/               Tests for utils/src/cli.c
 │   ├── string_utils/      Tests for utils/src/string_utils.c
+│   ├── driver_stubs/      Fake peripheral headers shared by all driver test suites
+│   ├── gpio/              Tests for drivers/src/gpio_handler.c
+│   ├── exti/              Tests for drivers/src/exti_handler.c
+│   ├── uart/              Tests for drivers/src/uart.c
+│   ├── rcc/               Tests for drivers/src/rcc.c
+│   ├── timer/             Tests for drivers/src/timer.c
 │   └── baselines/         Performance baseline JSON for HIL regression detection
 ├── scripts/               Automation scripts
-│   └── run_hil_tests.py   HIL test runner (build → flash → serial → validate)
+│   ├── run_hil_tests.py   HIL test runner (build → flash → serial → validate)
+│   ├── mcp_hil_server.py  MCP server exposing HIL tools to Claude Code
+│   ├── worktree_new.sh    Create an isolated git worktree for parallel agent work
+│   └── worktree_clean.sh  Remove a merged worktree and its branch
 ├── docs/wiki/             Project knowledge base (this wiki)
 ├── .github/workflows/     CI pipeline
 ├── Makefile               Root build orchestrator
@@ -97,15 +106,15 @@ Application (examples/)
 
 ```
 ┌─────────────────────────────────────────────┐
-│  Layer 3: HIL tests (implemented)           │  Real board + serial capture
+│  Layer 3: HIL tests (77 tests)              │  Real board + serial capture
 │  Unity on target → assert via UART output   │  Catches hardware-specific bugs
-│  60 tests: SPI sweep (all 5 instances,      │  + performance regression detection
-│  prescaler/size matrix) + FPU               │
+│  SPI sweep, FPU, RCC/Timer accuracy,        │  + performance regression detection
+│  UART/GPIO/EXTI loopback                    │
 ├─────────────────────────────────────────────┤
-│  Layer 2: Driver logic tests (Issues #98–101)│  Host, native gcc
+│  Layer 2: Driver logic tests (298 tests)    │  Host, native gcc
 │  Fake peripheral stubs + pure fn extraction │  Catches register config bugs
 ├─────────────────────────────────────────────┤
-│  Layer 1: Pure unit tests (existing)        │  Host, native gcc, no mocking
+│  Layer 1: Pure unit tests (64 tests)        │  Host, native gcc, no mocking
 │  CLI engine, string utils                   │  Catches algorithmic bugs
 └─────────────────────────────────────────────┘
 ```
@@ -140,18 +149,18 @@ Examples:
 
 The shell functions (hardware init/control) call the pure functions and apply their results to registers. Tests call the pure functions directly.
 
-### Directory layout (with driver tests)
+### Directory layout (driver tests)
 
 ```
 tests/
-├── cli/               Existing — tests utils/src/cli.c
-├── string_utils/      Existing — tests utils/src/string_utils.c
-├── driver_stubs/      New — fake peripheral headers (shared by all driver test suites)
-├── gpio/              New — tests drivers/src/gpio_handler.c
-├── exti/              New — tests drivers/src/exti_handler.c
-├── uart/              New — tests drivers/src/uart.c
-├── rcc/               New — tests drivers/src/rcc.c
-└── timer/             New — tests drivers/src/timer.c
+├── cli/               Tests utils/src/cli.c (41 tests)
+├── string_utils/      Tests utils/src/string_utils.c (23 tests)
+├── driver_stubs/      Fake peripheral headers shared by all driver suites
+├── gpio/              Tests drivers/src/gpio_handler.c (44 tests)
+├── exti/              Tests drivers/src/exti_handler.c (56 tests)
+├── uart/              Tests drivers/src/uart.c (46 tests)
+├── rcc/               Tests drivers/src/rcc.c (36 tests)
+└── timer/             Tests drivers/src/timer.c (52 tests)
 ```
 
 ## RCC / Clock
