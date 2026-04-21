@@ -2,18 +2,10 @@
 
 ## Open Issues by Priority
 
-### Architecture / Quality
-
-| Issue | Title | Notes |
-|---|---|---|
-| #26 | Unified error code scheme | Prerequisite for clean APIs on all new drivers. |
-| #73 | Centralise NVIC interrupt priority scheme | Quality gate before adding more interrupt-driven drivers. |
-
 ### Driver Development
 
 | Issue | Title | Notes |
 |---|---|---|
-| #69 | Enhance UART: multiple instances + configurable baud rate | High utility. Depends on #26. |
 | #66 | Implement I2C master driver | Depends on #26 and #73. |
 | #67 | Implement ADC driver | Depends on #26. |
 | #68 | Implement IWDG watchdog driver | Depends on #26. |
@@ -34,11 +26,9 @@
 
 ## Suggested Priority Order
 
-1. **#26** — unified error codes
-2. **#69** — multi-instance UART
-3. **#73** — NVIC priority scheme
-4. Remaining drivers (#66, #67, #68, #70, #71, #72) after #26 and #73
-5. Examples (#14, #16, #22, #45) driven by driver availability
+1. **#73** — NVIC priority scheme
+2. Remaining drivers (#66, #67, #68, #70, #71, #72) after #26 and #73
+3. Examples (#14, #16, #22, #45) driven by driver availability
 
 ---
 
@@ -68,3 +58,4 @@ See [log.md](log.md) for the full history. Key milestones:
 - ✅ HIL SPI throughput: 5-sample median with warm-up transfer, majority-vote integrity check, recalibrated baselines (#112)
 - ✅ Parallel agent worktree workflow: `worktree_new.sh` / `worktree_clean.sh`, CLAUDE.md instructions, agents wiki page (#114)
 - ✅ Tailscale remote access + MCP HIL server (`scripts/mcp_hil_server.py`) for Claude Code integration (#109)
+- ✅ Multi-instance UART driver: USART1/2/6, configurable baud rate, hardware table, `uart_init_config()` (#69)

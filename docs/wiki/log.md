@@ -21,6 +21,20 @@ Added `systick_reset_for_test()` (guarded by `#ifdef UNIT_TEST`) and 14 new
 host unit tests in `tests/systick/`. Extended `tests/driver_stubs/core_cm4.h`
 with `SysTick_CTRL_*` constants and negative-IRQn handling in
 `NVIC_SetPriority`.
+## [2026-04-17] milestone | Multi-instance UART driver with configurable baud rate (#69)
+
+Refactored `drivers/src/uart.c` and `drivers/inc/uart.h` to support USART1, USART2,
+and USART6. A static hardware descriptor table (`uart_hw_table`) maps each
+`uart_instance_t` to its registers, RCC enable bit, GPIO pins (TX/RX), DMA stream IDs
+and channels, IRQn, and APB clock getter. New `uart_init_config(const uart_config_t *cfg)`
+accepts an instance + baud rate; `uart_init()` is kept unchanged as a USART2/115200
+wrapper for backward compatibility with all existing callers (examples, log_platform,
+tests). Baud divisor is computed via the correct APB clock for each instance
+(`rcc_get_apb1_clk()` for USART2, `rcc_get_apb2_clk()` for USART1/USART6).
+Added `fake_USART1` and `fake_USART6` to the driver test stubs. Added 25 new host tests
+covering USART1 GPIO pinout, APB2 BRR, NVIC entries, USART6 GPIO pinout, APB2 BRR,
+NVIC entries, and `uart_init_config` invalid-argument guards. Total UART tests: 76
+(up from 46); total host tests: 328.
 
 ## [2026-04-20] milestone | HIL SPI throughput: warm-up run + 5-sample median (#112)
 
