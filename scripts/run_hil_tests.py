@@ -30,6 +30,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from xml.etree.ElementTree import Element, SubElement, ElementTree, indent
 
 # Color codes for terminal output
 class Colors:
@@ -345,21 +346,23 @@ def load_baselines(baseline_path: Path) -> Dict:
         log_error(f"Invalid baseline JSON: {e}")
         return {}
 
-def check_baselines(results: Dict, baselines: Dict) -> bool:
+def check_baselines(results: Dict, baselines: Dict) -> Tuple[bool, List[Dict]]:
     """
     Validate performance metrics against baselines
-    
+
     Returns:
-        True if all metrics pass, False if any regression detected
+        Tuple of (all_pass, regressions) where regressions is a list of dicts:
+        {'name': ..., 'metric': ..., 'expected': ..., 'actual': ..., 'tolerance': ...}
     """
     if not baselines:
         log_warning("No baselines loaded - skipping validation")
-        return True
-    
+        return True, []
+
     all_pass = True
-    
+    regressions = []
+
     log_info("Validating against baselines...")
-    
+
     for test in results['tests']:
         test_name = test['name']
 
@@ -374,6 +377,13 @@ def check_baselines(results: Dict, baselines: Dict) -> bool:
             else:
                 log_error(f"  {test_name}: Integrity {m}/{n} — too many corruptions, treating as FAIL")
                 all_pass = False
+                regressions.append({
+                    'name': test_name,
+                    'metric': 'integrity',
+                    'expected': n,
+                    'actual': m,
+                    'tolerance': 1,
+                })
 
         if test_name not in baselines:
             log_info(f"  {test_name}: No baseline (new test)")
@@ -401,6 +411,13 @@ def check_baselines(results: Dict, baselines: Dict) -> bool:
                 log_error(f"    Expected: {expected_cycles} ±{tolerance_pct}%")
                 log_error(f"    Actual: {actual_cycles}")
                 all_pass = False
+                regressions.append({
+                    'name': test_name,
+                    'metric': 'cycles',
+                    'expected': expected_cycles,
+                    'actual': actual_cycles,
+                    'tolerance': tolerance_pct,
+                })
             else:
                 log_success(f"  {test_name}: Cycles OK ({actual_cycles})")
 
@@ -418,10 +435,88 @@ def check_baselines(results: Dict, baselines: Dict) -> bool:
                             log_error(f"    Expected: {expected} ±{tolerance_pct}%")
                             log_error(f"    Actual: {metric_value}")
                             all_pass = False
+                            regressions.append({
+                                'name': test_name,
+                                'metric': metric_name,
+                                'expected': expected,
+                                'actual': metric_value,
+                                'tolerance': tolerance_pct,
+                            })
                         else:
                             log_success(f"  {test_name}: {metric_name} OK ({metric_value})")
-    
-    return all_pass
+
+    return all_pass, regressions
+
+def write_junit_xml(results: Dict, regressions: List[Dict], output_path: str):
+    """
+    Write JUnit XML report compatible with dorny/test-reporter@v3.
+
+    Unity test lines → classname="test_harness"
+    TEST: performance lines (have 'cycles' field) → classname="spi_perf"
+    Baseline regressions → <failure> on the matching spi_perf testcase
+    Integrity failures → <failure> on the matching spi_perf testcase
+    """
+    tests = results.get('tests', [])
+
+    # Build a set of regression names for fast lookup
+    regression_by_name: Dict[str, List[Dict]] = {}
+    for reg in regressions:
+        regression_by_name.setdefault(reg['name'], []).append(reg)
+
+    failures = 0
+    testcase_elements = []
+
+    for test in tests:
+        name = test['name']
+        status = test.get('status', 'PASS')
+
+        if 'cycles' in test:
+            # Performance / sampled test → spi_perf
+            tc = Element('testcase', classname='spi_perf', name=name, time='0')
+            test_regressions = regression_by_name.get(name, [])
+            if test_regressions:
+                for reg in test_regressions:
+                    if reg['metric'] == 'integrity':
+                        msg = (f"Integrity: {reg['actual']}/{reg['expected']} passes")
+                    else:
+                        msg = (
+                            f"{reg['metric'].capitalize()} regression: "
+                            f"expected {reg['expected']} ±{reg['tolerance']}%, "
+                            f"actual {reg['actual']}"
+                        )
+                    SubElement(tc, 'failure', message=msg)
+                    failures += 1
+        else:
+            # Unity test → test_harness
+            tc = Element('testcase', classname='test_harness', name=name, time='0')
+            if status == 'FAIL':
+                message = test.get('message', '')
+                SubElement(tc, 'failure', message=message)
+                failures += 1
+
+        testcase_elements.append(tc)
+
+    total = len(testcase_elements)
+
+    testsuites = Element('testsuites')
+    testsuite = SubElement(
+        testsuites,
+        'testsuite',
+        name='HIL Tests',
+        tests=str(total),
+        failures=str(failures),
+        errors='0',
+        time='0',
+    )
+    for tc in testcase_elements:
+        testsuite.append(tc)
+
+    indent(testsuites)
+
+    tree = ElementTree(testsuites)
+    tree.write(output_path, encoding='unicode', xml_declaration=True)
+    log_info(f"JUnit XML written to {output_path} ({total} tests, {failures} failures)")
+
 
 def print_summary(results: Dict):
     """Print test results summary"""
@@ -466,13 +561,19 @@ def main():
                         help='Path to baseline JSON file')
     parser.add_argument('--timeout', type=int, default=30,
                         help='Serial timeout in seconds')
-    
+    parser.add_argument('--junit-xml', default='hil-test-results.xml',
+                        help='Path to write JUnit XML report (default: hil-test-results.xml)')
+
     args = parser.parse_args()
-    
+
+    results = {'tests': [], 'summary': {'total': 0, 'passed': 0, 'failed': 0}}
+    regressions: List[Dict] = []
+    exit_code = 2
+
     try:
         project_root = get_project_root()
         log_info(f"Project root: {project_root}")
-        
+
         # Build firmware
         if not args.skip_build:
             elf_path = build_firmware(project_root)
@@ -484,53 +585,55 @@ def main():
             if not elf_path.exists():
                 log_error("No existing ELF file found - build required")
                 return 2
-        
+
         # Flash firmware
         if not args.skip_flash:
             if not flash_firmware(elf_path):
                 return 2
         else:
             log_warning("Skipping flash (--skip-flash)")
-        
+
         # Wait for board to reset
         time.sleep(2)
-        
+
         # Find serial port
         port = find_serial_port()
         if not port:
             log_error("Serial port not found - is the board connected?")
             return 2
-        
+
         # Run tests
         success, output_lines = run_test_suite(port, timeout=args.timeout)
         if not success:
             log_error("Failed to run tests (timeout or serial error)")
             return 2
-        
+
         # Parse results
         results = parse_test_output(output_lines)
-        
+
         if results['summary']['total'] == 0:
             log_error("No tests found in output")
             return 2
-        
+
         # Print summary
         print_summary(results)
-        
+
         # Check baselines
         baseline_path = project_root / args.baseline
         baselines = load_baselines(baseline_path)
-        baseline_pass = check_baselines(results, baselines)
-        
-        # Exit with appropriate code
+        baseline_pass, regressions = check_baselines(results, baselines)
+
+        # Determine exit code
         if results['summary']['failed'] > 0:
-            return 1
+            exit_code = 1
         elif not baseline_pass:
             log_error("Baseline validation failed")
-            return 1
+            exit_code = 1
         else:
-            return 0
-            
+            exit_code = 0
+
+        return exit_code
+
     except KeyboardInterrupt:
         log_warning("\nInterrupted by user")
         return 2
@@ -539,6 +642,8 @@ def main():
         import traceback
         traceback.print_exc()
         return 2
+    finally:
+        write_junit_xml(results, regressions, args.junit_xml)
 
 if __name__ == '__main__':
     sys.exit(main())

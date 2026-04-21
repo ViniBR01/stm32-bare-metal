@@ -83,6 +83,8 @@ jobs:
     name: HIL Tests
     runs-on: [self-hosted, pi-hil]
     needs: host-tests
+    permissions:
+      checks: write  # required by dorny/test-reporter to publish results
 
     steps:
       - name: Checkout repository
@@ -94,4 +96,13 @@ jobs:
         run: arm-none-eabi-gcc --version
 
       - name: Run HIL tests
-        run: python3 scripts/run_hil_tests.py --timeout 180 --baseline tests/baselines/performance.json
+        run: python3 scripts/run_hil_tests.py --timeout 180 --baseline tests/baselines/performance.json --junit-xml hil-test-results.xml
+
+      - name: Publish HIL test results
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: HIL Tests
+          path: hil-test-results.xml
+          reporter: java-junit
+          fail-on-error: false
