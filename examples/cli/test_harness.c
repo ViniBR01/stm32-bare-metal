@@ -38,6 +38,7 @@
 #include "printf_dma.h"
 #include "rcc.h"
 #include "timer.h"
+#include "systick.h"
 #include "gpio_handler.h"
 #include "exti_handler.h"
 #include "stm32f4xx.h"  /* DWT / CoreDebug for cycle counting */
@@ -243,6 +244,82 @@ void test_timer_delay_us_accuracy(void)
         DELAY_EXPECTED_CYCLES,
         elapsed,
         "timer_delay_us(1000) not within ±20 us of 1 ms");
+}
+
+/* ====================================================================
+ * SysTick hardware tests
+ * ==================================================================== */
+
+/*
+ * Verify systick_get_ms() advances over a 5 ms hardware delay.
+ *
+ * timer_delay_us(5000) burns ~500 000 cycles on the Cortex-M4 timer;
+ * the SysTick ISR still fires every 1 ms, so the counter must increase
+ * by at least 4 ms and at most 6 ms.
+ */
+void test_systick_get_ms_increments(void)
+{
+    uint32_t before = systick_get_ms();
+    timer_delay_us(5000);
+    uint32_t after  = systick_get_ms();
+    uint32_t diff   = after - before;   /* unsigned: handles wrap correctly */
+
+    TEST_ASSERT_UINT32_WITHIN_MESSAGE(
+        1U,       /* tolerance: ±1 ms */
+        5U,       /* expected centre */
+        diff,
+        "systick_get_ms() did not advance ~5 ms over a 5 ms delay");
+}
+
+/*
+ * Verify systick_elapsed_since() returns the correct elapsed time.
+ *
+ * Record start, wait 10 ms via timer_delay_us(10000), then check the
+ * returned elapsed value is within 9–11 ms.
+ */
+void test_systick_elapsed_since(void)
+{
+    uint32_t start = systick_get_ms();
+    timer_delay_us(10000);
+    uint32_t elapsed = systick_elapsed_since(start);
+
+    TEST_ASSERT_UINT32_WITHIN_MESSAGE(
+        1U,       /* tolerance: ±1 ms */
+        10U,      /* expected centre */
+        elapsed,
+        "systick_elapsed_since() did not return ~10 ms after a 10 ms delay");
+}
+
+/*
+ * Measure systick_delay_ms(10) against the DWT cycle counter.
+ *
+ * At 100 MHz, 10 ms = 1 000 000 cycles.  We allow ±100 000 cycles (±1 ms)
+ * because systick_delay_ms() has inherent 1 ms quantisation: depending on
+ * where in the current tick period systick_get_ms() is sampled, the actual
+ * wait can be anywhere from 9 ms to 10 ms.  The tolerance is set to 1 full
+ * SysTick period (100 000 cycles) to cover the worst-case phase offset while
+ * still confirming the delay is in the right ballpark.
+ */
+#define SYSTICK_DELAY_TEST_MS          10U
+#define SYSTICK_DELAY_EXPECTED_CYCLES  (SYSTICK_DELAY_TEST_MS * 100000U)  /* 1 000 000 */
+#define SYSTICK_DELAY_TOLERANCE_CYCLES 100000U  /* ±1 ms quantisation */
+
+void test_systick_delay_ms_accuracy(void)
+{
+    /* Enable DWT cycle counter */
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0;
+    DWT->CTRL  |= DWT_CTRL_CYCCNTENA_Msk;
+
+    uint32_t start = DWT->CYCCNT;
+    systick_delay_ms(SYSTICK_DELAY_TEST_MS);
+    uint32_t elapsed = DWT->CYCCNT - start;
+
+    TEST_ASSERT_UINT32_WITHIN_MESSAGE(
+        SYSTICK_DELAY_TOLERANCE_CYCLES,
+        SYSTICK_DELAY_EXPECTED_CYCLES,
+        elapsed,
+        "systick_delay_ms(10) not within ±1 ms of 10 ms");
 }
 
 /* ====================================================================
@@ -724,6 +801,18 @@ int run_unity_tests(void) {
     printf_dma_flush();
 
     RUN_TEST(test_timer_delay_us_accuracy);
+
+    /* ----------------------------------------------------------
+     * Tier 4: SysTick tests
+     *   systick_init() is called by main() at startup, so the counter
+     *   is already running when these tests execute.
+     * ---------------------------------------------------------- */
+    printf("\n--- Tier 4: SysTick tests ---\n");
+    printf_dma_flush();
+
+    RUN_TEST(test_systick_get_ms_increments);
+    RUN_TEST(test_systick_elapsed_since);
+    RUN_TEST(test_systick_delay_ms_accuracy);
 
     /* ----------------------------------------------------------
      * Tier 5: UART loopback hardware tests

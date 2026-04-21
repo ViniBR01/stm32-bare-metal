@@ -191,7 +191,7 @@ The Unity ARM library is built by `3rd_party/Makefile` and linked as `libunity_a
 
 `examples/cli/test_harness.c` contains all HIL test cases. It uses a parameterized macro `RUN_SPI_TEST(instance, prescaler, buffer_size, use_dma)` to run SPI tests across parameter combinations without code duplication.
 
-**Test tiers (77 tests total):**
+**Test tiers (80 tests total):**
 
 | Tier | Tests | What it covers |
 |---|---|---|
@@ -199,7 +199,7 @@ The Unity ARM library is built by `3rd_party/Makefile` and linked as `libunity_a
 | Tier 2a: SPI2 deep sweep | 24 | APB1 bus (50 MHz): all prescalers at 256B + buffer sizes 1/4/16/64B at psc=2 |
 | Tier 2b: SPI1 deep sweep | 24 | APB2 bus (100 MHz): same matrix as SPI2 |
 | Tier 3: FPU | 2 | Hardware FPU multiplication and division |
-| Tier 4: RCC + Timer | 5 | Clock frequencies via `rcc_get_*` API; `timer_delay_us` accuracy (±20 µs @ 100 MHz) |
+| Tier 4: RCC + Timer + SysTick | 8 | Clock frequencies via `rcc_get_*` API; `timer_delay_us` accuracy (±20 µs @ 100 MHz); `systick_get_ms` increments over 5 ms delay; `systick_elapsed_since` over 10 ms delay; `systick_delay_ms(10)` duration within ±1 ms |
 | Tier 5: UART loopback | 8 | USART1 (PA9/PB7) + USART6 (PC6/PC7) at 115200 baud, polled, multiple byte patterns |
 | Tier 5: GPIO loopback | 2 | Output HIGH/LOW/toggle driving input pin through loopback cable |
 | Tier 5: EXTI loopback | 2 | Rising+falling edge ISR via loopback; software trigger via EXTI SWIER |

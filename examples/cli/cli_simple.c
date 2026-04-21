@@ -7,6 +7,7 @@
 #include "printf.h"
 #include "printf_dma.h"
 #include "sleep_mode.h"
+#include "systick.h"
 #include "uart.h"
 
 #define MAX_CMD_SIZE 32
@@ -58,6 +59,7 @@ int main(void) {
     // Initialize hardware
     led2_init();
     uart_init();
+    systick_init();
     sleep_mode_init();
     
     // Enable DIV_0 trapping and individual fault handlers
