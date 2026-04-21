@@ -2,6 +2,7 @@
 #define SPI_H
 
 #include <stdint.h>
+#include "error.h"
 #include "gpio_handler.h"
 
 /**
@@ -59,9 +60,9 @@ typedef struct {
  *
  * @param handle  Caller-allocated handle to populate
  * @param config  Configuration parameters
- * @return 0 on success, -1 on invalid parameters
+ * @return ERR_OK on success, ERR_INVALID_ARG on invalid parameters
  */
-int spi_init(spi_handle_t *handle, const spi_config_t *config);
+err_t spi_init(spi_handle_t *handle, const spi_config_t *config);
 
 /**
  * @brief Deinitialize an SPI peripheral
@@ -99,9 +100,9 @@ void spi_disable(spi_handle_t *handle);
  * @param tx      Transmit buffer (may be NULL)
  * @param rx      Receive buffer (may be NULL)
  * @param len     Number of bytes to transfer
- * @return 0 on success, -1 on error
+ * @return ERR_OK on success, ERR_INVALID_ARG on error
  */
-int spi_transfer(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint16_t len);
+err_t spi_transfer(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint16_t len);
 
 /**
  * @brief Start a full-duplex SPI transfer using DMA (non-blocking)
@@ -118,9 +119,9 @@ int spi_transfer(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint16_t 
  * @param tx      Transmit buffer (may be NULL)
  * @param rx      Receive buffer (may be NULL)
  * @param len     Number of bytes to transfer (1-65535)
- * @return 0 on success, -1 on error
+ * @return ERR_OK on success, ERR_INVALID_ARG on error
  */
-int spi_transfer_dma(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint16_t len);
+err_t spi_transfer_dma(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint16_t len);
 
 /**
  * @brief Perform a full-duplex SPI transfer using DMA (blocking)
@@ -131,15 +132,15 @@ int spi_transfer_dma(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint1
  * @param tx      Transmit buffer (may be NULL)
  * @param rx      Receive buffer (may be NULL)
  * @param len     Number of bytes to transfer (1-65535)
- * @return 0 on success, -1 on error
+ * @return ERR_OK on success, ERR_INVALID_ARG on error
  */
-int spi_transfer_dma_blocking(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint16_t len);
+err_t spi_transfer_dma_blocking(spi_handle_t *handle, const uint8_t *tx, uint8_t *rx, uint16_t len);
 
 /**
  * @brief Convert a human-readable prescaler value to the BR[2:0] bit field
  *
  * @param prescaler  Prescaler divider (must be power of 2: 2, 4, 8, ..., 256)
- * @return BR field value (0-7) on success, -1 if prescaler is invalid
+ * @return BR field value (0-7) on success, ERR_INVALID_ARG (-1) if prescaler is invalid
  */
 int spi_prescaler_to_br(uint16_t prescaler);
 

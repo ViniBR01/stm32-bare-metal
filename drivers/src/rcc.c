@@ -74,8 +74,8 @@ uint32_t rcc_compute_apb_divider(uint32_t hclk_hz, uint32_t max_hz)
     return div;
 }
 
-int rcc_compute_pll_config(uint32_t src_hz, uint32_t target_hz,
-                           rcc_pll_factors_t *out)
+err_t rcc_compute_pll_config(uint32_t src_hz, uint32_t target_hz,
+                             rcc_pll_factors_t *out)
 {
     uint32_t pllm   = src_hz / VCO_INPUT_TARGET;
     uint32_t vco_in = src_hz / pllm;
@@ -95,7 +95,7 @@ int rcc_compute_pll_config(uint32_t src_hz, uint32_t target_hz,
         break;
     }
     if (plln == 0)
-        return -1;
+        return ERR_INVALID_ARG;
 
     uint32_t vco_out = vco_in * plln;
     uint32_t pllq    = vco_out / 48000000U;
@@ -106,7 +106,7 @@ int rcc_compute_pll_config(uint32_t src_hz, uint32_t target_hz,
     out->plln = plln;
     out->pllp = pllp;
     out->pllq = pllq;
-    return 0;
+    return ERR_OK;
 }
 
 static void cache_default_clocks(uint32_t source_freq) {
@@ -117,23 +117,23 @@ static void cache_default_clocks(uint32_t source_freq) {
     s_apb1_timer_clk = source_freq;
 }
 
-int rcc_init(rcc_clk_src_t source, uint32_t target_sysclk_hz) {
+err_t rcc_init(rcc_clk_src_t source, uint32_t target_sysclk_hz) {
     uint32_t source_freq = (source == RCC_CLK_SRC_HSE_BYPASS)
                            ? HSE_FREQ_HZ : HSI_FREQ_HZ;
 
     /* No PLL needed — run directly from the oscillator */
     if (target_sysclk_hz == source_freq) {
         cache_default_clocks(source_freq);
-        return 0;
+        return ERR_OK;
     }
 
     if (target_sysclk_hz > SYSCLK_MAX)
-        return -1;
+        return ERR_INVALID_ARG;
 
     /* --- Compute PLL factors --- */
     rcc_pll_factors_t pll;
-    if (rcc_compute_pll_config(source_freq, target_sysclk_hz, &pll) != 0)
-        return -1;
+    if (rcc_compute_pll_config(source_freq, target_sysclk_hz, &pll) != ERR_OK)
+        return ERR_INVALID_ARG;
 
     uint32_t pllm = pll.pllm;
     uint32_t plln = pll.plln;
@@ -161,7 +161,7 @@ int rcc_init(rcc_clk_src_t source, uint32_t target_sysclk_hz) {
         for (uint32_t t = HSE_READY_TIMEOUT; t; t--) {
             if (RCC->CR & RCC_CR_HSERDY)
                 break;
-            if (t == 1) return -1;
+            if (t == 1) return ERR_TIMEOUT;
         }
     }
     /* HSI is on by default after reset — nothing to do for HSI */
@@ -189,7 +189,7 @@ int rcc_init(rcc_clk_src_t source, uint32_t target_sysclk_hz) {
     for (uint32_t t = PLL_LOCK_TIMEOUT; t; t--) {
         if (RCC->CR & RCC_CR_PLLRDY)
             break;
-        if (t == 1) return -1;
+        if (t == 1) return ERR_TIMEOUT;
     }
 
     /* --- Set bus prescalers --- */
@@ -215,7 +215,7 @@ int rcc_init(rcc_clk_src_t source, uint32_t target_sysclk_hz) {
     s_apb2_clk      = target_sysclk_hz / ppre2_div;
     s_apb1_timer_clk = (ppre1_div == 1) ? s_apb1_clk : s_apb1_clk * 2;
 
-    return 0;
+    return ERR_OK;
 }
 
 /*

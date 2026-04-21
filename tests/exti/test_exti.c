@@ -23,6 +23,7 @@
 
 #include "unity.h"
 #include "stm32f4xx.h"    /* stub: TypeDefs + fake peripheral declarations */
+#include "error.h"
 #include "exti_handler.h" /* EXTI driver API */
 #include "gpio_handler.h" /* For gpio_port_t */
 
@@ -263,7 +264,7 @@ void test_configure_invalid_pin_returns_error(void)
     int ret = exti_configure_gpio_interrupt(GPIO_PORT_A, 16,
                                             EXTI_TRIGGER_RISING,
                                             EXTI_MODE_INTERRUPT);
-    TEST_ASSERT_EQUAL(-1, ret);
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, ret);
 }
 
 void test_configure_invalid_trigger_returns_error(void)
@@ -271,7 +272,7 @@ void test_configure_invalid_trigger_returns_error(void)
     int ret = exti_configure_gpio_interrupt(GPIO_PORT_A, 5,
                                             EXTI_TRIGGER_INVALID,
                                             EXTI_MODE_INTERRUPT);
-    TEST_ASSERT_EQUAL(-1, ret);
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, ret);
 }
 
 void test_configure_invalid_mode_returns_error(void)
@@ -279,7 +280,7 @@ void test_configure_invalid_mode_returns_error(void)
     int ret = exti_configure_gpio_interrupt(GPIO_PORT_A, 5,
                                             EXTI_TRIGGER_RISING,
                                             EXTI_MODE_INVALID);
-    TEST_ASSERT_EQUAL(-1, ret);
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, ret);
 }
 
 /* ======================================================================== */
@@ -289,7 +290,7 @@ void test_configure_invalid_mode_returns_error(void)
 void test_enable_line0_sets_nvic_iser(void)
 {
     int ret = exti_enable_line(0);
-    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(ERR_OK, ret);
     /* EXTI0_IRQn = 6 → ISER[0] bit 6 */
     TEST_ASSERT_BITS_HIGH(1U << 6, fake_NVIC.ISER[0]);
 }
@@ -297,7 +298,7 @@ void test_enable_line0_sets_nvic_iser(void)
 void test_enable_line1_sets_nvic_iser(void)
 {
     int ret = exti_enable_line(1);
-    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(ERR_OK, ret);
     /* EXTI1_IRQn = 7 → ISER[0] bit 7 */
     TEST_ASSERT_BITS_HIGH(1U << 7, fake_NVIC.ISER[0]);
 }
@@ -305,7 +306,7 @@ void test_enable_line1_sets_nvic_iser(void)
 void test_enable_line5_sets_nvic_iser_exti9_5(void)
 {
     int ret = exti_enable_line(5);
-    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(ERR_OK, ret);
     /* EXTI9_5_IRQn = 23 → ISER[0] bit 23 */
     TEST_ASSERT_BITS_HIGH(1U << 23, fake_NVIC.ISER[0]);
 }
@@ -313,7 +314,7 @@ void test_enable_line5_sets_nvic_iser_exti9_5(void)
 void test_enable_line10_sets_nvic_iser_exti15_10(void)
 {
     int ret = exti_enable_line(10);
-    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(ERR_OK, ret);
     /* EXTI15_10_IRQn = 40 → ISER[1] bit 8 */
     TEST_ASSERT_BITS_HIGH(1U << 8, fake_NVIC.ISER[1]);
 }
@@ -321,7 +322,7 @@ void test_enable_line10_sets_nvic_iser_exti15_10(void)
 void test_enable_line15_sets_nvic_iser_exti15_10(void)
 {
     int ret = exti_enable_line(15);
-    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(ERR_OK, ret);
     /* EXTI15_10_IRQn = 40 → ISER[1] bit 8 */
     TEST_ASSERT_BITS_HIGH(1U << 8, fake_NVIC.ISER[1]);
 }
@@ -329,20 +330,20 @@ void test_enable_line15_sets_nvic_iser_exti15_10(void)
 void test_enable_invalid_line_returns_error(void)
 {
     int ret = exti_enable_line(23);  /* Valid EXTI line but no GPIO IRQ */
-    /* Lines 16-22 map to (IRQn_Type)-1, should return -1 */
-    TEST_ASSERT_EQUAL(-1, ret);
+    /* Lines 16-22 map to (IRQn_Type)-1, should return ERR_INVALID_ARG */
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, ret);
 }
 
 void test_enable_out_of_range_line_returns_error(void)
 {
     int ret = exti_enable_line(25);
-    TEST_ASSERT_EQUAL(-1, ret);
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, ret);
 }
 
 void test_disable_line0_sets_nvic_icer(void)
 {
     int ret = exti_disable_line(0);
-    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(ERR_OK, ret);
     /* EXTI0_IRQn = 6 → ICER[0] bit 6 */
     TEST_ASSERT_BITS_HIGH(1U << 6, fake_NVIC.ICER[0]);
 }
@@ -350,7 +351,7 @@ void test_disable_line0_sets_nvic_icer(void)
 void test_disable_line4_sets_nvic_icer(void)
 {
     int ret = exti_disable_line(4);
-    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(ERR_OK, ret);
     /* EXTI4_IRQn = 10 → ICER[0] bit 10 */
     TEST_ASSERT_BITS_HIGH(1U << 10, fake_NVIC.ICER[0]);
 }
@@ -358,7 +359,7 @@ void test_disable_line4_sets_nvic_icer(void)
 void test_disable_line12_sets_nvic_icer_exti15_10(void)
 {
     int ret = exti_disable_line(12);
-    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(ERR_OK, ret);
     /* EXTI15_10_IRQn = 40 → ICER[1] bit 8 */
     TEST_ASSERT_BITS_HIGH(1U << 8, fake_NVIC.ICER[1]);
 }
@@ -366,7 +367,7 @@ void test_disable_line12_sets_nvic_icer_exti15_10(void)
 void test_disable_invalid_line_returns_error(void)
 {
     int ret = exti_disable_line(25);
-    TEST_ASSERT_EQUAL(-1, ret);
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, ret);
 }
 
 /* ======================================================================== */
@@ -376,7 +377,7 @@ void test_disable_invalid_line_returns_error(void)
 void test_set_interrupt_mask_enable_sets_imr_bit(void)
 {
     int ret = exti_set_interrupt_mask(5, 1);
-    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(ERR_OK, ret);
     TEST_ASSERT_BITS_HIGH(1U << 5, fake_EXTI.IMR);
 }
 
@@ -384,7 +385,7 @@ void test_set_interrupt_mask_disable_clears_imr_bit(void)
 {
     fake_EXTI.IMR = (1U << 5);
     int ret = exti_set_interrupt_mask(5, 0);
-    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(ERR_OK, ret);
     TEST_ASSERT_BITS_LOW(1U << 5, fake_EXTI.IMR);
 }
 
@@ -399,7 +400,7 @@ void test_set_interrupt_mask_does_not_affect_other_lines(void)
 void test_set_interrupt_mask_invalid_line_returns_error(void)
 {
     int ret = exti_set_interrupt_mask(25, 1);
-    TEST_ASSERT_EQUAL(-1, ret);
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, ret);
 }
 
 /* ======================================================================== */
@@ -409,7 +410,7 @@ void test_set_interrupt_mask_invalid_line_returns_error(void)
 void test_set_event_mask_enable_sets_emr_bit(void)
 {
     int ret = exti_set_event_mask(5, 1);
-    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(ERR_OK, ret);
     TEST_ASSERT_BITS_HIGH(1U << 5, fake_EXTI.EMR);
 }
 
@@ -417,7 +418,7 @@ void test_set_event_mask_disable_clears_emr_bit(void)
 {
     fake_EXTI.EMR = (1U << 5);
     int ret = exti_set_event_mask(5, 0);
-    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(ERR_OK, ret);
     TEST_ASSERT_BITS_LOW(1U << 5, fake_EXTI.EMR);
 }
 
@@ -432,7 +433,7 @@ void test_set_event_mask_does_not_affect_other_lines(void)
 void test_set_event_mask_invalid_line_returns_error(void)
 {
     int ret = exti_set_event_mask(25, 1);
-    TEST_ASSERT_EQUAL(-1, ret);
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, ret);
 }
 
 /* ======================================================================== */
@@ -463,7 +464,7 @@ void test_is_pending_only_checks_requested_line(void)
 void test_is_pending_invalid_line_returns_error(void)
 {
     int ret = exti_is_pending(25);
-    TEST_ASSERT_EQUAL(-1, ret);
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, ret);
 }
 
 /* ======================================================================== */
@@ -473,7 +474,7 @@ void test_is_pending_invalid_line_returns_error(void)
 void test_clear_pending_writes_1_to_pr_bit(void)
 {
     int ret = exti_clear_pending(5);
-    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(ERR_OK, ret);
     /* PR is write-1-to-clear on hardware; in the fake struct, the driver
      * writes 1 to the bit. We verify the write happened. */
     TEST_ASSERT_BITS_HIGH(1U << 5, fake_EXTI.PR);
@@ -482,7 +483,7 @@ void test_clear_pending_writes_1_to_pr_bit(void)
 void test_clear_pending_invalid_line_returns_error(void)
 {
     int ret = exti_clear_pending(25);
-    TEST_ASSERT_EQUAL(-1, ret);
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, ret);
 }
 
 /* ======================================================================== */
@@ -492,7 +493,7 @@ void test_clear_pending_invalid_line_returns_error(void)
 void test_software_trigger_sets_swier_bit(void)
 {
     int ret = exti_software_trigger(5);
-    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(ERR_OK, ret);
     TEST_ASSERT_BITS_HIGH(1U << 5, fake_EXTI.SWIER);
 }
 
@@ -512,7 +513,7 @@ void test_software_trigger_does_not_affect_other_lines(void)
 void test_software_trigger_invalid_line_returns_error(void)
 {
     int ret = exti_software_trigger(25);
-    TEST_ASSERT_EQUAL(-1, ret);
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, ret);
 }
 
 /* ======================================================================== */

@@ -20,6 +20,7 @@
 
 #include "unity.h"
 #include "stm32f4xx.h"   /* stub: TypeDefs + fake peripheral declarations */
+#include "error.h"
 #include "rcc.h"
 #include "rcc_calc.h"
 
@@ -119,7 +120,7 @@ void test_apb_divider_exact_boundary_passes_without_extra_divide(void)
 void test_pll_config_hsi_to_100mhz_pllm(void)
 {
     rcc_pll_factors_t f;
-    TEST_ASSERT_EQUAL(0, rcc_compute_pll_config(16000000U, 100000000U, &f));
+    TEST_ASSERT_EQUAL(ERR_OK, rcc_compute_pll_config(16000000U, 100000000U, &f));
     TEST_ASSERT_EQUAL(8, f.pllm);
 }
 
@@ -154,7 +155,7 @@ void test_pll_config_hsi_to_100mhz_pllq(void)
 void test_pll_config_hse_to_100mhz_pllm_is_4(void)
 {
     rcc_pll_factors_t f;
-    TEST_ASSERT_EQUAL(0, rcc_compute_pll_config(8000000U, 100000000U, &f));
+    TEST_ASSERT_EQUAL(ERR_OK, rcc_compute_pll_config(8000000U, 100000000U, &f));
     TEST_ASSERT_EQUAL(4, f.pllm);
 }
 
@@ -179,7 +180,7 @@ void test_pll_config_hse_to_100mhz_pllp_is_2(void)
 void test_pll_config_hsi_to_96mhz_plln_is_96(void)
 {
     rcc_pll_factors_t f;
-    TEST_ASSERT_EQUAL(0, rcc_compute_pll_config(16000000U, 96000000U, &f));
+    TEST_ASSERT_EQUAL(ERR_OK, rcc_compute_pll_config(16000000U, 96000000U, &f));
     TEST_ASSERT_EQUAL(96, f.plln);
 }
 
@@ -197,13 +198,13 @@ void test_pll_config_target_3mhz_returns_error(void)
 {
     rcc_pll_factors_t f;
     /* All PLLP values give VCO out < 100 MHz minimum */
-    TEST_ASSERT_EQUAL(-1, rcc_compute_pll_config(16000000U, 3000000U, &f));
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, rcc_compute_pll_config(16000000U, 3000000U, &f));
 }
 
 void test_pll_config_target_zero_returns_error(void)
 {
     rcc_pll_factors_t f;
-    TEST_ASSERT_EQUAL(-1, rcc_compute_pll_config(16000000U, 0U, &f));
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, rcc_compute_pll_config(16000000U, 0U, &f));
 }
 
 /*
@@ -213,7 +214,7 @@ void test_pll_config_target_zero_returns_error(void)
 void test_pll_config_hsi_to_50mhz_pllq_clamped_to_2(void)
 {
     rcc_pll_factors_t f;
-    TEST_ASSERT_EQUAL(0, rcc_compute_pll_config(16000000U, 50000000U, &f));
+    TEST_ASSERT_EQUAL(ERR_OK, rcc_compute_pll_config(16000000U, 50000000U, &f));
     TEST_ASSERT_GREATER_OR_EQUAL(2, f.pllq);
 }
 
@@ -228,7 +229,7 @@ void test_pll_config_hsi_to_50mhz_pllq_clamped_to_2(void)
  */
 void test_rcc_init_hsi_direct_returns_0(void)
 {
-    TEST_ASSERT_EQUAL(0, rcc_init(RCC_CLK_SRC_HSI, 16000000U));
+    TEST_ASSERT_EQUAL(ERR_OK, rcc_init(RCC_CLK_SRC_HSI, 16000000U));
 }
 
 void test_rcc_init_hsi_direct_caches_sysclk(void)
@@ -264,7 +265,7 @@ void test_rcc_init_hsi_direct_caches_apb1_timer_clk(void)
 
 void test_rcc_init_hse_direct_returns_0(void)
 {
-    TEST_ASSERT_EQUAL(0, rcc_init(RCC_CLK_SRC_HSE_BYPASS, 8000000U));
+    TEST_ASSERT_EQUAL(ERR_OK, rcc_init(RCC_CLK_SRC_HSE_BYPASS, 8000000U));
 }
 
 void test_rcc_init_hse_direct_caches_sysclk(void)
@@ -276,16 +277,17 @@ void test_rcc_init_hse_direct_caches_sysclk(void)
 void test_rcc_init_target_exceeds_max_returns_error(void)
 {
     /* 101 MHz > SYSCLK_MAX (100 MHz) — rejected immediately, no busy-waits */
-    TEST_ASSERT_EQUAL(-1, rcc_init(RCC_CLK_SRC_HSI, 101000000U));
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, rcc_init(RCC_CLK_SRC_HSI, 101000000U));
 }
 
 void test_rcc_init_unreachable_pll_target_returns_error(void)
 {
     /*
-     * 3 MHz: rcc_compute_pll_config returns -1 immediately (VCO output
-     * would be < 100 MHz min for every valid PLLP value). No busy-waits.
+     * 3 MHz: rcc_compute_pll_config returns ERR_INVALID_ARG immediately
+     * (VCO output would be < 100 MHz min for every valid PLLP value).
+     * No busy-waits.
      */
-    TEST_ASSERT_EQUAL(-1, rcc_init(RCC_CLK_SRC_HSI, 3000000U));
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG, rcc_init(RCC_CLK_SRC_HSI, 3000000U));
 }
 
 /* ======================================================================== */

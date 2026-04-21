@@ -2,6 +2,7 @@
 #define RCC_H
 
 #include <stdint.h>
+#include "error.h"
 
 /**
  * @brief Clock source selection for rcc_init
@@ -28,9 +29,10 @@ typedef enum {
  *
  * @param source          Clock source (HSI or HSE bypass)
  * @param target_sysclk_hz  Desired SYSCLK frequency in Hz (e.g. 100000000)
- * @return 0 on success, -1 on invalid parameters or PLL lock timeout
+ * @return ERR_OK on success, ERR_INVALID_ARG on invalid parameters,
+ *         ERR_TIMEOUT on PLL/HSE lock timeout
  */
-int rcc_init(rcc_clk_src_t source, uint32_t target_sysclk_hz);
+err_t rcc_init(rcc_clk_src_t source, uint32_t target_sysclk_hz);
 
 /** @return Current SYSCLK frequency in Hz */
 uint32_t rcc_get_sysclk(void);
