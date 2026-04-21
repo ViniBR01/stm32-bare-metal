@@ -1,5 +1,6 @@
 #include "timer.h"
 #include "timer_calc.h"
+#include "irq_priorities.h"
 #include "rcc.h"
 #include "stm32f4xx.h"
 
@@ -96,6 +97,7 @@ void timer_register_callback(timer_instance_t tim, timer_callback_t cb)
 
     if (cb) {
         r->DIER |= DIER_UIE;
+        NVIC_SetPriority(hw[tim].irqn, IRQ_PRIO_TIMER);
         NVIC_EnableIRQ(hw[tim].irqn);
     } else {
         r->DIER &= ~DIER_UIE;

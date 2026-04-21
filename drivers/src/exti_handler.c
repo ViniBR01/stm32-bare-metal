@@ -2,7 +2,8 @@
 
 #include "error.h"
 #include "exti_handler.h"
-#include "gpio_handler.h" 
+#include "gpio_handler.h"
+#include "irq_priorities.h"
 #include "stm32f4xx.h"
 
 /* Private helper functions */
@@ -71,6 +72,7 @@ err_t exti_configure_gpio_interrupt(gpio_port_t port, uint8_t pin_num,
     /* Enable NVIC interrupt */
     IRQn_Type irq_num = get_exti_irq_number(pin_num);
     if (irq_num != (IRQn_Type)-1) {
+        NVIC_SetPriority(irq_num, IRQ_PRIO_EXTI);
         NVIC_EnableIRQ(irq_num);
     }
 

@@ -3,6 +3,7 @@
 
 #include "dma.h"
 #include "gpio_handler.h"
+#include "irq_priorities.h"
 #include "rcc.h"
 #include "stm32f4xx.h"
 #include "uart.h"
@@ -212,7 +213,7 @@ void uart_start_rx_dma(uint8_t *buf, uint16_t size) {
         .tc_callback   = uart_rx_dma_tc_callback,
         .error_callback = NULL,
         .cb_ctx        = NULL,
-        .nvic_priority = 1,
+        .nvic_priority = IRQ_PRIO_DMA_LOW,
     };
     dma_stream_init(&rx_cfg);
 
@@ -357,16 +358,16 @@ static void uart_tx_dma_init(void) {
         .tc_callback   = uart_tx_dma_tc_callback,
         .error_callback = NULL,
         .cb_ctx        = NULL,
-        .nvic_priority = 0,  /* DMA higher priority than UART (2) */
+        .nvic_priority = IRQ_PRIO_DMA_HIGH,
     };
     dma_stream_init(&tx_cfg);
 }
 
 static void uart_nvic_init(void) {
     /* Enable USART2 interrupt in NVIC */
+    NVIC_SetPriority(USART2_IRQn, IRQ_PRIO_UART);
     NVIC_EnableIRQ(USART2_IRQn);
-    NVIC_SetPriority(USART2_IRQn, 2);  // Lower priority (higher number)
-    // DMA NVIC is configured by dma_stream_init() with priority 0
-    // DMA must have higher priority than UART to allow DMA completion 
-    // interrupts to fire even when called from UART interrupt context
+    /* DMA NVIC is configured by dma_stream_init() using IRQ_PRIO_DMA_HIGH/LOW.
+     * DMA must have higher priority than UART to allow DMA completion
+     * interrupts to fire even when called from UART interrupt context. */
 }

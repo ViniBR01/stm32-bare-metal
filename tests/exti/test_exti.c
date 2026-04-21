@@ -26,6 +26,7 @@
 #include "error.h"
 #include "exti_handler.h" /* EXTI driver API */
 #include "gpio_handler.h" /* For gpio_port_t */
+#include "irq_priorities.h"
 
 /* ---- Test lifecycle ----------------------------------------------------- */
 
@@ -517,6 +518,37 @@ void test_software_trigger_invalid_line_returns_error(void)
 }
 
 /* ======================================================================== */
+/* exti_configure_gpio_interrupt — NVIC priority                             */
+/* ======================================================================== */
+
+void test_configure_pin0_nvic_priority_is_exti(void)
+{
+    exti_configure_gpio_interrupt(GPIO_PORT_A, 0, EXTI_TRIGGER_RISING,
+                                  EXTI_MODE_INTERRUPT);
+    /* EXTI0_IRQn = 6 */
+    TEST_ASSERT_EQUAL(IRQ_PRIO_EXTI << (8U - __NVIC_PRIO_BITS),
+                      fake_NVIC.IP[(uint32_t)EXTI0_IRQn]);
+}
+
+void test_configure_pin7_nvic_priority_is_exti(void)
+{
+    exti_configure_gpio_interrupt(GPIO_PORT_A, 7, EXTI_TRIGGER_RISING,
+                                  EXTI_MODE_INTERRUPT);
+    /* EXTI9_5_IRQn = 23 */
+    TEST_ASSERT_EQUAL(IRQ_PRIO_EXTI << (8U - __NVIC_PRIO_BITS),
+                      fake_NVIC.IP[(uint32_t)EXTI9_5_IRQn]);
+}
+
+void test_configure_pin10_nvic_priority_is_exti(void)
+{
+    exti_configure_gpio_interrupt(GPIO_PORT_A, 10, EXTI_TRIGGER_RISING,
+                                  EXTI_MODE_INTERRUPT);
+    /* EXTI15_10_IRQn = 40 */
+    TEST_ASSERT_EQUAL(IRQ_PRIO_EXTI << (8U - __NVIC_PRIO_BITS),
+                      fake_NVIC.IP[(uint32_t)EXTI15_10_IRQn]);
+}
+
+/* ======================================================================== */
 /* main                                                                      */
 /* ======================================================================== */
 
@@ -605,6 +637,11 @@ int main(void)
     RUN_TEST(test_software_trigger_line0_sets_swier_bit0);
     RUN_TEST(test_software_trigger_does_not_affect_other_lines);
     RUN_TEST(test_software_trigger_invalid_line_returns_error);
+
+    /* NVIC priority */
+    RUN_TEST(test_configure_pin0_nvic_priority_is_exti);
+    RUN_TEST(test_configure_pin7_nvic_priority_is_exti);
+    RUN_TEST(test_configure_pin10_nvic_priority_is_exti);
 
     return UNITY_END();
 }
