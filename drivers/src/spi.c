@@ -5,6 +5,7 @@
 /* Only include hardware headers when compiling for target */
 #ifndef SPI_HOST_TEST
 #include "dma.h"
+#include "irq_priorities.h"
 #include "stm32f4xx.h"
 #endif
 
@@ -284,7 +285,7 @@ static err_t spi_dma_init_streams(spi_handle_t *handle) {
         .tc_callback   = spi_dma_rx_complete_cb,
         .error_callback = (void *)0,
         .cb_ctx        = handle,
-        .nvic_priority = 1,
+        .nvic_priority = IRQ_PRIO_DMA_LOW,
     };
     if (dma_stream_init(&rx_cfg) != ERR_OK) return ERR_INVALID_ARG;
 
@@ -301,7 +302,7 @@ static err_t spi_dma_init_streams(spi_handle_t *handle) {
         .tc_callback   = (void *)0,   /* Only need RX TC */
         .error_callback = (void *)0,
         .cb_ctx        = (void *)0,
-        .nvic_priority = 1,
+        .nvic_priority = IRQ_PRIO_DMA_LOW,
     };
     if (dma_stream_init(&tx_cfg) != ERR_OK) {
         dma_stream_release(map->rx_stream);

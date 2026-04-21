@@ -70,6 +70,9 @@ extern DMA_Stream_TypeDef fake_DMA2_S7;
 /* ---- Cortex-M4 core peripheral fakes (declared in core_cm4.h stub) ------ */
 /* fake_NVIC, fake_SCB, fake_SysTick, fake_DWT, fake_CoreDebug             */
 
+/* ---- BASEPRI fake (declared in core_cm4.h stub) ------------------------- */
+extern uint32_t fake_BASEPRI;
+
 /* ---- Override STM32 peripheral instance macros -------------------------- */
 
 #undef GPIOA

@@ -22,6 +22,7 @@
 
 #include "unity.h"
 #include "stm32f4xx.h"  /* stub: TypeDefs + fake peripheral declarations */
+#include "irq_priorities.h"
 #include "rcc.h"
 #include "timer.h"
 #include "timer_calc.h"
@@ -281,6 +282,14 @@ void test_register_callback_does_not_affect_other_timer_dier(void)
     TEST_ASSERT_BITS_LOW(DIER_UIE, fake_TIM3.DIER);
 }
 
+void test_register_callback_sets_nvic_priority(void)
+{
+    timer_init(TIMER_2, 0U, 999U);
+    timer_register_callback(TIMER_2, test_cb);
+    TEST_ASSERT_EQUAL(IRQ_PRIO_TIMER << (8U - __NVIC_PRIO_BITS),
+                      fake_NVIC.IP[(uint32_t)TIM2_IRQn]);
+}
+
 /* ======================================================================== */
 /* timer_pwm_init                                                             */
 /* ======================================================================== */
@@ -492,6 +501,7 @@ int main(void)
     RUN_TEST(test_register_null_callback_disables_nvic_irq);
     RUN_TEST(test_register_callback_tim5_enables_nvic_irq);
     RUN_TEST(test_register_callback_does_not_affect_other_timer_dier);
+    RUN_TEST(test_register_callback_sets_nvic_priority);
 
     /* timer_pwm_init */
     RUN_TEST(test_pwm_init_ch1_enables_apb1_clock);

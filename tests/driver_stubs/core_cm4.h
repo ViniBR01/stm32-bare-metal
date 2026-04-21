@@ -181,6 +181,19 @@ static inline void     __ISB(void)         {}
 static inline void     __NOP(void)         {}
 static inline void     __WFI(void)         {}
 
+/* ---- BASEPRI stubs (for critical_section.h) ----------------------------- */
+
+extern uint32_t fake_BASEPRI;
+static inline uint32_t __get_BASEPRI(void)            { return fake_BASEPRI; }
+static inline void     __set_BASEPRI(uint32_t val)    { fake_BASEPRI = val; }
+
+/* ---- NVIC_SetPriorityGrouping stub --------------------------------------- */
+
+static inline void NVIC_SetPriorityGrouping(uint32_t PriorityGroup)
+{
+    (void)PriorityGroup;  /* no-op in host tests */
+}
+
 /* ---- DWT / CoreDebug bit constants (used by spi_perf.c) ----------------- */
 
 #define DWT_CTRL_CYCCNTENA_Msk        (1UL << 0)

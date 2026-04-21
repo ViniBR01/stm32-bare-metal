@@ -69,6 +69,9 @@ SysTick_Type     fake_SysTick;
 DWT_Type         fake_DWT;
 CoreDebug_Type   fake_CoreDebug;
 
+/* ---- BASEPRI fake (declared in core_cm4.h stub) ------------------------- */
+uint32_t fake_BASEPRI = 0;
+
 /* ---- System clock (declared in system_stm32f4xx.h) --------------------- */
 
 uint32_t SystemCoreClock = 100000000U;  /* 100 MHz */
@@ -130,4 +133,6 @@ void test_periph_reset(void)
     memset(&fake_SysTick,    0, sizeof(fake_SysTick));
     memset(&fake_DWT,        0, sizeof(fake_DWT));
     memset(&fake_CoreDebug,  0, sizeof(fake_CoreDebug));
+
+    fake_BASEPRI = 0;
 }

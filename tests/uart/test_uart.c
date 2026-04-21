@@ -29,6 +29,8 @@
 
 #include "unity.h"
 #include "stm32f4xx.h"  /* stub: TypeDefs + fake peripheral declarations */
+#include "irq_priorities.h"
+#include "critical_section.h"
 #include "rcc.h"
 #include "uart.h"
 #include "uart_calc.h"
@@ -257,11 +259,31 @@ void test_uart_init_nvic_usart2_irq_enabled(void)
     TEST_ASSERT_BITS_HIGH(1U << (irqn & 0x1FU), fake_NVIC.ISER[irqn >> 5U]);
 }
 
-void test_uart_init_nvic_usart2_priority_is_2(void)
+void test_uart_init_nvic_usart2_priority(void)
 {
     uart_init();
-    /* NVIC_SetPriority stores (priority << (8 - __NVIC_PRIO_BITS)) = 2 << 4 = 32 */
-    TEST_ASSERT_EQUAL(2U << (8U - 4U), fake_NVIC.IP[(uint32_t)USART2_IRQn]);
+    /* NVIC_SetPriority stores (priority << (8 - __NVIC_PRIO_BITS)) */
+    TEST_ASSERT_EQUAL(IRQ_PRIO_UART << (8U - __NVIC_PRIO_BITS),
+                      fake_NVIC.IP[(uint32_t)USART2_IRQn]);
+}
+
+void test_uart_init_nvic_dma_tx_priority(void)
+{
+    uart_init();
+    /* UART TX uses DMA1 Stream6 (DMA_STREAM_1_6) */
+    TEST_ASSERT_EQUAL(IRQ_PRIO_DMA_HIGH << (8U - __NVIC_PRIO_BITS),
+                      fake_NVIC.IP[(uint32_t)DMA1_Stream6_IRQn]);
+}
+
+void test_uart_init_nvic_dma_rx_priority(void)
+{
+    uart_init();
+    static uint8_t buf[32];
+    uart_start_rx_dma(buf, sizeof(buf));
+    /* UART RX uses DMA1 Stream5 (DMA_STREAM_1_5) */
+    TEST_ASSERT_EQUAL(IRQ_PRIO_DMA_LOW << (8U - __NVIC_PRIO_BITS),
+                      fake_NVIC.IP[(uint32_t)DMA1_Stream5_IRQn]);
+    uart_stop_rx_dma();
 }
 
 /* ======================================================================== */
@@ -485,6 +507,39 @@ void test_null_rx_callback_does_not_crash(void)
 }
 
 /* ======================================================================== */
+/* Critical section                                                           */
+/* ======================================================================== */
+
+void test_critical_section_enter_sets_basepri(void)
+{
+    fake_BASEPRI = 0;
+    uint32_t saved = critical_section_enter();
+    TEST_ASSERT_EQUAL(0U, saved);  /* previous value was 0 */
+    TEST_ASSERT_EQUAL(IRQ_BASEPRI_MASK << (8U - __NVIC_PRIO_BITS), fake_BASEPRI);
+    critical_section_exit(saved);
+}
+
+void test_critical_section_exit_restores_basepri(void)
+{
+    fake_BASEPRI = 0;
+    uint32_t saved = critical_section_enter();
+    critical_section_exit(saved);
+    TEST_ASSERT_EQUAL(0U, fake_BASEPRI);
+}
+
+void test_critical_section_nesting(void)
+{
+    fake_BASEPRI = 0;
+    uint32_t s1 = critical_section_enter();
+    uint32_t s2 = critical_section_enter();
+    /* second enter is a no-op in terms of saved value since BASEPRI is already set */
+    critical_section_exit(s2);
+    /* BASEPRI still set after inner exit because s2 == already-masked value */
+    critical_section_exit(s1);
+    TEST_ASSERT_EQUAL(0U, fake_BASEPRI);
+}
+
+/* ======================================================================== */
 /* main                                                                       */
 /* ======================================================================== */
 
@@ -526,7 +581,9 @@ int main(void)
 
     /* uart_init — NVIC */
     RUN_TEST(test_uart_init_nvic_usart2_irq_enabled);
-    RUN_TEST(test_uart_init_nvic_usart2_priority_is_2);
+    RUN_TEST(test_uart_init_nvic_usart2_priority);
+    RUN_TEST(test_uart_init_nvic_dma_tx_priority);
+    RUN_TEST(test_uart_init_nvic_dma_rx_priority);
 
     /* uart_write */
     RUN_TEST(test_uart_write_puts_char_in_dr);
@@ -561,6 +618,11 @@ int main(void)
     RUN_TEST(test_rx_callback_not_called_when_dma_rx_active);
     RUN_TEST(test_rx_callback_receives_correct_character);
     RUN_TEST(test_null_rx_callback_does_not_crash);
+
+    /* Critical section */
+    RUN_TEST(test_critical_section_enter_sets_basepri);
+    RUN_TEST(test_critical_section_exit_restores_basepri);
+    RUN_TEST(test_critical_section_nesting);
 
     return UNITY_END();
 }

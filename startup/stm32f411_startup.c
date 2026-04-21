@@ -1,4 +1,6 @@
 #include <stdint.h>
+#include "stm32f4xx.h"
+#include "irq_priorities.h"
 
 /*Symbols defined in the linker script */
 extern uint32_t _estack;
@@ -200,6 +202,9 @@ void Default_Handler(void)
 /* Reset Handler */
 void Reset_Handler(void)
 {
+    /* Set NVIC priority grouping: all 4 bits = preemption, 0 sub-priority bits */
+    NVIC_SetPriorityGrouping(NVIC_PRIORITY_GROUP);
+
 #ifdef ENABLE_HW_FPU
 	/* Enable FPU: set CP10 and CP11 to full access (bits 20-23 in CPACR).
 	 * This must happen before any C code that may use floating-point,
