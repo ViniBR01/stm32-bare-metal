@@ -6,6 +6,20 @@ Types: `merge`, `decision`, `milestone`, `infra`
 
 ---
 
+## [2026-04-17] milestone | HIL Tier 4: SysTick hardware tests (#62)
+
+Added three HIL tests to the Tier 4 section of `examples/cli/test_harness.c`:
+`test_systick_get_ms_increments` — calls `systick_get_ms()` twice with a
+`timer_delay_us(5000)` between them and asserts the difference is 5 ± 1 ms;
+`test_systick_elapsed_since` — records a start snapshot, delays 10 ms, and asserts
+`systick_elapsed_since(start)` is 10 ± 1 ms; `test_systick_delay_ms_accuracy` —
+measures `systick_delay_ms(10)` via DWT cycle counter (expected 1 000 000 cycles at
+100 MHz) and asserts within ±100 000 cycles (±1 ms, reflecting inherent 1 ms
+quantisation of the tick counter). All three tests pass on hardware (actual
+`delay_ms` measurement: ~959 000 cycles). Added `systick_init()` call to
+`examples/cli/cli_simple.c` `main()` so the SysTick ISR is running before the
+test harness executes. Total HIL tests: 80.
+
 ## [2026-04-17] milestone | SysTick tick counter with non-blocking API (#62)
 
 Refactored the SysTick driver from a polled-COUNTFLAG blocking loop to an
