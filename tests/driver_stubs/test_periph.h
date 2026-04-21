@@ -30,7 +30,9 @@ extern GPIO_TypeDef    fake_GPIOH;
 
 extern RCC_TypeDef     fake_RCC;
 
+extern USART_TypeDef   fake_USART1;
 extern USART_TypeDef   fake_USART2;
+extern USART_TypeDef   fake_USART6;
 
 extern SPI_TypeDef     fake_SPI1;
 extern SPI_TypeDef     fake_SPI2;
@@ -91,8 +93,12 @@ extern uint32_t fake_BASEPRI;
 #undef RCC
 #define RCC      (&fake_RCC)
 
+#undef USART1
+#define USART1   (&fake_USART1)
 #undef USART2
 #define USART2   (&fake_USART2)
+#undef USART6
+#define USART6   (&fake_USART6)
 
 #undef SPI1
 #define SPI1     (&fake_SPI1)

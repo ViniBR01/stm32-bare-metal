@@ -24,7 +24,9 @@ GPIO_TypeDef    fake_GPIOH;
 
 RCC_TypeDef     fake_RCC;
 
+USART_TypeDef   fake_USART1;
 USART_TypeDef   fake_USART2;
+USART_TypeDef   fake_USART6;
 
 SPI_TypeDef     fake_SPI1;
 SPI_TypeDef     fake_SPI2;
@@ -91,7 +93,9 @@ void test_periph_reset(void)
     memset(&fake_GPIOH,  0, sizeof(fake_GPIOH));
 
     memset(&fake_RCC,    0, sizeof(fake_RCC));
+    memset(&fake_USART1, 0, sizeof(fake_USART1));
     memset(&fake_USART2, 0, sizeof(fake_USART2));
+    memset(&fake_USART6, 0, sizeof(fake_USART6));
 
     memset(&fake_SPI1,   0, sizeof(fake_SPI1));
     memset(&fake_SPI2,   0, sizeof(fake_SPI2));
