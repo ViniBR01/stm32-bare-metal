@@ -6,12 +6,12 @@
 
 | Issue | Title | Notes |
 |---|---|---|
-| #66 | Implement I2C master driver | Depends on #26 and #73. |
-| #67 | Implement ADC driver | Depends on #26. |
-| #68 | Implement IWDG watchdog driver | Depends on #26. |
-| #70 | Implement Stop and Standby low-power modes | Depends on #26. |
-| #71 | Implement internal flash read/write driver | Depends on #26. |
-| #72 | Implement hardware CRC driver | Depends on #26. |
+| #66 | Implement I2C master driver | |
+| #67 | Implement ADC driver | |
+| #68 | Implement IWDG watchdog driver | |
+| #70 | Implement Stop and Standby low-power modes | |
+| #71 | Implement internal flash read/write driver | |
+| #72 | Implement hardware CRC driver | |
 
 ### Examples
 
@@ -26,7 +26,7 @@
 
 ## Suggested Priority Order
 
-1. Remaining drivers (#66, #67, #68, #70, #71, #72) after #26 and #73
+1. Remaining drivers (#66, #67, #68, #70, #71, #72)
 2. Examples (#14, #16, #22, #45) driven by driver availability
 
 ---
@@ -43,7 +43,7 @@ See [log.md](log.md) for the full history. Key milestones:
 - ✅ CLI engine with tab completion, command history, ANSI escape handling
 - ✅ DMA-buffered printf (printf_dma)
 - ✅ Logging system (log_c) with runtime log level control
-- ✅ Host unit tests: CLI (41), string utils (23), GPIO (44), EXTI (56), RCC (36), Timer (52), UART (46) — 298 total
+- ✅ Host unit tests: CLI (41), string utils (23), GPIO (44), EXTI (56), RCC (36), Timer (52), UART (76) — 328 total
 - ✅ SysTick tick counter with non-blocking API: `systick_init()`, `systick_get_ms()`, `systick_elapsed_since()`, `uptime` CLI command, 14 host tests (#62)
 - ✅ Driver host test infrastructure: fake `stm32f4xx.h` + `core_cm4.h` stubs, `test_periph_reset()`
 - ✅ GitHub Actions CI pipeline: `host-tests` + `firmware-build` + `hil-tests`, branch protection
@@ -58,3 +58,6 @@ See [log.md](log.md) for the full history. Key milestones:
 - ✅ Parallel agent worktree workflow: `worktree_new.sh` / `worktree_clean.sh`, CLAUDE.md instructions, agents wiki page (#114)
 - ✅ Tailscale remote access + MCP HIL server (`scripts/mcp_hil_server.py`) for Claude Code integration (#109)
 - ✅ Multi-instance UART driver: USART1/2/6, configurable baud rate, hardware table, `uart_init_config()` (#69)
+- ✅ Unified error code definitions (#26) and centralised NVIC priority scheme (#73)
+- ✅ HIL Tier 4: SysTick hardware tests — `get_ms`, `elapsed_since`, `delay_ms` accuracy on real board (#62)
+- ✅ JUnit XML reporting for HIL tests in CI — every PR shows a HIL Tests tab in GitHub Test Summary (#123)
