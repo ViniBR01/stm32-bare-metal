@@ -12,12 +12,14 @@ This script automates the full HIL test workflow:
 
 Usage:
     python3 scripts/run_hil_tests.py [--skip-build] [--skip-flash]
-    
+
 Options:
-    --skip-build    Skip firmware build step (use existing binary)
-    --skip-flash    Skip flashing step (assumes firmware already loaded)
-    --baseline PATH Custom path to baseline JSON (default: tests/baselines/performance.json)
-    --timeout SEC   Serial timeout in seconds (default: 30)
+    --skip-build      Skip firmware build step (use existing binary)
+    --skip-flash      Skip flashing step (assumes firmware already loaded)
+    --baseline PATH   Custom path to baseline JSON (default: tests/baselines/performance.json)
+    --timeout SEC     Serial timeout in seconds (default: 30)
+    --hla-serial SN   ST-LINK serial number to pin OpenOCD and serial port.
+                      Pass "" to disable pinning (default: 066BFF554869774867234426)
 """
 
 import argparse
@@ -31,6 +33,10 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from xml.etree.ElementTree import Element, SubElement, ElementTree, indent
+
+# Default ST-LINK serial number for the Pi HIL runner's NUCLEO board.
+# Override via --hla-serial CLI argument; pass "" to skip pinning.
+DEFAULT_HLA_SERIAL = '066BFF554869774867234426'
 
 # Color codes for terminal output
 class Colors:
@@ -127,25 +133,37 @@ def build_firmware(project_root: Path) -> Path:
         log_error("Build timed out after 120 seconds")
         return None
 
-def flash_firmware(elf_path: Path) -> bool:
+def flash_firmware(elf_path: Path, hla_serial: str = '') -> bool:
     """
-    Flash firmware to STM32 board using OpenOCD
-    
+    Flash firmware to STM32 board using OpenOCD.
+
     Args:
-        elf_path: Path to the .elf file to flash
-        
+        elf_path:    Path to the .elf file to flash.
+        hla_serial:  ST-LINK serial number to target.  When non-empty,
+                     ``hla_serial`` is passed to OpenOCD so that it selects
+                     the correct probe even when multiple ST-LINKs are
+                     connected.
+
     Returns:
         True if successful, False otherwise
     """
     log_info(f"Flashing {elf_path.name} via OpenOCD...")
-    
+
+    cmd = ['openocd']
+
+    # Pin to a specific ST-LINK probe when serial is known
+    if hla_serial:
+        cmd += ['-c', f'hla_serial {hla_serial}']
+        log_info(f"Targeting ST-LINK serial: {hla_serial}")
+
+    cmd += [
+        '-f', 'board/st_nucleo_f4.cfg',
+        '-c', f'program {elf_path} verify reset exit'
+    ]
+
     try:
         result = subprocess.run(
-            [
-                'openocd',
-                '-f', 'board/st_nucleo_f4.cfg',
-                '-c', f'program {elf_path} verify reset exit'
-            ],
+            cmd,
             cwd=elf_path.parent.parent.parent.parent,  # Project root
             capture_output=True,
             text=True,
@@ -164,25 +182,51 @@ def flash_firmware(elf_path: Path) -> bool:
         log_error("Flash timed out after 30 seconds")
         return False
 
-def find_serial_port() -> Optional[str]:
+def find_serial_port(hla_serial: str = '') -> Optional[str]:
     """
-    Auto-detect NUCLEO serial port
-    
+    Auto-detect NUCLEO serial port.
+
+    When *hla_serial* is provided (non-empty), the function first checks for
+    the stable ``/dev/serial/by-id/`` symlink that encodes the ST-LINK serial
+    number.  This guarantees we talk to the same board that OpenOCD flashed,
+    even when multiple ST-LINKs are connected.
+
+    Falls back to glob-based detection for development environments that lack
+    the pinned symlink (e.g. macOS or single-board setups).
+
     Returns:
         Serial port path or None if not found
     """
+    # --- Pinned symlink (Linux, matches specific ST-LINK) ----------------
+    if hla_serial:
+        pinned = (f'/dev/serial/by-id/'
+                  f'usb-STMicroelectronics_STM32_STLink_{hla_serial}-if02')
+        if os.path.exists(pinned):
+            resolved = os.path.realpath(pinned)
+            log_info(f"Using pinned serial port: {pinned} -> {resolved}")
+            return pinned
+
+    # --- Glob fallback ----------------------------------------------------
     # Mac patterns
     mac_patterns = ['/dev/cu.usbmodem*']
     # Linux patterns
     linux_patterns = ['/dev/ttyACM*']
-    
+
     for pattern in mac_patterns + linux_patterns:
         ports = glob.glob(pattern)
         if ports:
+            # Multi-device warning: ambiguity risk when no pinned symlink
+            if len(ports) > 1:
+                log_warning(
+                    f"Multiple serial devices found: {ports}. "
+                    f"Using {ports[0]}, but this may be the WRONG board. "
+                    f"Consider using --hla-serial to pin to a specific "
+                    f"ST-LINK serial number."
+                )
             port = ports[0]
             log_info(f"Found serial port: {port}")
             return port
-    
+
     return None
 
 def run_test_suite(port: str, baudrate: int = 115200, timeout: int = 30) -> Tuple[bool, List[str]]:
@@ -563,6 +607,10 @@ def main():
                         help='Serial timeout in seconds')
     parser.add_argument('--junit-xml', default='hil-test-results.xml',
                         help='Path to write JUnit XML report (default: hil-test-results.xml)')
+    parser.add_argument('--hla-serial', default=DEFAULT_HLA_SERIAL,
+                        help=('ST-LINK serial number to pin OpenOCD and serial '
+                              'port selection. Pass empty string "" to disable '
+                              'pinning. (default: %(default)s)'))
 
     args = parser.parse_args()
 
@@ -588,7 +636,7 @@ def main():
 
         # Flash firmware
         if not args.skip_flash:
-            if not flash_firmware(elf_path):
+            if not flash_firmware(elf_path, hla_serial=args.hla_serial):
                 return 2
         else:
             log_warning("Skipping flash (--skip-flash)")
@@ -597,7 +645,7 @@ def main():
         time.sleep(2)
 
         # Find serial port
-        port = find_serial_port()
+        port = find_serial_port(hla_serial=args.hla_serial)
         if not port:
             log_error("Serial port not found - is the board connected?")
             return 2
