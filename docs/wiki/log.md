@@ -4,6 +4,15 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-04-22] milestone | Implement IWDG watchdog driver (#68)
+
+Added Independent Watchdog (IWDG) driver: `iwdg_init(timeout_ms)`, `iwdg_feed()`,
+`iwdg_was_reset_cause()`, `iwdg_clear_reset_flags()`. Pure calculation functions in
+`iwdg_calc.h`: prescaler/reload solver, timeout computation, prescaler divider lookup.
+37 host unit tests covering calc functions, register writes, and boundary cases.
+Basic example `iwdg_basic.c` demonstrates 1-second watchdog with LED feedback.
+Wiki page: `docs/wiki/drivers/iwdg.md`.
+
 ## [2026-04-17] infra | Add JUnit XML reporting for HIL tests in CI (#123)
 
 Extended `scripts/run_hil_tests.py` with a `--junit-xml PATH` argument (default:
