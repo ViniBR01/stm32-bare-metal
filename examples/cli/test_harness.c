@@ -672,9 +672,10 @@ void test_exti_software_trigger_pb7(void)
 /* ====================================================================
  * Flash hardware tests — Tier 6
  *
- * Uses sector 1 (0x08004000, 16 KB) as the test area. This sector is
- * designated for parameter storage and is safe to erase/write without
- * affecting the running application (which lives in sector 0).
+ * Uses sector 4 (0x08010000, 64 KB) as the test area. Sector 4 starts
+ * at the 64 KB offset, safely beyond the HIL firmware (~38 KB in
+ * sectors 0–2). Sectors 0–3 contain application code and must NOT be
+ * erased while the firmware is running.
  *
  * Wear-levelling strategy: a SINGLE erase per test run. The first test
  * erases + verifies, subsequent tests write to different offsets within
@@ -682,8 +683,8 @@ void test_exti_software_trigger_pb7(void)
  * wears out (STM32F411 flash endurance spec).
  * ==================================================================== */
 
-#define FLASH_TEST_SECTOR     1U
-#define FLASH_TEST_BASE_ADDR  0x08004000U
+#define FLASH_TEST_SECTOR     4U
+#define FLASH_TEST_BASE_ADDR  0x08010000U
 
 void test_flash_erase_sector1(void)
 {
@@ -749,8 +750,8 @@ void test_flash_write_bytes_readback(void)
 
 void test_flash_sector_info(void)
 {
-    TEST_ASSERT_EQUAL_HEX32(0x08004000U, flash_get_sector_address(1));
-    TEST_ASSERT_EQUAL_UINT32(16U * 1024U, flash_get_sector_size(1));
+    TEST_ASSERT_EQUAL_HEX32(0x08010000U, flash_get_sector_address(4));
+    TEST_ASSERT_EQUAL_UINT32(64U * 1024U, flash_get_sector_size(4));
 }
 
 /* ====================================================================

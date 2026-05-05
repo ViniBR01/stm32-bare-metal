@@ -353,9 +353,9 @@ static int cmd_flash_write(const char *args)
     }
     uint32_t val = parse_hex_or_dec(p, NULL);
 
-    /* Safety: prevent writing to sector 0 (application code) */
-    if (addr < 0x08004000U) {
-        printf("ERROR: writing to sector 0 (code) is not allowed\n");
+    /* Safety: prevent writing to sectors 0-3 (application code region) */
+    if (addr < 0x08010000U) {
+        printf("ERROR: writing to code region (sectors 0-3) is not allowed\n");
         return 1;
     }
 
@@ -387,9 +387,9 @@ static int cmd_flash_erase(const char *args)
 
     uint32_t sector = parse_hex_or_dec(args, NULL);
 
-    /* Safety: prevent erasing sector 0 (application code) */
-    if (sector == 0) {
-        printf("ERROR: erasing sector 0 (code) is not allowed\n");
+    /* Safety: prevent erasing sectors 0-3 (application code region) */
+    if (sector <= 3) {
+        printf("ERROR: erasing sectors 0-3 (code region) is not allowed\n");
         return 1;
     }
     if (sector > FLASH_SECTOR_MAX) {
@@ -430,7 +430,7 @@ static const cli_command_t commands[] = {
     {"spi_perf_test", "SPI master TX perf test",   cmd_spi_perf_test},
     {"flash_read",    "Read flash <addr> [count]",        cmd_flash_read},
     {"flash_write",   "Write flash <addr> <value>",       cmd_flash_write},
-    {"flash_erase",   "Erase flash <sector> (1-7)",       cmd_flash_erase},
+    {"flash_erase",   "Erase flash <sector> (4-7)",       cmd_flash_erase},
     {"fault_test",    "Trigger a fault (nullptr|divzero|illegal)", cmd_fault_test},
 #ifdef ENABLE_HW_FPU
     {"fpu_test",      "Validate HW FPU is working", cmd_fpu_test},
