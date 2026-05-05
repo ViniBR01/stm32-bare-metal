@@ -1,5 +1,6 @@
 #include "cli_commands.h"
 #include "fault_handler.h"
+#include "flash.h"
 #include "led2.h"
 #include "printf.h"
 #include "rcc.h"
@@ -274,6 +275,151 @@ static int cmd_uptime(const char* args) {
     return 0;
 }
 
+/* ---- Flash commands ------------------------------------------------------- */
+
+static uint32_t parse_hex_or_dec(const char *s, const char **end)
+{
+    uint32_t val = 0;
+    if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
+        s += 2;
+        while ((*s >= '0' && *s <= '9') || (*s >= 'a' && *s <= 'f') ||
+               (*s >= 'A' && *s <= 'F')) {
+            val <<= 4;
+            if (*s >= '0' && *s <= '9')      val |= (uint32_t)(*s - '0');
+            else if (*s >= 'a' && *s <= 'f') val |= (uint32_t)(*s - 'a' + 10);
+            else                             val |= (uint32_t)(*s - 'A' + 10);
+            s++;
+        }
+    } else {
+        while (*s >= '0' && *s <= '9') {
+            val = val * 10 + (uint32_t)(*s - '0');
+            s++;
+        }
+    }
+    if (end) *end = s;
+    return val;
+}
+
+static int cmd_flash_read(const char *args)
+{
+    while (args && *args == ' ') args++;
+    if (!args || !*args) {
+        printf("Usage: flash_read <addr> [count]\n");
+        printf("  addr:  hex or decimal flash address\n");
+        printf("  count: number of 32-bit words (default: 1, max: 64)\n");
+        return 1;
+    }
+
+    const char *p;
+    uint32_t addr = parse_hex_or_dec(args, &p);
+
+    while (*p == ' ') p++;
+    uint32_t count = 1;
+    if (*p) count = parse_hex_or_dec(p, NULL);
+    if (count == 0) count = 1;
+    if (count > 64) count = 64;
+
+    for (uint32_t i = 0; i < count; i++) {
+        uint32_t a = addr + i * 4;
+        uint32_t val;
+        err_t ret = flash_read_word(a, &val);
+        if (ret != ERR_OK) {
+            printf("Error reading 0x%08lX\n", (unsigned long)a);
+            return 1;
+        }
+        if ((i % 4) == 0) printf("0x%08lX: ", (unsigned long)a);
+        printf("%08lX ", (unsigned long)val);
+        if ((i % 4) == 3 || i == count - 1) printf("\n");
+    }
+    return 0;
+}
+
+static int cmd_flash_write(const char *args)
+{
+    while (args && *args == ' ') args++;
+    if (!args || !*args) {
+        printf("Usage: flash_write <addr> <value>\n");
+        printf("  addr:  4-byte aligned flash address\n");
+        printf("  value: 32-bit word to program\n");
+        return 1;
+    }
+
+    const char *p;
+    uint32_t addr = parse_hex_or_dec(args, &p);
+    while (*p == ' ') p++;
+    if (!*p) {
+        printf("Missing value argument\n");
+        return 1;
+    }
+    uint32_t val = parse_hex_or_dec(p, NULL);
+
+    /* Safety: prevent writing to sector 0 (application code) */
+    if (addr < 0x08004000U) {
+        printf("ERROR: writing to sector 0 (code) is not allowed\n");
+        return 1;
+    }
+
+    err_t ret = flash_unlock();
+    if (ret != ERR_OK) {
+        printf("Flash unlock failed\n");
+        return 1;
+    }
+
+    ret = flash_write_word(addr, val);
+    flash_lock();
+
+    if (ret != ERR_OK) {
+        printf("Write failed (err %d)\n", ret);
+        return 1;
+    }
+    printf("Wrote 0x%08lX to 0x%08lX\n", (unsigned long)val, (unsigned long)addr);
+    return 0;
+}
+
+static int cmd_flash_erase(const char *args)
+{
+    while (args && *args == ' ') args++;
+    if (!args || !*args) {
+        printf("Usage: flash_erase <sector>\n");
+        printf("  sector: 0-7 (sector 0 is protected)\n");
+        return 1;
+    }
+
+    uint32_t sector = parse_hex_or_dec(args, NULL);
+
+    /* Safety: prevent erasing sector 0 (application code) */
+    if (sector == 0) {
+        printf("ERROR: erasing sector 0 (code) is not allowed\n");
+        return 1;
+    }
+    if (sector > FLASH_SECTOR_MAX) {
+        printf("Invalid sector %lu (max %u)\n",
+               (unsigned long)sector, FLASH_SECTOR_MAX);
+        return 1;
+    }
+
+    err_t ret = flash_unlock();
+    if (ret != ERR_OK) {
+        printf("Flash unlock failed\n");
+        return 1;
+    }
+
+    printf("Erasing sector %lu (0x%08lX, %lu KB)...\n",
+           (unsigned long)sector,
+           (unsigned long)flash_get_sector_address((uint8_t)sector),
+           (unsigned long)(flash_get_sector_size((uint8_t)sector) / 1024U));
+
+    ret = flash_erase_sector((uint8_t)sector);
+    flash_lock();
+
+    if (ret != ERR_OK) {
+        printf("Erase failed (err %d)\n", ret);
+        return 1;
+    }
+    printf("Erase complete\n");
+    return 0;
+}
+
 // Command table (help command is automatically added by CLI library)
 static const cli_command_t commands[] = {
     {"uptime",        "Print uptime (hh:mm:ss.mmm)", cmd_uptime},
@@ -282,6 +428,9 @@ static const cli_command_t commands[] = {
     {"led_toggle",    "Toggle LED2 state",         cmd_led_toggle},
     {"led_blink",     "Blink LED2 <count> <interval_ms>", cmd_led_blink},
     {"spi_perf_test", "SPI master TX perf test",   cmd_spi_perf_test},
+    {"flash_read",    "Read flash <addr> [count]",        cmd_flash_read},
+    {"flash_write",   "Write flash <addr> <value>",       cmd_flash_write},
+    {"flash_erase",   "Erase flash <sector> (1-7)",       cmd_flash_erase},
     {"fault_test",    "Trigger a fault (nullptr|divzero|illegal)", cmd_fault_test},
 #ifdef ENABLE_HW_FPU
     {"fpu_test",      "Validate HW FPU is working", cmd_fpu_test},
