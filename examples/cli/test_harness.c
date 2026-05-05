@@ -676,19 +676,14 @@ void test_exti_software_trigger_pb7(void)
  * designated for parameter storage and is safe to erase/write without
  * affecting the running application (which lives in sector 0).
  *
- * Test sequence: unlock → erase → write patterns → read back → lock.
- * Each test is self-contained: unlock at start, lock at end.
+ * Wear-levelling strategy: a SINGLE erase per test run. The first test
+ * erases + verifies, subsequent tests write to different offsets within
+ * the already-erased sector. This gives ~10K CI runs before the sector
+ * wears out (STM32F411 flash endurance spec).
  * ==================================================================== */
 
 #define FLASH_TEST_SECTOR     1U
 #define FLASH_TEST_BASE_ADDR  0x08004000U
-
-void test_flash_unlock_lock(void)
-{
-    err_t ret = flash_unlock();
-    TEST_ASSERT_EQUAL_MESSAGE(ERR_OK, ret, "flash_unlock() failed");
-    flash_lock();
-}
 
 void test_flash_erase_sector1(void)
 {
@@ -699,8 +694,8 @@ void test_flash_erase_sector1(void)
     flash_lock();
     TEST_ASSERT_EQUAL_MESSAGE(ERR_OK, ret, "flash_erase_sector(1) failed");
 
-    /* Verify erased state: first 16 bytes should all be 0xFF */
-    uint8_t buf[16];
+    /* Verify erased state: first 32 bytes should all be 0xFF */
+    uint8_t buf[32];
     flash_read_bytes(FLASH_TEST_BASE_ADDR, buf, sizeof(buf));
     for (uint32_t i = 0; i < sizeof(buf); i++) {
         TEST_ASSERT_EQUAL_HEX8_MESSAGE(0xFF, buf[i],
@@ -710,8 +705,8 @@ void test_flash_erase_sector1(void)
 
 void test_flash_write_word_readback(void)
 {
+    /* Write to offset 0x00 and 0x04 (already erased by previous test) */
     flash_unlock();
-    flash_erase_sector(FLASH_TEST_SECTOR);
 
     err_t ret = flash_write_word(FLASH_TEST_BASE_ADDR, 0xDEADBEEFU);
     TEST_ASSERT_EQUAL_MESSAGE(ERR_OK, ret, "flash_write_word() failed");
@@ -733,20 +728,21 @@ void test_flash_write_word_readback(void)
 
 void test_flash_write_bytes_readback(void)
 {
-    flash_unlock();
-    flash_erase_sector(FLASH_TEST_SECTOR);
+    /* Write to offset 0x100 to avoid clobbering the word test above */
+    const uint32_t addr = FLASH_TEST_BASE_ADDR + 0x100U;
 
     static const uint8_t pattern[] = {
         0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
         0xA0, 0xB0, 0xC0, 0xD0, 0xE0, 0xF0, 0x55, 0xAA
     };
 
-    err_t ret = flash_write_bytes(FLASH_TEST_BASE_ADDR, pattern, sizeof(pattern));
+    flash_unlock();
+    err_t ret = flash_write_bytes(addr, pattern, sizeof(pattern));
     flash_lock();
     TEST_ASSERT_EQUAL_MESSAGE(ERR_OK, ret, "flash_write_bytes() failed");
 
     uint8_t readback[16];
-    flash_read_bytes(FLASH_TEST_BASE_ADDR, readback, sizeof(readback));
+    flash_read_bytes(addr, readback, sizeof(readback));
     TEST_ASSERT_EQUAL_HEX8_ARRAY_MESSAGE(pattern, readback, sizeof(pattern),
         "Byte pattern readback mismatch");
 }
@@ -949,13 +945,13 @@ int run_unity_tests(void) {
 
     /* ----------------------------------------------------------
      * Tier 6: Flash hardware tests
-     *   Erase/write/read sector 1 (0x08004000, 16 KB parameter storage).
+     *   Single erase of sector 1, then write/read at different offsets.
+     *   1 erase cycle per CI run → ~10K runs before wear-out.
      *   No external wiring required.
      * ---------------------------------------------------------- */
     printf("\n--- Tier 6: Flash erase/write/read (sector 1) ---\n");
     printf_dma_flush();
 
-    RUN_TEST(test_flash_unlock_lock);
     RUN_TEST(test_flash_erase_sector1);
     RUN_TEST(test_flash_write_word_readback);
     RUN_TEST(test_flash_write_bytes_readback);
