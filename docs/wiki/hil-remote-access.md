@@ -13,7 +13,7 @@ network. The SSH config uses `BindAddress` to bypass corporate VPN routing (see 
 
 - Hostname: `pi-hil.local` (mDNS), IP: `10.0.0.245`
 - Username: `pi`
-- Board: `/dev/ttyACM0`
+- Boards: 2x NUCLEO-F411RE (see "Multi-Board Setup" section below)
 
 ### SSH key
 
@@ -180,6 +180,55 @@ On infrastructure failure (build error, serial timeout, board not connected):
 ### Rsync excludes
 
 The rsync step skips `build/`, `.git/`, `__pycache__/`, and `*.pyc` to keep transfers fast. Everything else (source files, scripts, baselines, Makefiles) is synced.
+
+---
+
+## Multi-Board Setup
+
+Two NUCLEO-F411RE boards are connected to the Pi, each with a dedicated role:
+
+| Role | ST-LINK Serial | Stable Path | Purpose |
+|------|---------------|-------------|---------|
+| `ci` | `066BFF554869774867234426` | `/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_066BFF554869774867234426-if02` | Automated CI tests (GitHub Actions) |
+| `dev` | `066CFF3833554B3043154235` | `/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_066CFF3833554B3043154235-if02` | Manual/agent testing (MCP, SSH) |
+
+### How board selection works
+
+The `--board` flag in `run_hil_tests.py` resolves to the correct serial port and ST-LINK serial:
+
+```sh
+# CI (automated — used by GitHub Actions)
+python3 scripts/run_hil_tests.py --board ci --timeout 240
+
+# Dev (manual — used by MCP server and SSH sessions)
+python3 scripts/run_hil_tests.py --board dev --timeout 180
+```
+
+OpenOCD is told which probe to use via `adapter serial <serial>`, so both boards can be
+connected simultaneously without conflict.
+
+### Why no udev rules
+
+Linux auto-creates stable symlinks in `/dev/serial/by-id/` based on USB serial numbers.
+These survive reboots and do not depend on USB enumeration order (unlike `/dev/ttyACM0`).
+No custom udev rules are needed.
+
+### Replacing a board
+
+If a board is physically replaced, update its serial number in the `BOARD_REGISTRY` dict
+at the top of `scripts/run_hil_tests.py`. The new serial can be found with:
+
+```sh
+ls /dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_*
+```
+
+### Verify both boards
+
+```sh
+ssh hil-pi "ls /dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_*"
+```
+
+Should list two paths — one for each board.
 
 ---
 

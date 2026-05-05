@@ -96,7 +96,7 @@ jobs:
         run: arm-none-eabi-gcc --version
 
       - name: Run HIL tests
-        run: python3 scripts/run_hil_tests.py --timeout 240 --baseline tests/baselines/performance.json --junit-xml hil-test-results.xml
+        run: python3 scripts/run_hil_tests.py --board ci --timeout 240 --baseline tests/baselines/performance.json --junit-xml hil-test-results.xml
 
       - name: Publish HIL test results
         uses: dorny/test-reporter@v3

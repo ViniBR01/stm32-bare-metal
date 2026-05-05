@@ -34,9 +34,16 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from xml.etree.ElementTree import Element, SubElement, ElementTree, indent
 
-# Default ST-LINK serial number for the Pi HIL runner's NUCLEO board.
-# Override via --hla-serial CLI argument; pass "" to skip pinning.
-DEFAULT_HLA_SERIAL = '066BFF554869774867234426'
+# Board registry: maps role names to ST-LINK serial numbers.
+# The serial number is used both for OpenOCD probe selection (hla_serial) and
+# to derive the stable /dev/serial/by-id/ symlink for the serial port.
+BOARD_REGISTRY = {
+    "ci": "066BFF554869774867234426",
+    "dev": "066CFF3833554B3043154235",
+}
+
+# Default ST-LINK serial (used when --board is not specified).
+DEFAULT_HLA_SERIAL = BOARD_REGISTRY["ci"]
 
 # Color codes for terminal output
 class Colors:
@@ -605,6 +612,8 @@ def main():
                         help='Path to baseline JSON file')
     parser.add_argument('--timeout', type=int, default=30,
                         help='Serial timeout in seconds')
+    parser.add_argument('--board', choices=['ci', 'dev'],
+                        help='Board role: "ci" (automated CI) or "dev" (manual/agent testing)')
     parser.add_argument('--junit-xml', default='hil-test-results.xml',
                         help='Path to write JUnit XML report (default: hil-test-results.xml)')
     parser.add_argument('--hla-serial', default=DEFAULT_HLA_SERIAL,
@@ -634,9 +643,15 @@ def main():
                 log_error("No existing ELF file found - build required")
                 return 2
 
+        # Resolve board selection
+        # Resolve board role to serial number (overrides --hla-serial)
+        hla_serial = args.hla_serial
+        if args.board:
+            hla_serial = BOARD_REGISTRY[args.board]
+
         # Flash firmware
         if not args.skip_flash:
-            if not flash_firmware(elf_path, hla_serial=args.hla_serial):
+            if not flash_firmware(elf_path, hla_serial=hla_serial):
                 return 2
         else:
             log_warning("Skipping flash (--skip-flash)")
@@ -645,7 +660,7 @@ def main():
         time.sleep(2)
 
         # Find serial port
-        port = find_serial_port(hla_serial=args.hla_serial)
+        port = find_serial_port(hla_serial=hla_serial)
         if not port:
             log_error("Serial port not found - is the board connected?")
             return 2
