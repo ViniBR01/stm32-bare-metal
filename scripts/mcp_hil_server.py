@@ -236,18 +236,33 @@ async def _hil_status() -> dict:
             "error": f"SSH failed: {proc.stderr.strip()}",
         }
 
-    # Check for connected NUCLEO board
+    # Check for connected NUCLEO boards (by stable /dev/serial/by-id paths)
+    ci_connected = False
+    dev_connected = False
     try:
         proc = ssh_run(
             pi_ssh,
-            "ls /dev/ttyACM* 2>/dev/null && echo BOARD_OK || echo BOARD_NONE",
+            (
+                "ls /dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_066BFF554869774867234426-if02 2>/dev/null && echo CI_OK;"
+                "ls /dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_066CFF3833554B3043154235-if02 2>/dev/null && echo DEV_OK;"
+                "ls /dev/ttyACM* 2>/dev/null"
+            ),
             timeout=10,
         )
-        board_connected = "BOARD_OK" in proc.stdout
+        ci_connected = "CI_OK" in proc.stdout
+        dev_connected = "DEV_OK" in proc.stdout
     except Exception:
-        board_connected = False
+        pass
 
-    return {"pi_reachable": True, "board_connected": board_connected, "error": None}
+    return {
+        "pi_reachable": True,
+        "board_connected": ci_connected or dev_connected,
+        "boards": {
+            "ci": {"connected": ci_connected, "serial": "066BFF554869774867234426"},
+            "dev": {"connected": dev_connected, "serial": "066CFF3833554B3043154235"},
+        },
+        "error": None,
+    }
 
 
 async def _hil_run_tests(skip_build: bool = False, skip_flash: bool = False) -> dict:
@@ -275,7 +290,7 @@ async def _hil_run_tests(skip_build: bool = False, skip_flash: bool = False) -> 
 
     remote_cmd = (
         f"cd {REMOTE_DIR} && "
-        f"python3 scripts/run_hil_tests.py --timeout 180 {flags_str}"
+        f"python3 scripts/run_hil_tests.py --board dev --timeout 180 {flags_str}"
     )
 
     # 3. Run on Pi — capture stdout for parsing

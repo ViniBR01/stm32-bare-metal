@@ -41,6 +41,7 @@
 #include "systick.h"
 #include "gpio_handler.h"
 #include "exti_handler.h"
+#include "flash.h"
 #include "stm32f4xx.h"  /* DWT / CoreDebug for cycle counting */
 
 /* ====================================================================
@@ -669,6 +670,91 @@ void test_exti_software_trigger_pb7(void)
 }
 
 /* ====================================================================
+ * Flash hardware tests — Tier 6
+ *
+ * Uses sector 4 (0x08010000, 64 KB) as the test area. Sector 4 starts
+ * at the 64 KB offset, safely beyond the HIL firmware (~38 KB in
+ * sectors 0–2). Sectors 0–3 contain application code and must NOT be
+ * erased while the firmware is running.
+ *
+ * Wear-levelling strategy: a SINGLE erase per test run. The first test
+ * erases + verifies, subsequent tests write to different offsets within
+ * the already-erased sector. This gives ~10K CI runs before the sector
+ * wears out (STM32F411 flash endurance spec).
+ * ==================================================================== */
+
+#define FLASH_TEST_SECTOR     4U
+#define FLASH_TEST_BASE_ADDR  0x08010000U
+
+void test_flash_erase_sector1(void)
+{
+    err_t ret = flash_unlock();
+    TEST_ASSERT_EQUAL_MESSAGE(ERR_OK, ret, "flash_unlock() failed");
+
+    ret = flash_erase_sector(FLASH_TEST_SECTOR);
+    flash_lock();
+    TEST_ASSERT_EQUAL_MESSAGE(ERR_OK, ret, "flash_erase_sector(1) failed");
+
+    /* Verify erased state: first 32 bytes should all be 0xFF */
+    uint8_t buf[32];
+    flash_read_bytes(FLASH_TEST_BASE_ADDR, buf, sizeof(buf));
+    for (uint32_t i = 0; i < sizeof(buf); i++) {
+        TEST_ASSERT_EQUAL_HEX8_MESSAGE(0xFF, buf[i],
+            "Erased flash byte not 0xFF");
+    }
+}
+
+void test_flash_write_word_readback(void)
+{
+    /* Write to offset 0x00 and 0x04 (already erased by previous test) */
+    flash_unlock();
+
+    err_t ret = flash_write_word(FLASH_TEST_BASE_ADDR, 0xDEADBEEFU);
+    TEST_ASSERT_EQUAL_MESSAGE(ERR_OK, ret, "flash_write_word() failed");
+
+    ret = flash_write_word(FLASH_TEST_BASE_ADDR + 4U, 0xCAFEBABEU);
+    TEST_ASSERT_EQUAL_MESSAGE(ERR_OK, ret, "flash_write_word(+4) failed");
+
+    flash_lock();
+
+    uint32_t val0, val1;
+    flash_read_word(FLASH_TEST_BASE_ADDR, &val0);
+    flash_read_word(FLASH_TEST_BASE_ADDR + 4U, &val1);
+
+    TEST_ASSERT_EQUAL_HEX32_MESSAGE(0xDEADBEEFU, val0,
+        "Word readback mismatch at base");
+    TEST_ASSERT_EQUAL_HEX32_MESSAGE(0xCAFEBABEU, val1,
+        "Word readback mismatch at base+4");
+}
+
+void test_flash_write_bytes_readback(void)
+{
+    /* Write to offset 0x100 to avoid clobbering the word test above */
+    const uint32_t addr = FLASH_TEST_BASE_ADDR + 0x100U;
+
+    static const uint8_t pattern[] = {
+        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+        0xA0, 0xB0, 0xC0, 0xD0, 0xE0, 0xF0, 0x55, 0xAA
+    };
+
+    flash_unlock();
+    err_t ret = flash_write_bytes(addr, pattern, sizeof(pattern));
+    flash_lock();
+    TEST_ASSERT_EQUAL_MESSAGE(ERR_OK, ret, "flash_write_bytes() failed");
+
+    uint8_t readback[16];
+    flash_read_bytes(addr, readback, sizeof(readback));
+    TEST_ASSERT_EQUAL_HEX8_ARRAY_MESSAGE(pattern, readback, sizeof(pattern),
+        "Byte pattern readback mismatch");
+}
+
+void test_flash_sector_info(void)
+{
+    TEST_ASSERT_EQUAL_HEX32(0x08010000U, flash_get_sector_address(4));
+    TEST_ASSERT_EQUAL_UINT32(64U * 1024U, flash_get_sector_size(4));
+}
+
+/* ====================================================================
  * Main test runner
  * ==================================================================== */
 
@@ -857,6 +943,20 @@ int run_unity_tests(void) {
 
     RUN_TEST(test_exti_both_edges_pb7);
     RUN_TEST(test_exti_software_trigger_pb7);
+
+    /* ----------------------------------------------------------
+     * Tier 6: Flash hardware tests
+     *   Single erase of sector 1, then write/read at different offsets.
+     *   1 erase cycle per CI run → ~10K runs before wear-out.
+     *   No external wiring required.
+     * ---------------------------------------------------------- */
+    printf("\n--- Tier 6: Flash erase/write/read (sector 1) ---\n");
+    printf_dma_flush();
+
+    RUN_TEST(test_flash_erase_sector1);
+    RUN_TEST(test_flash_write_word_readback);
+    RUN_TEST(test_flash_write_bytes_readback);
+    RUN_TEST(test_flash_sector_info);
 
     printf_dma_flush();
     return UNITY_END();
