@@ -1,4 +1,4 @@
-SUBDIRS = string_utils cli gpio exti rcc timer uart systick flash
+SUBDIRS = string_utils cli gpio exti rcc timer uart systick flash iwdg
 
 COVERAGE_INFO = coverage.info
 COVERAGE_FILT = coverage-filtered.info
@@ -48,6 +48,10 @@ run: all
 	@echo "Running flash tests"
 	@echo "========================================"
 	@$(MAKE) -C flash run
+	@echo "========================================"
+	@echo "Running iwdg tests"
+	@echo "========================================"
+	@$(MAKE) -C iwdg run
 	@echo "========================================"
 	@echo "All test suites passed"
 	@echo "========================================"

@@ -25,6 +25,7 @@ Claude reads this file at session start via `CLAUDE.md`. Update it whenever a pa
 | [drivers/timer.md](drivers/timer.md) | General-purpose timers — basic, PWM, microsecond delay |
 | [drivers/systick.md](drivers/systick.md) | SysTick millisecond delay |
 | [drivers/exti.md](drivers/exti.md) | External interrupt configuration on GPIO pins |
+| [drivers/iwdg.md](drivers/iwdg.md) | Independent Watchdog — configurable timeout, feed, reset cause detection |
 
 ## Decisions
 
