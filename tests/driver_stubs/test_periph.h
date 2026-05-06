@@ -70,6 +70,7 @@ extern DMA_Stream_TypeDef fake_DMA2_S6;
 extern DMA_Stream_TypeDef fake_DMA2_S7;
 
 extern IWDG_TypeDef    fake_IWDG;
+extern CRC_TypeDef     fake_CRC;
 
 /* ---- Cortex-M4 core peripheral fakes (declared in core_cm4.h stub) ------ */
 /* fake_NVIC, fake_SCB, fake_SysTick, fake_DWT, fake_CoreDebug             */
@@ -170,6 +171,9 @@ extern uint32_t fake_BASEPRI;
 
 #undef IWDG
 #define IWDG     (&fake_IWDG)
+
+#undef CRC
+#define CRC      (&fake_CRC)
 
 /* ---- Reset helper ------------------------------------------------------- */
 

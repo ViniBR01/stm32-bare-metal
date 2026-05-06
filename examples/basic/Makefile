@@ -28,6 +28,7 @@ EXAMPLES := blink_pwm \
 			button_interrupt \
 			button_simple \
 			button_sleep \
+			crc_basic \
 			iwdg_basic \
 			serial_echo \
 			serial_simple \
@@ -43,6 +44,7 @@ blink_simple_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
 button_interrupt_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(PRINTF_LIB)
 button_simple_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
 button_sleep_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(PRINTF_LIB)
+crc_basic_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
 iwdg_basic_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
 serial_echo_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(LOG_C_LIB) $(PRINTF_LIB) $(UTILS_LIB)
 serial_simple_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(LOG_C_LIB) $(PRINTF_LIB)

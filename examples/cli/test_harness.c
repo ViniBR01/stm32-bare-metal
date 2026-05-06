@@ -42,6 +42,7 @@
 #include "gpio_handler.h"
 #include "exti_handler.h"
 #include "flash.h"
+#include "crc.h"
 #include "stm32f4xx.h"  /* DWT / CoreDebug for cycle counting */
 
 /* ====================================================================
@@ -755,6 +756,122 @@ void test_flash_sector_info(void)
 }
 
 /* ====================================================================
+ * CRC hardware tests — Tier 7
+ *
+ * The STM32F411 CRC peripheral uses polynomial 0x04C11DB7 (MPEG-2),
+ * initial value 0xFFFFFFFF, no output XOR, no bit reversal.
+ * Pure internal peripheral — no external wiring required.
+ * ==================================================================== */
+
+/* Software CRC-32/MPEG-2 reference for cross-validation */
+static uint32_t sw_crc32_mpeg2_word(const uint32_t *data, uint32_t len)
+{
+    uint32_t crc = 0xFFFFFFFFU;
+    for (uint32_t i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (int bit = 0; bit < 32; bit++) {
+            if (crc & 0x80000000U) {
+                crc = (crc << 1) ^ 0x04C11DB7U;
+            } else {
+                crc = crc << 1;
+            }
+        }
+    }
+    return crc;
+}
+
+void test_crc_hw_known_vector(void)
+{
+    static const uint32_t vec[] = {0x00000001, 0x00000002, 0x00000003,
+                                   0x04050607, 0x08090A0B, 0x0C0D0E0F};
+    uint32_t expected = sw_crc32_mpeg2_word(vec, 6);
+
+    crc_init();
+    crc_reset();
+    uint32_t hw_result = crc_accumulate(vec, 6);
+
+    TEST_ASSERT_EQUAL_HEX32_MESSAGE(expected, hw_result,
+        "HW CRC does not match software reference for known vector");
+}
+
+void test_crc_hw_reset_restores_init(void)
+{
+    static const uint32_t data[] = {0xDEADBEEF, 0xCAFEBABE};
+    crc_init();
+    crc_accumulate(data, 2);
+
+    crc_reset();
+    uint32_t result = crc_get_result();
+    TEST_ASSERT_EQUAL_HEX32_MESSAGE(0xFFFFFFFFU, result,
+        "CRC reset did not restore accumulator to 0xFFFFFFFF");
+}
+
+void test_crc_hw_accumulate_matches_sequential(void)
+{
+    static const uint32_t data[] = {0x11223344, 0x55667788, 0x99AABBCC, 0xDDEEFF00};
+
+    crc_init();
+    crc_reset();
+    uint32_t bulk = crc_accumulate(data, 4);
+
+    crc_reset();
+    for (uint32_t i = 0; i < 4; i++) {
+        crc_accumulate(&data[i], 1);
+    }
+    uint32_t sequential = crc_get_result();
+
+    TEST_ASSERT_EQUAL_HEX32_MESSAGE(bulk, sequential,
+        "Bulk accumulate != sequential word-by-word");
+}
+
+void test_crc_hw_flash_region(void)
+{
+    crc_init();
+    crc_reset();
+    uint32_t result1 = crc_accumulate((const uint32_t *)0x08000000U, 256);
+
+    TEST_ASSERT_NOT_EQUAL_HEX32_MESSAGE(0U, result1,
+        "CRC of flash region should not be zero");
+    TEST_ASSERT_NOT_EQUAL_HEX32_MESSAGE(0xFFFFFFFFU, result1,
+        "CRC of flash region should not be init value");
+
+    /* Determinism: same input must give same output */
+    crc_reset();
+    uint32_t result2 = crc_accumulate((const uint32_t *)0x08000000U, 256);
+    TEST_ASSERT_EQUAL_HEX32_MESSAGE(result1, result2,
+        "CRC of same flash region not deterministic");
+}
+
+void test_crc_hw_performance(void)
+{
+    static uint32_t perf_buf[1024];
+    for (uint32_t i = 0; i < 1024; i++) {
+        perf_buf[i] = i * 0x01010101U;
+    }
+
+    /* Enable DWT cycle counter */
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0;
+    DWT->CTRL  |= DWT_CTRL_CYCCNTENA_Msk;
+
+    crc_init();
+    crc_reset();
+
+    uint32_t start = DWT->CYCCNT;
+    crc_accumulate(perf_buf, 1024);
+    uint32_t elapsed = DWT->CYCCNT - start;
+
+    /* At 100 MHz AHB, HW CRC processes 1 word/cycle.
+     * 1024 words + loop overhead should be well under 5000 cycles. */
+    TEST_ASSERT_UINT32_WITHIN_MESSAGE(
+        3000U, 2000U, elapsed,
+        "CRC of 1024 words took too many cycles");
+
+    printf("  [perf] CRC 1024 words: %lu cycles (%.1f cycles/word)\n",
+           (unsigned long)elapsed, (float)elapsed / 1024.0f);
+}
+
+/* ====================================================================
  * Main test runner
  * ==================================================================== */
 
@@ -957,6 +1074,20 @@ int run_unity_tests(void) {
     RUN_TEST(test_flash_write_word_readback);
     RUN_TEST(test_flash_write_bytes_readback);
     RUN_TEST(test_flash_sector_info);
+
+    /* ----------------------------------------------------------
+     * Tier 7: CRC hardware tests
+     *   Pure internal peripheral — no external wiring.
+     *   Validates CRC-32 (MPEG-2 polynomial 0x04C11DB7).
+     * ---------------------------------------------------------- */
+    printf("\n--- Tier 7: CRC hardware ---\n");
+    printf_dma_flush();
+
+    RUN_TEST(test_crc_hw_known_vector);
+    RUN_TEST(test_crc_hw_reset_restores_init);
+    RUN_TEST(test_crc_hw_accumulate_matches_sequential);
+    RUN_TEST(test_crc_hw_flash_region);
+    RUN_TEST(test_crc_hw_performance);
 
     printf_dma_flush();
     return UNITY_END();
