@@ -1,4 +1,5 @@
 #include "cli_commands.h"
+#include "crc.h"
 #include "fault_handler.h"
 #include "flash.h"
 #include "led2.h"
@@ -420,6 +421,35 @@ static int cmd_flash_erase(const char *args)
     return 0;
 }
 
+static int cmd_crc_test(const char *args)
+{
+    while (args && *args == ' ') args++;
+
+    uint32_t addr = 0x08000000U;
+    uint32_t words = 256;
+
+    if (args && *args) {
+        const char *p;
+        addr = parse_hex_or_dec(args, &p);
+        while (*p == ' ') p++;
+        if (*p) words = parse_hex_or_dec(p, NULL);
+    }
+
+    if (words == 0) words = 1;
+    if (words > 16384) words = 16384;
+
+    /* Align addr to 4 bytes */
+    addr &= ~3U;
+
+    crc_init();
+    crc_reset();
+    uint32_t result = crc_accumulate((const uint32_t *)addr, words);
+
+    printf("CRC32 of %lu words at 0x%08lX: 0x%08lX\n",
+           (unsigned long)words, (unsigned long)addr, (unsigned long)result);
+    return 0;
+}
+
 // Command table (help command is automatically added by CLI library)
 static const cli_command_t commands[] = {
     {"uptime",        "Print uptime (hh:mm:ss.mmm)", cmd_uptime},
@@ -431,6 +461,7 @@ static const cli_command_t commands[] = {
     {"flash_read",    "Read flash <addr> [count]",        cmd_flash_read},
     {"flash_write",   "Write flash <addr> <value>",       cmd_flash_write},
     {"flash_erase",   "Erase flash <sector> (4-7)",       cmd_flash_erase},
+    {"crc_test",      "CRC32 of flash <addr> [words]",    cmd_crc_test},
     {"fault_test",    "Trigger a fault (nullptr|divzero|illegal)", cmd_fault_test},
 #ifdef ENABLE_HW_FPU
     {"fpu_test",      "Validate HW FPU is working", cmd_fpu_test},

@@ -28,6 +28,7 @@ ALL_EXAMPLES := \
 	button_interrupt \
 	button_simple \
 	button_sleep \
+	crc_basic \
 	iwdg_basic \
 	serial_simple \
 	cli_simple

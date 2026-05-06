@@ -44,18 +44,22 @@ branch. The main working tree is never modified during parallel work.
    make test   # host unit tests
    make all    # all firmware examples
    ```
-   Do **not** run HIL tests locally — the physical board is a shared resource. CI handles it.
 
-6. **Push and open the PR:**
+6. **HIL tests (optional, via MCP)** — use the `hil_run_tests` MCP tool to run on the
+   **dev board** without conflicting with CI. The MCP tool rsyncs uncommitted changes,
+   builds, flashes the dev board, and returns structured results. Safe to call anytime.
+   Do **not** run `run_hil_tests.py --board ci` directly — that board is reserved for CI.
+
+7. **Push and open the PR:**
    ```sh
    git push -u origin <branch-name>
    gh pr create --title "..." --body "..."
    ```
 
-7. **Report the PR URL to the user and stop.** Do not merge. Do not modify the worktree
+8. **Report the PR URL to the user and stop.** Do not merge. Do not modify the worktree
    after the PR is open unless asked to address review feedback or CI failures.
 
-8. **Cleanup after merge** (when the user confirms the PR is merged):
+9. **Cleanup after merge** (when the user confirms the PR is merged):
    ```sh
    bash scripts/worktree_clean.sh <branch-name>
    ```

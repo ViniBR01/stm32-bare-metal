@@ -67,15 +67,48 @@ commits, and make commands happen inside the worktree.
 - All source file editing and git commits
 
 ### Must serialise (shared physical device)
-- `python3 scripts/run_hil_tests.py` — requires exclusive access to the STM32 board
-- `make flash` — flashes the board; incompatible with concurrent HIL test runs
+- `python3 scripts/run_hil_tests.py --board ci` — CI board, reserved for GitHub Actions
+- `python3 scripts/run_hil_tests.py --board dev` — dev board, for agent/manual use
+- `make flash` — flashes whichever board is selected; incompatible with concurrent runs
 
-In normal agent workflow, HIL tests are handled exclusively by CI. The `hil-tests` CI
-job runs on the `[self-hosted, pi-hil]` runner; GitHub Actions queues jobs when the
-runner is busy, so concurrent PRs from multiple agents are automatically serialised.
+### Two-board setup
 
-Do not run `run_hil_tests.py` locally from a worktree unless no other HIL work is
-running and you have confirmed with the user that the board is free.
+Two NUCLEO-F411RE boards are connected to the Pi, each with a dedicated role:
+
+| Board | Who uses it | How to target |
+|---|---|---|
+| `ci` | GitHub Actions (`hil-tests` job) | `--board ci` (default for CI runner) |
+| `dev` | Agents, MCP `hil_run_tests`, SSH sessions | `--board dev` (default for MCP server) |
+
+Because each board has its own ST-LINK serial and OpenOCD instance, the dev board can
+run tests while CI is simultaneously running on the ci board — no collision.
+
+### Using the MCP tool (recommended for agents)
+
+The `hil_run_tests` MCP tool automatically targets the **dev board**. Agents should use
+it to verify HIL tests without conflicting with CI:
+
+1. Call `hil_status` to confirm the dev board is connected.
+2. Call `hil_run_tests()` — rsyncs working tree, builds, flashes dev board, runs tests.
+3. Inspect the returned JSON for pass/fail.
+
+This is safe to call at any time, even when a CI run is active on the ci board.
+
+### Running manually via SSH
+
+For ad-hoc testing from an SSH session on the Pi:
+
+```sh
+ssh hil-pi
+cd ~/stm32-bare-metal
+python3 scripts/run_hil_tests.py --board dev --timeout 180
+```
+
+### What NOT to do
+
+- Do not run `run_hil_tests.py --board ci` from an agent — that board is reserved for CI.
+- Do not run `make flash` without `--board dev` (or the MCP tool) — it defaults to ci.
+- Do not run two `--board dev` sessions simultaneously (only one can flash at a time).
 
 ## Cleanup After Merge
 

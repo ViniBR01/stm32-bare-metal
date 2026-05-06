@@ -64,6 +64,7 @@ DMA_Stream_TypeDef fake_DMA2_S6;
 DMA_Stream_TypeDef fake_DMA2_S7;
 
 IWDG_TypeDef    fake_IWDG;
+CRC_TypeDef     fake_CRC;
 
 /* ---- Cortex-M4 core peripheral fake instances (declared in core_cm4.h) - */
 
@@ -135,6 +136,7 @@ void test_periph_reset(void)
     memset(&fake_DMA2_S7, 0, sizeof(fake_DMA2_S7));
 
     memset(&fake_IWDG,       0, sizeof(fake_IWDG));
+    memset(&fake_CRC,        0, sizeof(fake_CRC));
 
     memset(&fake_NVIC,       0, sizeof(fake_NVIC));
     memset(&fake_SCB,        0, sizeof(fake_SCB));
