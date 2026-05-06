@@ -861,10 +861,11 @@ void test_crc_hw_performance(void)
     crc_accumulate(perf_buf, 1024);
     uint32_t elapsed = DWT->CYCCNT - start;
 
-    /* At 100 MHz AHB, HW CRC processes 1 word/cycle.
-     * 1024 words + loop overhead should be well under 5000 cycles. */
+    /* CRC peripheral takes 4 AHB cycles per word. With loop overhead
+     * (load, store, branch), expect ~6 cycles/word = ~6144 for 1024 words.
+     * Allow generous margin for pipeline and flash wait states. */
     TEST_ASSERT_UINT32_WITHIN_MESSAGE(
-        3000U, 2000U, elapsed,
+        3000U, 6200U, elapsed,
         "CRC of 1024 words took too many cycles");
 
     printf("  [perf] CRC 1024 words: %lu cycles (%.1f cycles/word)\n",

@@ -21,12 +21,14 @@ err_t crc_init(void)
 {
     RCC->AHB1ENR |= RCC_AHB1ENR_CRCEN;
     CRC->CR = CRC_CR_RESET;
+    __DSB();
     return ERR_OK;
 }
 
 void crc_reset(void)
 {
     CRC->CR = CRC_CR_RESET;
+    __DSB();
 }
 
 uint32_t crc_accumulate(const uint32_t *data, uint32_t len)
