@@ -1,5 +1,15 @@
 # Roadmap
 
+## Long-Term Tracks
+
+Detailed multi-phase plans live in [plans/](plans/index.md).
+
+| # | Track | Status |
+|---|---|---|
+| 000 | [Repository refactor](plans/000-repo-refactor.md) — `examples/` → `apps/`, add `lib/` and `tools/` | proposed (prerequisite for 001 and 002) |
+| 001 | [Bootloader & embedded security](plans/001-bootloader-and-security.md) — custom bootloader, ECDSA-signed images, OTA, A/B slots, anti-rollback, RDP | proposed |
+| 002 | [Inter-board comms + DSP baseband](plans/002-comms-and-dsp-baseband.md) — UART/SPI/I²C link benchmarks + BPSK modem over wired analog link | proposed |
+
 ## Open Issues by Priority
 
 ### Driver Development
@@ -26,8 +36,10 @@
 
 ## Suggested Priority Order
 
-1. Remaining drivers (#66, #67, #68, #70, #71, #72)
-2. Examples (#14, #16, #22, #45) driven by driver availability
+1. **Plan 000** — Repository refactor (unblocks both new tracks)
+2. Remaining drivers (#66, #67, #68, #70, #71, #72) — `#71` and `#66` are also prerequisites for Plans 001 and 002 respectively
+3. Plans 001 and 002 — pursued in parallel where they don't share files
+4. Examples (#14, #16, #22, #45) driven by driver availability
 
 ---
 
