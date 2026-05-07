@@ -61,6 +61,12 @@ int main(void) {
     uart_init();
     systick_init();
     sleep_mode_init();
+
+    // Detect standby wakeup (before printf_dma_init so UART is ready)
+    if (sleep_was_standby_wakeup()) {
+        sleep_clear_standby_flag();
+        sleep_clear_wakeup_flag();
+    }
     
     // Enable DIV_0 trapping and individual fault handlers
     fault_handler_init();
