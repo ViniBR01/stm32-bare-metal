@@ -4,14 +4,16 @@
 #include "flash.h"
 #include "led2.h"
 #include "printf.h"
+#include "printf_dma.h"
 #include "rcc.h"
+#include "sleep_mode.h"
 #include "spi_perf.h"
 #include "systick.h"
 #include "timer.h"
+#include "uart.h"
 
 #ifdef HIL_TEST_MODE
 #include "test_output.h"
-#include "printf_dma.h"
 #endif
 
 // Command implementations
@@ -450,6 +452,37 @@ static int cmd_crc_test(const char *args)
     return 0;
 }
 
+static int cmd_stop_mode(const char *args)
+{
+    (void)args;
+    printf("Entering Stop mode (low-power regulator, flash off)...\n");
+    printf_dma_flush();
+
+    enter_stop_mode();
+
+    /* Woke up — HSI is now the clock source. Restore PLL to 100 MHz. */
+    rcc_init(RCC_CLK_SRC_HSI, 100000000U);
+    uart_init();
+    systick_init();
+    printf_dma_init();
+
+    printf("Woke from Stop mode — clock restored to 100 MHz\n");
+    return 0;
+}
+
+static int cmd_standby_mode(const char *args)
+{
+    (void)args;
+    printf("Entering Standby mode (WKUP pin enabled)...\n");
+    printf("System will reset on wakeup.\n");
+    printf_dma_flush();
+
+    enter_standby_mode(1);
+
+    /* Should never reach here on real hardware */
+    return 0;
+}
+
 // Command table (help command is automatically added by CLI library)
 static const cli_command_t commands[] = {
     {"uptime",        "Print uptime (hh:mm:ss.mmm)", cmd_uptime},
@@ -462,6 +495,8 @@ static const cli_command_t commands[] = {
     {"flash_write",   "Write flash <addr> <value>",       cmd_flash_write},
     {"flash_erase",   "Erase flash <sector> (4-7)",       cmd_flash_erase},
     {"crc_test",      "CRC32 of flash <addr> [words]",    cmd_crc_test},
+    {"stop_mode",     "Enter Stop mode (wake on interrupt)",      cmd_stop_mode},
+    {"standby_mode",  "Enter Standby mode (full reset on wake)",  cmd_standby_mode},
     {"fault_test",    "Trigger a fault (nullptr|divzero|illegal)", cmd_fault_test},
 #ifdef ENABLE_HW_FPU
     {"fpu_test",      "Validate HW FPU is working", cmd_fpu_test},

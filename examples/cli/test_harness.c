@@ -43,6 +43,7 @@
 #include "exti_handler.h"
 #include "flash.h"
 #include "crc.h"
+#include "sleep_mode.h"
 #include "stm32f4xx.h"  /* DWT / CoreDebug for cycle counting */
 
 /* ====================================================================
@@ -873,6 +874,47 @@ void test_crc_hw_performance(void)
 }
 
 /* ====================================================================
+ * Stop mode test — Tier 8
+ *
+ * Uses EXTI software trigger on line 7 (PB7) to wake immediately from
+ * Stop mode without external wiring or hang risk. After wake, the PLL
+ * is restored to 100 MHz and systick re-initialised.
+ * ==================================================================== */
+
+void test_stop_mode_enter_and_wake(void)
+{
+    /* Configure PB7 as input, enable EXTI line 7 rising edge */
+    gpio_clock_enable(GPIO_PORT_B);
+    gpio_configure_pin(GPIO_PORT_B, 7, GPIO_MODE_INPUT);
+    RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
+
+    int ret = exti_configure_gpio_interrupt(GPIO_PORT_B, 7,
+                                            EXTI_TRIGGER_RISING,
+                                            EXTI_MODE_INTERRUPT);
+    TEST_ASSERT_EQUAL_MESSAGE(0, ret, "EXTI config for stop wake failed");
+
+    /* Set EXTI pending via software trigger so WFI wakes immediately */
+    exti_software_trigger(7);
+
+    /* Enter Stop mode — wakes immediately due to pending EXTI */
+    enter_stop_mode();
+
+    /* Restore PLL to 100 MHz (Stop mode reverts to HSI) */
+    rcc_init(RCC_CLK_SRC_HSI, 100000000U);
+    systick_init();
+
+    /* Verify clock restored */
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(100000000U, rcc_get_sysclk(),
+        "SYSCLK not restored to 100 MHz after Stop mode wake");
+
+    /* Cleanup EXTI */
+    exti_clear_pending(7);
+    exti_disable_line(7);
+    exti_set_interrupt_mask(7, 0);
+    gpio_configure_pin(GPIO_PORT_B, 7, GPIO_MODE_ANALOG);
+}
+
+/* ====================================================================
  * Main test runner
  * ==================================================================== */
 
@@ -1089,6 +1131,16 @@ int run_unity_tests(void) {
     RUN_TEST(test_crc_hw_accumulate_matches_sequential);
     RUN_TEST(test_crc_hw_flash_region);
     RUN_TEST(test_crc_hw_performance);
+
+    /* ----------------------------------------------------------
+     * Tier 8: Low-power Stop mode test
+     *   Uses EXTI software trigger to wake immediately.
+     *   No external wiring required.
+     * ---------------------------------------------------------- */
+    printf("\n--- Tier 8: Stop mode enter/wake ---\n");
+    printf_dma_flush();
+
+    RUN_TEST(test_stop_mode_enter_and_wake);
 
     printf_dma_flush();
     return UNITY_END();
