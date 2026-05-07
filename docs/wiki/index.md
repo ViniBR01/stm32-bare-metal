@@ -27,6 +27,17 @@ Claude reads this file at session start via `CLAUDE.md`. Update it whenever a pa
 | [drivers/exti.md](drivers/exti.md) | External interrupt configuration on GPIO pins |
 | [drivers/iwdg.md](drivers/iwdg.md) | Independent Watchdog — configurable timeout, feed, reset cause detection |
 
+## Plans
+
+Multi-phase project plans. Each plan's phases are sized as individual GitHub issues.
+
+| Page | Summary |
+|---|---|
+| [plans/index.md](plans/index.md) | Plans index — convention and active plans |
+| [plans/000-repo-refactor.md](plans/000-repo-refactor.md) | Refactor `examples/` → `apps/`, add `lib/` and `tools/` |
+| [plans/001-bootloader-and-security.md](plans/001-bootloader-and-security.md) | Bootloader, image signing, OTA, A/B slots, anti-rollback, RDP |
+| [plans/002-comms-and-dsp-baseband.md](plans/002-comms-and-dsp-baseband.md) | Two-board comms (UART/SPI/I²C) + software BPSK modem with FEC |
+
 ## Decisions
 
 | Page | Summary |
