@@ -1,0 +1,15 @@
+Source:  https://github.com/B-Con/crypto-algorithms
+Commit:  cfbde48414baacf51fc7c74f275190881f037d32
+Date:    2015-04-26
+License: public domain (see LICENSE.txt)
+
+Vendored files:
+  sha256.h
+  sha256.c
+
+Local modifications (stm32-bare-metal):
+  sha256.c — replaced "#include <stdlib.h>" + "#include <memory.h>"
+             with "#include <string.h>". <memory.h> is a glibc
+             extension that does not ship with arm-none-eabi-gcc's
+             newlib; <stdlib.h> was unused. <string.h> provides
+             memset, the only libc symbol this file references.
