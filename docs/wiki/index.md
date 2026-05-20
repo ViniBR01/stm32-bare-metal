@@ -36,6 +36,7 @@ Multi-phase project plans. Each plan's phases are sized as individual GitHub iss
 | [plans/index.md](plans/index.md) | Plans index — convention and active plans |
 | [plans/000-repo-refactor.md](plans/000-repo-refactor.md) | Repository refactor — renamed `examples/` → `apps/`, added `lib/` and `tools/`, per-app linker scripts (landed) |
 | [plans/001-bootloader-and-security.md](plans/001-bootloader-and-security.md) | Bootloader, image signing, OTA, A/B slots, anti-rollback, RDP |
+| [plans/001-bootloader/image-format.md](plans/001-bootloader/image-format.md) | Plan 001 Phase 1.2 — image header & slot metadata on-flash format, CRC-32 spec, parser API |
 | [plans/002-comms-and-dsp-baseband.md](plans/002-comms-and-dsp-baseband.md) | Two-board comms (UART/SPI/I²C) + software BPSK modem with FEC |
 
 ## Decisions
