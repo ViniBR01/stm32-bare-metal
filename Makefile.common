@@ -86,11 +86,14 @@ CFLAGS := $(CFLAGS_BASE) $(COMMON_INCLUDES) -DLOG_LEVEL=$(LOG_LEVEL) $(HIL_TEST_
 #==============================================================================
 # Linker configuration
 #==============================================================================
-# Linker script
-LDSCRIPT := $(LINKER_DIR)/stm32_ls.ld
+# Default linker script. An app can select its own by setting LDSCRIPT
+# (e.g. LDSCRIPT := $(LINKER_DIR)/bootloader_ls.ld) in its own Makefile
+# AFTER `include ../../Makefile.common`. LDFLAGS uses recursive expansion
+# so a later override of LDSCRIPT takes effect at link time.
+LDSCRIPT ?= $(LINKER_DIR)/stm32_ls.ld
 
 # Linker flags
-LDFLAGS := $(MCU_FLAGS) -flto -T $(LDSCRIPT) -Wl,--gc-sections --specs=nosys.specs
+LDFLAGS = $(MCU_FLAGS) -flto -T $(LDSCRIPT) -Wl,--gc-sections --specs=nosys.specs
 
 #==============================================================================
 # Library paths
