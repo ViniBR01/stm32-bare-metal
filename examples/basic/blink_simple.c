@@ -4,6 +4,7 @@
 int main(void)
 {
     led2_init();
+    systick_init();
 
     while(1)
     {
