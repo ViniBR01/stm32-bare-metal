@@ -59,7 +59,7 @@ Adds `drivers/src/flash.c` with sector erase, word/halfword/byte program, lock/u
 
 ### Phase 1.2 — Image header & metadata format
 
-**Status:** filed — [#143](https://github.com/ViniBR01/stm32-bare-metal/issues/143)
+**Status:** done — landed in PR [#146](https://github.com/ViniBR01/stm32-bare-metal/pull/146) for [#143](https://github.com/ViniBR01/stm32-bare-metal/issues/143).
 
 **Scope:**
 - Define `lib/img/img_header.h`: magic, version, size, SHA-256, ECDSA signature, image type
@@ -73,7 +73,7 @@ See [image-format.md](001-bootloader/image-format.md).
 
 ### Phase 1.3 — Crypto primitives in `lib/crypto/`
 
-**Status:** filed — [#144](https://github.com/ViniBR01/stm32-bare-metal/issues/144)
+**Status:** done — landed in PR [#147](https://github.com/ViniBR01/stm32-bare-metal/pull/147) for [#144](https://github.com/ViniBR01/stm32-bare-metal/issues/144). Algorithm decision: stay with ECDSA-P256; on-target verify time to be measured in Phase 1.6 against the <500 ms budget.
 
 **Scope:**
 - Vendor micro-ecc (single C file, MIT license)
@@ -85,6 +85,8 @@ See [image-format.md](001-bootloader/image-format.md).
 **Validation:** Host tests pass FIPS vectors; ECDSA verify completes in <500 ms on a 100 MHz F411 (measured later in HIL).
 
 ### Phase 1.4 — Host tooling: `keygen.py`, `sign_image.py`
+
+**Status:** filed — [#148](https://github.com/ViniBR01/stm32-bare-metal/issues/148)
 
 **Scope:**
 - `keygen.py`: generate P-256 keypair, emit `bootloader_pubkey.c` with `const uint8_t pubkey[64]`
