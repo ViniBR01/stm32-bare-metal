@@ -1,7 +1,7 @@
 # Plan 001 — Bootloader & Embedded Security Track
 
-**Status:** proposed
-**Tracking issue:** _(to be filed)_
+**Status:** in progress
+**Tracking issue:** [#137](https://github.com/ViniBR01/stm32-bare-metal/issues/137)
 **Depends on:** [Plan 000 — Repository Refactor](000-repo-refactor.md)
 
 ## Why
@@ -53,9 +53,13 @@ Each phase is one issue / one PR. Phases assume Plan 000 has landed.
 
 ### Phase 1.1 — Internal flash driver (Issue #71)
 
-Already on the roadmap; required prerequisite. Adds `drivers/src/flash.c` with sector erase, word/halfword/byte program, lock/unlock, BSY polling. Host tests use the existing fake-stub pattern.
+**Status:** done — landed in PR #132 as part of #71. The planned `lib/flash/` middleware (slot erase wrapper, atomic metadata commit, sector-range validator) has been folded into Phase 1.7, where the abstractions are first actually exercised.
+
+Adds `drivers/src/flash.c` with sector erase, word/halfword/byte program, lock/unlock, BSY polling. Host tests use the existing fake-stub pattern.
 
 ### Phase 1.2 — Image header & metadata format
+
+**Status:** filed — [#143](https://github.com/ViniBR01/stm32-bare-metal/issues/143)
 
 **Scope:**
 - Define `lib/img/img_header.h`: magic, version, size, SHA-256, ECDSA signature, image type
@@ -66,6 +70,8 @@ Already on the roadmap; required prerequisite. Adds `drivers/src/flash.c` with s
 **Validation:** Host tests cover header round-trip, malformed inputs, boundary values.
 
 ### Phase 1.3 — Crypto primitives in `lib/crypto/`
+
+**Status:** filed — [#144](https://github.com/ViniBR01/stm32-bare-metal/issues/144)
 
 **Scope:**
 - Vendor micro-ecc (single C file, MIT license)
@@ -110,6 +116,7 @@ Already on the roadmap; required prerequisite. Adds `drivers/src/flash.c` with s
 ### Phase 1.7 — A/B slots and fallback
 
 **Scope:**
+- `lib/flash/` middleware (absorbed from former Phase 1.1 scope): slot-erase wrapper, atomic metadata commit primitive, sector-range validator
 - Slot metadata in dedicated sector with active flag, fail counter
 - Bootloader picks active slot, increments fail counter before jump, app must clear it after init (rollback-on-crash)
 - If active slot verify fails, try the other slot; if both fail, halt with diagnostics
