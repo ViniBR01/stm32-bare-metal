@@ -36,7 +36,7 @@ GitHub Actions workflow at `.github/workflows/ci.yml`.
 1. Checkout with `submodules: recursive`
 2. `apt-get install gcc-arm-none-eabi`
 3. Print `arm-none-eabi-gcc --version`
-4. `make all` (builds all examples; exits non-zero on any failure)
+4. `make all` (builds all apps; exits non-zero on any failure)
 
 ### `hil-tests` (active)
 

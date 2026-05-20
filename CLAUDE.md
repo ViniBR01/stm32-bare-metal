@@ -42,7 +42,7 @@ branch. The main working tree is never modified during parallel work.
 5. **Validate locally** — both must pass before pushing:
    ```sh
    make test   # host unit tests
-   make all    # all firmware examples
+   make all    # all firmware apps
    ```
 
 6. **HIL tests (optional, via MCP)** — use the `hil_run_tests` MCP tool to run on the
@@ -70,9 +70,9 @@ See `docs/wiki/agents.md` for parallelism rules, HIL constraints, and troublesho
 
 ```sh
 make test                    # Run host unit tests (Unity) — required before any PR
-make                         # Build default firmware example (cli_simple)
-make EXAMPLE=<name>          # Build a specific example
-make all                     # Build all firmware examples
+make                         # Build default firmware app (cli_simple)
+make EXAMPLE=<name>          # Build a specific app
+make all                     # Build all firmware apps
 make clean                   # Remove all build artifacts
 make flash EXAMPLE=<name>    # Flash to NUCLEO board via OpenOCD
 make debug EXAMPLE=<name>    # Flash and attach GDB

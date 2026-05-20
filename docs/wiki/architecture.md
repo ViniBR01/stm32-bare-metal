@@ -30,10 +30,16 @@ stm32-bare-metal/
 │   ├── printf/            Lightweight printf (mpaland/printf fork)
 │   ├── log_c/             Minimal logging library (contains Unity as nested submodule)
 │   └── unity/             Unity test framework (used for host tests + HIL target tests)
-├── examples/              Application firmware examples
+├── lib/                   Middleware libraries — above drivers, below apps
+│   ├── README.md          Convention for what belongs here vs drivers/utils/
+│   └── skeleton/          Minimal stub library that proves lib/ build plumbing
+├── apps/                  Application firmware images
 │   ├── basic/             Standalone peripheral demos
 │   └── cli/               Interactive CLI application (default build target)
 │       └── test_harness.c HIL test suite (compiled only with HIL_TEST=1)
+├── tools/                 Host-side utilities that operate on firmware artifacts
+│                          (image signers, OTA flashers, BER plotters — populated
+│                          by Plans 001 and 002)
 ├── tests/                 Host unit tests (compiled with native gcc, not ARM toolchain)
 │   ├── cli/               Tests for utils/src/cli.c
 │   ├── string_utils/      Tests for utils/src/string_utils.c
@@ -43,8 +49,9 @@ stm32-bare-metal/
 │   ├── uart/              Tests for drivers/src/uart.c
 │   ├── rcc/               Tests for drivers/src/rcc.c
 │   ├── timer/             Tests for drivers/src/timer.c
+│   ├── lib/               Tests for middleware libraries (one subdir per lib)
 │   └── baselines/         Performance baseline JSON for HIL regression detection
-├── scripts/               Automation scripts
+├── scripts/               Repo automation (CI helpers, HIL runner, worktrees)
 │   ├── run_hil_tests.py   HIL test runner (build → flash → serial → validate)
 │   ├── mcp_hil_server.py  MCP server exposing HIL tools to Claude Code
 │   ├── worktree_new.sh    Create an isolated git worktree for parallel agent work
@@ -62,6 +69,7 @@ stm32-bare-metal/
 - **Optimisation:** `-O2 -flto -ffunction-sections -fdata-sections` (dead-code elimination via `--gc-sections`)
 - **Linker:** `--specs=nosys.specs` for syscall stubs; `-lc -lm -lgcc` for libc/math/compiler-rt
 - **Hierarchical Makefiles:** Each subdirectory compiles to a static library (`.a`); the top-level Makefile links them.
+- **Per-app linker script:** Default is `linker/stm32_ls.ld`. An app can override it by setting `LDSCRIPT := $(LINKER_DIR)/<app>_ls.ld` in its own Makefile after `include ../../Makefile.common`.
 - **Host tests:** Compiled with native `gcc` (no ARM toolchain needed). Unity framework from `3rd_party/unity/`.
 - **HIL tests:** `HIL_TEST=1` flag adds `-DHIL_TEST_MODE`, links `libunity_arm.a`, includes `test_harness.c`. Always `make clean` when switching.
 - **Log level:** Controlled at compile time via `LOG_LEVEL=LOG_LEVEL_DEBUG` (default: `LOG_LEVEL_INFO`).
@@ -69,7 +77,7 @@ stm32-bare-metal/
 ## Module Map
 
 ```
-Application (examples/)
+Application (apps/)
     │
     ├── CLI Engine (utils/cli.c)
     │       └── string_utils (utils/string_utils.c)

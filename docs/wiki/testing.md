@@ -7,7 +7,7 @@ Tests are split into three categories:
 | Type | Location | Toolchain | Runs on |
 |---|---|---|---|
 | Host unit tests | `tests/` | Native `gcc` | Any Linux/macOS host, CI |
-| Hardware-in-the-loop (HIL) | `examples/cli/test_harness.c` | `arm-none-eabi-gcc` | STM32 board + host serial |
+| Hardware-in-the-loop (HIL) | `apps/cli/test_harness.c` | `arm-none-eabi-gcc` | STM32 board + host serial |
 | HIL automation | `scripts/run_hil_tests.py` | Python 3 + pyserial | Host (Mac/Linux) |
 
 ## Host Unit Tests
@@ -177,7 +177,7 @@ make EXAMPLE=cli_simple               # ~19 KB — production binary, no test co
 When `HIL_TEST=1`:
 - `-DHIL_TEST_MODE` is added to `CFLAGS`
 - Unity include path and `libunity_arm.a` are linked
-- `examples/cli/test_harness.c` is compiled (excluded in production builds)
+- `apps/cli/test_harness.c` is compiled (excluded in production builds)
 - `run_all_tests` CLI command becomes available
 - `spi_perf.c` emits machine-parseable `TEST:` output lines
 
@@ -189,7 +189,7 @@ The Unity ARM library is built by `3rd_party/Makefile` and linked as `libunity_a
 
 ### Test harness
 
-`examples/cli/test_harness.c` contains all HIL test cases. It uses a parameterized macro `RUN_SPI_TEST(instance, prescaler, buffer_size, use_dma)` to run SPI tests across parameter combinations without code duplication.
+`apps/cli/test_harness.c` contains all HIL test cases. It uses a parameterized macro `RUN_SPI_TEST(instance, prescaler, buffer_size, use_dma)` to run SPI tests across parameter combinations without code duplication.
 
 **Test tiers (80 tests total):**
 

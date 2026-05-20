@@ -6,7 +6,7 @@ Detailed multi-phase plans live in [plans/](plans/index.md).
 
 | # | Track | Status |
 |---|---|---|
-| 000 | [Repository refactor](plans/000-repo-refactor.md) — `examples/` → `apps/`, add `lib/` and `tools/` | proposed (prerequisite for 001 and 002) |
+| 000 | [Repository refactor](plans/000-repo-refactor.md) — `examples/` → `apps/`, add `lib/` and `tools/`, per-app linker scripts | landed (#136) |
 | 001 | [Bootloader & embedded security](plans/001-bootloader-and-security.md) — custom bootloader, ECDSA-signed images, OTA, A/B slots, anti-rollback, RDP | proposed |
 | 002 | [Inter-board comms + DSP baseband](plans/002-comms-and-dsp-baseband.md) — UART/SPI/I²C link benchmarks + BPSK modem over wired analog link | proposed |
 
@@ -36,10 +36,9 @@ Detailed multi-phase plans live in [plans/](plans/index.md).
 
 ## Suggested Priority Order
 
-1. **Plan 000** — Repository refactor (unblocks both new tracks)
-2. Remaining drivers (#66, #67, #68, #70, #71, #72) — `#71` and `#66` are also prerequisites for Plans 001 and 002 respectively
-3. Plans 001 and 002 — pursued in parallel where they don't share files
-4. Examples (#14, #16, #22, #45) driven by driver availability
+1. Remaining drivers (#66, #67, #71) — `#71` and `#66` are prerequisites for Plans 001 and 002 respectively
+2. Plans 001 and 002 — pursued in parallel where they don't share files
+3. Examples (#14, #45) driven by driver availability
 
 ---
 
@@ -73,3 +72,4 @@ See [log.md](log.md) for the full history. Key milestones:
 - ✅ Unified error code definitions (#26) and centralised NVIC priority scheme (#73)
 - ✅ HIL Tier 4: SysTick hardware tests — `get_ms`, `elapsed_since`, `delay_ms` accuracy on real board (#62)
 - ✅ JUnit XML reporting for HIL tests in CI — every PR shows a HIL Tests tab in GitHub Test Summary (#123)
+- ✅ Plan 000 — Repository refactor: renamed `examples/` → `apps/`, added `lib/` (middleware) and `tools/` (host utilities), per-app linker script override (#136)
