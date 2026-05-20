@@ -69,6 +69,8 @@ Adds `drivers/src/flash.c` with sector erase, word/halfword/byte program, lock/u
 
 **Validation:** Host tests cover header round-trip, malformed inputs, boundary values.
 
+See [image-format.md](001-bootloader/image-format.md).
+
 ### Phase 1.3 — Crypto primitives in `lib/crypto/`
 
 **Status:** filed — [#144](https://github.com/ViniBR01/stm32-bare-metal/issues/144)
