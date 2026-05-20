@@ -60,4 +60,4 @@ The RCC_CSR register contains `IWDGRSTF` (bit 29), which is set when the IWDG ca
 
 ## Example
 
-`examples/basic/iwdg_basic.c` -- initialises the watchdog with a 1-second timeout, feeds it every 500 ms, and detects watchdog resets via LED blink pattern.
+`apps/basic/iwdg_basic.c` -- initialises the watchdog with a 1-second timeout, feeds it every 500 ms, and detects watchdog resets via LED blink pattern.

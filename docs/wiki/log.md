@@ -4,6 +4,33 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-05-20] milestone | Repository refactor — Plan 000 landed (#136)
+
+Single PR with five commits, one per phase, to prepare the repo for multi-track
+work (bootloader/security and comms+DSP):
+
+1. `examples/` → `apps/`. The CLI app is the primary build target, not an
+   example. `git mv` preserves history. Build paths under `build/apps/...`,
+   internal var `EXAMPLES_DIR` → `APPS_DIR`. User-facing `EXAMPLE=` make var
+   kept for backward compatibility with CI and documented invocations.
+2. New `lib/` directory for middleware (no `main()`, no hardware ownership).
+   Each lib mirrors `drivers/Makefile` and builds to
+   `build/lib/<name>/lib<name>.a`. A `lib/skeleton/` stub library plus a
+   one-test Unity suite under `tests/lib/skeleton/` proves the plumbing
+   end-to-end. Real libs (crypto, framing, modem) land with Plans 001/002.
+3. Per-app linker script override: `LDSCRIPT` switched from `:=` to `?=`
+   and `LDFLAGS` from `:=` to `=` (recursive expansion) so an app's Makefile
+   can select its own linker script after `include ../../Makefile.common`.
+   Default `linker/stm32_ls.ld` unchanged for every existing app.
+4. New empty `tools/` directory with a README documenting the convention for
+   host-side firmware utilities (image signers, OTA flashers, BER plotters).
+   Distinguished from `scripts/` which is repo automation.
+5. Documentation refresh — `architecture.md`, `index.md`, `roadmap.md`,
+   `testing.md`, `iwdg.md`, `ci.md`, `README.md`, `CLAUDE.md`, and Plan 000
+   itself all updated. Historical log entries that reference `examples/...c`
+   are intentionally not rewritten; they describe the repo as it was at the
+   time.
+
 ## [2026-04-22] milestone | Implement IWDG watchdog driver (#68)
 
 Added Independent Watchdog (IWDG) driver: `iwdg_init(timeout_ms)`, `iwdg_feed()`,

@@ -112,7 +112,7 @@ Bare-metal firmware for the STM32 NUCLEO-F411RE evaluation board, built entirely
 
    b. **In another terminal, use GDB:**
    ```sh
-   cd build/examples/basic/<example_name>/
+   cd build/apps/basic/<example_name>/
    arm-none-eabi-gdb <example_name>.elf
    ```
    Then in GDB:

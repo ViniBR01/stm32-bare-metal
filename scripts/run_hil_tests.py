@@ -109,7 +109,7 @@ def build_firmware(project_root: Path) -> Path:
         )
         
         # Find the built ELF file
-        elf_path = project_root / 'build' / 'examples' / 'cli' / 'cli_simple' / 'cli_simple.elf'
+        elf_path = project_root / 'build' / 'apps' / 'cli' / 'cli_simple' / 'cli_simple.elf'
         
         if not elf_path.exists():
             log_error("Build completed but ELF file not found")
@@ -638,7 +638,7 @@ def main():
                 return 2
         else:
             log_warning("Skipping build (--skip-build)")
-            elf_path = project_root / 'build' / 'examples' / 'cli' / 'cli_simple' / 'cli_simple.elf'
+            elf_path = project_root / 'build' / 'apps' / 'cli' / 'cli_simple' / 'cli_simple.elf'
             if not elf_path.exists():
                 log_error("No existing ELF file found - build required")
                 return 2

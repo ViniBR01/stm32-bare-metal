@@ -1,7 +1,7 @@
 # Plan 000 — Repository Refactor for Multi-Track Work
 
-**Status:** proposed
-**Tracking issue:** _(to be filed)_
+**Status:** landed
+**Tracking issue:** [#136](https://github.com/ViniBR01/stm32-bare-metal/issues/136)
 **Prerequisite for:** [Plan 001 — Bootloader & Security](001-bootloader-and-security.md), [Plan 002 — Inter-Board Comms + DSP Baseband](002-comms-and-dsp-baseband.md)
 
 ## Why

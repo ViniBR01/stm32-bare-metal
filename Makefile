@@ -8,7 +8,7 @@ include Makefile.common
 #==============================================================================
 # Default target
 #==============================================================================
-# To build a specific example, run: make EXAMPLE=<example_name>
+# To build a specific app, run: make EXAMPLE=<app_name>
 # For example: make EXAMPLE=blink_simple
 EXAMPLE ?= cli_simple
 
@@ -18,12 +18,12 @@ EXAMPLE ?= cli_simple
 #==============================================================================
 # Subdirectories with makefiles
 #==============================================================================
-SUBDIRS := startup utils drivers 3rd_party examples
+SUBDIRS := startup utils drivers 3rd_party lib apps
 
 #==============================================================================
-# All examples list (for 'all' target)
+# All apps list (for 'all' target)
 #==============================================================================
-ALL_EXAMPLES := \
+ALL_APPS := \
 	blink_simple \
 	button_interrupt \
 	button_simple \
@@ -36,33 +36,33 @@ ALL_EXAMPLES := \
 #==============================================================================
 # Phony targets
 #==============================================================================
-.PHONY: all clean test $(SUBDIRS) flash debug openocd serial help $(EXAMPLE) $(ALL_EXAMPLES)
+.PHONY: all clean test $(SUBDIRS) flash debug openocd serial help $(EXAMPLE) $(ALL_APPS)
 
 #==============================================================================
-# Build all examples
+# Build all apps
 #==============================================================================
 all:
-	@echo "Building all examples..."
-	@for example in $(ALL_EXAMPLES); do \
+	@echo "Building all apps..."
+	@for app in $(ALL_APPS); do \
 		echo "========================================"; \
-		echo "Building $$example..."; \
+		echo "Building $$app..."; \
 		echo "========================================"; \
-		$(MAKE) EXAMPLE=$$example || exit 1; \
+		$(MAKE) EXAMPLE=$$app || exit 1; \
 	done
 	@echo "========================================";
-	@echo "All examples built successfully!"
+	@echo "All apps built successfully!"
 
 #==============================================================================
-# Build specific example
+# Build specific app
 #==============================================================================
-$(EXAMPLE): startup utils drivers 3rd_party
-	@echo "Building example: $(EXAMPLE)"
-	$(MAKE) -C examples EXAMPLE=$(EXAMPLE)
+$(EXAMPLE): startup utils drivers 3rd_party lib
+	@echo "Building app: $(EXAMPLE)"
+	$(MAKE) -C apps EXAMPLE=$(EXAMPLE)
 
-# Individual example targets
-$(ALL_EXAMPLES): startup utils drivers 3rd_party
-	@echo "Building example: $@"
-	$(MAKE) -C examples EXAMPLE=$@
+# Individual app targets
+$(ALL_APPS): startup utils drivers 3rd_party lib
+	@echo "Building app: $@"
+	$(MAKE) -C apps EXAMPLE=$@
 
 #==============================================================================
 # Build subdirectories
@@ -79,8 +79,11 @@ drivers:
 utils: 3rd_party
 	$(MAKE) -C utils
 
-examples: startup utils drivers 3rd_party
-	$(MAKE) -C examples EXAMPLE=$(EXAMPLE)
+lib: 3rd_party drivers
+	$(MAKE) -C lib
+
+apps: startup utils drivers 3rd_party lib
+	$(MAKE) -C apps EXAMPLE=$(EXAMPLE)
 
 #==============================================================================
 # Host unit tests (no cross-compiler required)
@@ -97,16 +100,16 @@ clean:
 	@echo "Clean complete."
 
 #==============================================================================
-# Flash target (delegates to examples)
+# Flash target (delegates to apps)
 #==============================================================================
 flash: $(EXAMPLE)
 	@echo "Flashing $(EXAMPLE).elf to target using OpenOCD..."
-	openocd -f board/st_nucleo_f4.cfg -c "program $(shell find $(BUILD_DIR)/examples -name $(EXAMPLE).elf) verify reset exit"
+	openocd -f board/st_nucleo_f4.cfg -c "program $(shell find $(BUILD_DIR)/apps -name $(EXAMPLE).elf) verify reset exit"
 #==============================================================================
 # Debug target
 #==============================================================================
 debug: $(EXAMPLE)
-	./debug.sh $(shell find $(BUILD_DIR)/examples -name $(EXAMPLE).elf)
+	./debug.sh $(shell find $(BUILD_DIR)/apps -name $(EXAMPLE).elf)
 
 #==============================================================================
 # OpenOCD target
@@ -138,18 +141,18 @@ help:
 	@echo "============================="
 	@echo ""
 	@echo "Usage:"
-	@echo "  make                    - Build default example (cli_simple)"
-	@echo "  make EXAMPLE=<name>     - Build specific example"
-	@echo "  make all                - Build all examples"
+	@echo "  make                    - Build default app (cli_simple)"
+	@echo "  make EXAMPLE=<name>     - Build specific app"
+	@echo "  make all                - Build all apps"
 	@echo "  make clean              - Clean all build artifacts"
 	@echo "  make test               - Run host unit tests (no board needed)"
-	@echo "  make flash              - Flash current example to target"
-	@echo "  make debug              - Debug current example"
+	@echo "  make flash              - Flash current app to target"
+	@echo "  make debug              - Debug current app"
 	@echo "  make openocd            - Start OpenOCD server"
 	@echo "  make serial             - Connect to serial port (115200 baud)"
 	@echo "  make serial BAUD_RATE=9600 - Connect with custom baud rate"
 	@echo ""
-	@echo "Available examples:"
-	@for example in $(ALL_EXAMPLES); do \
-		echo "  - $$example"; \
+	@echo "Available apps:"
+	@for app in $(ALL_APPS); do \
+		echo "  - $$app"; \
 	done
