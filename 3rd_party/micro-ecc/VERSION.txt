@@ -1,0 +1,39 @@
+Source:  https://github.com/kmackay/micro-ecc
+Commit:  541b3a78026420a3e369c4c9281c396b5e531113
+Date:    2024-11-13
+License: BSD 2-Clause (see LICENSE.txt)
+
+Vendored files:
+  uECC.c
+  uECC.h
+  uECC_vli.h
+  types.h
+  platform-specific.inc
+  curve-specific.inc
+  LICENSE.txt
+
+Files NOT vendored (and why):
+  asm_arm.inc, asm_arm_mult_square.inc,
+  asm_arm_mult_square_umaal.inc           - We force the portable C path
+  asm_avr.inc, asm_avr_mult_square.inc      via -DuECC_PLATFORM=uECC_arch_other
+                                            in lib/crypto/Makefile, so these
+                                            inline-asm files are never #include'd.
+  test/, examples/, scripts/              - Upstream test/example code, unused.
+  emk_project.py, emk_rules.py            - Upstream build helpers, unused.
+  library.properties                      - Arduino library descriptor, unused.
+
+Compile-time configuration (set via lib/crypto/Makefile):
+  uECC_PLATFORM            = uECC_arch_other (0)  -- portable C, no inline asm
+  uECC_SUPPORTS_secp160r1  = 0
+  uECC_SUPPORTS_secp192r1  = 0
+  uECC_SUPPORTS_secp224r1  = 0
+  uECC_SUPPORTS_secp256r1  = 1                    -- the only curve we use
+  uECC_SUPPORTS_secp256k1  = 0
+  uECC_SUPPORT_COMPRESSED_POINT = 0
+  uECC_SQUARE_FUNC         = 0                    -- code-size win
+
+This phase only exercises uECC_verify(); signing and key-generation are
+not used. The default RNG hooks in platform-specific.inc are inert on
+arm-none-eabi (no Windows/POSIX/RIOT/NRF52 macros defined).
+
+No source modifications were made to the vendored .c/.h/.inc files.
