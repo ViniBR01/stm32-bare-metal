@@ -76,7 +76,7 @@ jobs:
       - name: Print toolchain version
         run: arm-none-eabi-gcc --version
 
-      - name: Build all firmware examples
+      - name: Build all firmware apps
         run: make all
 
   hil-tests:

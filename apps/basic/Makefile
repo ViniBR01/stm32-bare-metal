@@ -1,11 +1,11 @@
 #==============================================================================
-# Basic Examples Makefile
+# Basic Apps Makefile
 #==============================================================================
 
 # Module name for identification
-MODULE_NAME := basic_examples
+MODULE_NAME := basic_apps
 
-# Default target - build specific example if EXAMPLE is set, otherwise show help
+# Default target - build specific app if EXAMPLE is set, otherwise show help
 ifdef EXAMPLE
 .DEFAULT_GOAL := $(EXAMPLE)
 else
@@ -18,27 +18,27 @@ include ../../Makefile.common
 #==============================================================================
 # Local directories
 #==============================================================================
-LOCAL_BUILD_DIR := $(BUILD_DIR)/examples/basic
+LOCAL_BUILD_DIR := $(BUILD_DIR)/apps/basic
 
 #==============================================================================
-# All examples in this directory
+# All apps in this directory
 #==============================================================================
-EXAMPLES := blink_pwm \
-			blink_simple \
-			button_interrupt \
-			button_simple \
-			button_sleep \
-			crc_basic \
-			iwdg_basic \
-			serial_echo \
-			serial_simple \
-			shift_register_simple \
-			timer_interrupt
+APPS := blink_pwm \
+		blink_simple \
+		button_interrupt \
+		button_simple \
+		button_sleep \
+		crc_basic \
+		iwdg_basic \
+		serial_echo \
+		serial_simple \
+		shift_register_simple \
+		timer_interrupt
 
 #==============================================================================
-# Dependencies for each example
+# Dependencies for each app
 #==============================================================================
-# Define explicit dependencies for each example
+# Define explicit dependencies for each app
 blink_pwm_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
 blink_simple_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
 button_interrupt_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(PRINTF_LIB)
@@ -54,31 +54,31 @@ timer_interrupt_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
 #==============================================================================
 # Build rules
 #==============================================================================
-.PHONY: all clean help $(EXAMPLES)
+.PHONY: all clean help $(APPS)
 
-# Help target - show available examples
+# Help target - show available apps
 help:
-	@echo "Usage: make EXAMPLE=<example_name>"
-	@echo "       make all                 # Build all examples"
+	@echo "Usage: make EXAMPLE=<app_name>"
+	@echo "       make all                 # Build all apps"
 	@echo ""
-	@echo "Available examples:"
-	@for example in $(EXAMPLES); do \
-		echo "  - $$example"; \
+	@echo "Available apps:"
+	@for app in $(APPS); do \
+		echo "  - $$app"; \
 	done
 	@echo ""
 	@echo "Example: make EXAMPLE=blink_simple"
 
-# Build all examples
-all: $(EXAMPLES)
+# Build all apps
+all: $(APPS)
 
-# Pattern rule for building examples
-define build-example
+# Pattern rule for building apps
+define build-app
 $(1): $(LOCAL_BUILD_DIR)/$(1)/$(1).bin
-	@echo "Example $(1) built successfully!"
+	@echo "App $(1) built successfully!"
 
 $(LOCAL_BUILD_DIR)/$(1)/$(1).o: $(1).c
 	$$(make-build-dir)
-	@echo "Compiling example: $(1).c"
+	@echo "Compiling app: $(1).c"
 	$$(CC) $$(CFLAGS) -o $$@ $$<
 
 $(LOCAL_BUILD_DIR)/$(1)/$(1).elf: $(LOCAL_BUILD_DIR)/$(1)/$(1).o $$($(1)_DEPS)
@@ -93,10 +93,10 @@ $(LOCAL_BUILD_DIR)/$(1)/$(1).bin: $(LOCAL_BUILD_DIR)/$(1)/$(1).elf
 	@$$(SZ) $$<
 endef
 
-# Generate build rules for each example
-$(foreach example,$(EXAMPLES),$(eval $(call build-example,$(example))))
+# Generate build rules for each app
+$(foreach app,$(APPS),$(eval $(call build-app,$(app))))
 
 # Clean all build artifacts
 clean:
-	@echo "Cleaning basic examples..."
+	@echo "Cleaning basic apps..."
 	@rm -rf $(LOCAL_BUILD_DIR)

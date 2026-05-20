@@ -22,7 +22,7 @@ ROOT_DIR := $(realpath $(COMMON_DIR))
 
 # Main directories
 DRIVERS_DIR   := $(ROOT_DIR)/drivers
-EXAMPLES_DIR  := $(ROOT_DIR)/examples
+APPS_DIR      := $(ROOT_DIR)/apps
 STARTUP_DIR   := $(ROOT_DIR)/startup
 LINKER_DIR    := $(ROOT_DIR)/linker
 BUILD_DIR     := $(ROOT_DIR)/build
