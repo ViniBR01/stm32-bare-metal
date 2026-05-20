@@ -1,4 +1,4 @@
-SUBDIRS = string_utils cli gpio exti rcc timer uart systick flash iwdg crc lowpower
+SUBDIRS = string_utils cli gpio exti rcc timer uart systick flash iwdg crc lowpower lib/skeleton
 
 COVERAGE_INFO = coverage.info
 COVERAGE_FILT = coverage-filtered.info
@@ -60,6 +60,10 @@ run: all
 	@echo "Running lowpower tests"
 	@echo "========================================"
 	@$(MAKE) -C lowpower run
+	@echo "========================================"
+	@echo "Running lib/skeleton tests"
+	@echo "========================================"
+	@$(MAKE) -C lib/skeleton run
 	@echo "========================================"
 	@echo "All test suites passed"
 	@echo "========================================"

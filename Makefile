@@ -18,7 +18,7 @@ EXAMPLE ?= cli_simple
 #==============================================================================
 # Subdirectories with makefiles
 #==============================================================================
-SUBDIRS := startup utils drivers 3rd_party apps
+SUBDIRS := startup utils drivers 3rd_party lib apps
 
 #==============================================================================
 # All apps list (for 'all' target)
@@ -55,12 +55,12 @@ all:
 #==============================================================================
 # Build specific app
 #==============================================================================
-$(EXAMPLE): startup utils drivers 3rd_party
+$(EXAMPLE): startup utils drivers 3rd_party lib
 	@echo "Building app: $(EXAMPLE)"
 	$(MAKE) -C apps EXAMPLE=$(EXAMPLE)
 
 # Individual app targets
-$(ALL_APPS): startup utils drivers 3rd_party
+$(ALL_APPS): startup utils drivers 3rd_party lib
 	@echo "Building app: $@"
 	$(MAKE) -C apps EXAMPLE=$@
 
@@ -79,7 +79,10 @@ drivers:
 utils: 3rd_party
 	$(MAKE) -C utils
 
-apps: startup utils drivers 3rd_party
+lib: 3rd_party drivers
+	$(MAKE) -C lib
+
+apps: startup utils drivers 3rd_party lib
 	$(MAKE) -C apps EXAMPLE=$(EXAMPLE)
 
 #==============================================================================

@@ -23,6 +23,7 @@ ROOT_DIR := $(realpath $(COMMON_DIR))
 # Main directories
 DRIVERS_DIR   := $(ROOT_DIR)/drivers
 APPS_DIR      := $(ROOT_DIR)/apps
+LIB_DIR       := $(ROOT_DIR)/lib
 STARTUP_DIR   := $(ROOT_DIR)/startup
 LINKER_DIR    := $(ROOT_DIR)/linker
 BUILD_DIR     := $(ROOT_DIR)/build
@@ -147,5 +148,5 @@ clean-module:
 #==============================================================================
 export CC CP OD SZ AR
 export MCU_FLAGS CFLAGS LDFLAGS LDSCRIPT
-export ROOT_DIR BUILD_DIR HIL_TEST
+export ROOT_DIR BUILD_DIR HIL_TEST LIB_DIR
 export DRIVERS_LIB STARTUP_OBJ PRINTF_LIB LOG_C_LIB UTILS_LIB UNITY_ARM_LIB
