@@ -96,6 +96,8 @@ See [image-format.md](001-bootloader/image-format.md).
 
 **Validation:** Sign a known input, verify with `openssl` CLI as a cross-check.
 
+See [signing.md](001-bootloader/signing.md).
+
 ### Phase 1.5 — Bootloader skeleton (no crypto yet)
 
 **Scope:**
