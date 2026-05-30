@@ -162,6 +162,42 @@ void uart_init(void) {
     uart_init_config(&default_cfg);
 }
 
+void uart_deinit(void) {
+    if (!active_hw) return;
+    const uart_hw_info_t *hw = active_hw;
+
+    /* Disable + clear pending NVIC entries the driver may have armed.
+     * The DMA streams are static per instance (TX + RX), so clearing
+     * both is safe even when the caller never started DMA RX. */
+    NVIC_DisableIRQ(hw->irqn);
+    NVIC_ClearPendingIRQ(hw->irqn);
+
+    /* Stop the USART, which also disarms RXNEIE / IDLEIE / DMAT / DMAR. */
+    hw->regs->CR1 = 0;
+    hw->regs->CR2 = 0;
+    hw->regs->CR3 = 0;
+
+    /* Drain any pending RX byte so a freshly-armed RXNE interrupt does
+     * not fire the moment the next consumer of this peripheral runs. */
+    (void)hw->regs->SR;
+    (void)hw->regs->DR;
+
+    /* Reset driver-level state so the next uart_init_config starts
+     * clean. */
+    tx_busy = 0;
+    tx_complete_callback = NULL;
+    rx_callback = NULL;
+    rx_dma_callback = NULL;
+    rx_dma_buf = NULL;
+    rx_dma_buf_size = 0;
+    rx_dma_last_ndtr = 0;
+    rx_dma_active = 0;
+    error_flags.overrun_error = 0;
+    error_flags.framing_error = 0;
+    error_flags.noise_error = 0;
+    active_hw = NULL;
+}
+
 err_t uart_init_config(const uart_config_t *cfg) {
     if (!cfg) return ERR_INVALID_ARG;
     if (cfg->instance >= UART_INSTANCE_COUNT) return ERR_INVALID_ARG;

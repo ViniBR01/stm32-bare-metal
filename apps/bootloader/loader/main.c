@@ -57,14 +57,17 @@ static void __attribute__((noreturn)) bootloader_halt(void)
 }
 
 /*
- * Hand control to the app.  Mask interrupts only across the VTOR/MSP
- * change (so a stray IRQ can't observe a half-relocated state), then
- * unmask before transferring control — the app's Reset_Handler expects
- * the same PRIMASK state the chip has at hardware reset (interrupts
- * enabled).
+ * Hand control to the app.  Tears down the bootloader's UART (which
+ * armed USART2 RXNEIE + its NVIC entry), then masks interrupts only
+ * across the VTOR/MSP change so a stray IRQ can't observe a half-
+ * relocated state.  PRIMASK is cleared before the indirect call: the
+ * app's Reset_Handler expects the same interrupt-enabled state the
+ * chip has at hardware reset.
  */
 static void __attribute__((noreturn)) jump_to_app(uint32_t app_base)
 {
+    uart_deinit();
+
     uint32_t app_msp   = *(volatile uint32_t *)(app_base);
     uint32_t app_reset = *(volatile uint32_t *)(app_base + 4U);
 

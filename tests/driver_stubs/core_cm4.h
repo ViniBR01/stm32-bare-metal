@@ -157,6 +157,12 @@ static inline void NVIC_DisableIRQ(IRQn_Type IRQn)
         fake_NVIC.ICER[(uint32_t)IRQn >> 5U] = (1U << ((uint32_t)IRQn & 0x1FU));
 }
 
+static inline void NVIC_ClearPendingIRQ(IRQn_Type IRQn)
+{
+    if ((int32_t)IRQn >= 0)
+        fake_NVIC.ICPR[(uint32_t)IRQn >> 5U] = (1U << ((uint32_t)IRQn & 0x1FU));
+}
+
 static inline void NVIC_SetPriority(IRQn_Type IRQn, uint32_t priority)
 {
     if ((int32_t)IRQn >= 0) {
