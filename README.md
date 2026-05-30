@@ -1,438 +1,142 @@
 # stm32-bare-metal
 
-Bare-metal firmware for the STM32 NUCLEO-F411RE evaluation board, built entirely with direct register-level programming -- no vendor libraries, HAL, or IDE. The default build target is an **interactive CLI application** (`cli_simple`) designed as a foundation for manufacturing test software. Additional standalone examples demonstrate individual peripheral features.
+Bare-metal firmware for the STM32 NUCLEO-F411RE — written from the reset vector up
+with **no HAL, no vendor libraries, no IDE, and no dynamic allocation**. Every
+peripheral is driven by direct memory-mapped register access, on a stack of layered
+drivers, libs, and apps that I built and tested incrementally.
 
-## Features
+This repo doubles as a learning project and a portfolio piece. It exercises the
+hardware/software stack of a real Cortex-M4F system end to end:
 
-- **Interactive CLI application** (default target):
-  - LED control (`led_on`, `led_off`, `led_toggle`)
-  - SPI throughput testing with configurable parameters
-  - Tab auto-completion and command history (Up/Down arrows)
-  - DMA-buffered printf for non-blocking serial output
-  - Extensible command framework for adding new hardware tests
-- **Direct register access:** No vendor libraries or HAL; all peripheral access is via memory-mapped registers.
-- **Peripheral drivers:** GPIO abstraction, SPI master (all 5 instances), UART with DMA TX and RX interrupts, SysTick, EXTI, shift register, and more.
-- **Standalone demo examples:** LED blinking, button polling/interrupt, UART serial, sleep mode, PWM, timer interrupts, shift register.
-- **Modular build system:** Organized Makefile structure with common definitions and per-module builds.
-- **Third-party libraries:** Integrated printf and logging capabilities.
-- **Utility libraries:** CLI engine, DMA-buffered printf, and string manipulation utilities.
-- **Custom linker script and startup code:** Linker script and vector table for STM32F411RE.
-- **OpenOCD integration:** Flash and debug support via OpenOCD.
+- **Boot & runtime:** custom startup, vector table, hardened linker script with
+  stack-overflow detection, fault handlers with register dumps, hardware FPU,
+  100 MHz PLL clock setup.
+- **Drivers:** GPIO, EXTI, SysTick, multi-instance UART (DMA TX + IRQ/DMA RX),
+  SPI master on all five instances (polled + DMA), generic DMA, general-purpose
+  timers (basic / PWM / µs delay), independent watchdog (IWDG), hardware CRC,
+  internal flash read/write — all implemented against the reference manual,
+  not a SDK.
+- **Middleware (`lib/`):** image-header parser and ECDSA-P256 / SHA-256 crypto
+  primitives consumed by the in-flight bootloader track.
+- **Apps:** an interactive CLI over UART (DMA-buffered printf, tab completion,
+  command history, ISR-safe deferred dispatch) plus standalone peripheral demos.
+- **Host tooling:** Python utilities that produce signed firmware images
+  (`tools/keygen.py`, `tools/sign_image.py`) using a single source of truth for
+  the on-flash format that's mirrored in C.
+- **Three-layer test pyramid** (~400+ tests total):
+  - **Pure unit tests** — CLI engine, string utils, calc-only helpers (PLL solver,
+    baud divisor, PWM prescaler, IWDG timeout solver…).
+  - **Driver tests** — host-side, with a fake-peripheral header pattern that
+    shadows `stm32f4xx.h` so unmodified driver code runs against in-memory
+    register stubs and the test asserts on the resulting register state.
+  - **Hardware-in-the-loop** — Unity on the target itself (UART/GPIO/EXTI/SPI
+    loopback, FPU, RCC/Timer/SysTick accuracy), with performance baselines and
+    regression detection. Cross-language round-trip tests verify the Python
+    signing tools against the C parser.
+- **CI on every PR:** GitHub Actions runs host tests + cross-app firmware
+  builds + a self-hosted Raspberry Pi runner that flashes a real NUCLEO and
+  executes the HIL suite. Both Unity and HIL results show up in the GitHub
+  Test Summary tab.
+- **Agentic development infra:** a Tailscale-fronted MCP server exposes the HIL
+  rig to Claude Code so it can build, flash, and test from anywhere; a worktree
+  workflow lets multiple agents work on independent issues in parallel without
+  touching each other's branches.
 
-## Prerequisites
+## What you can learn from this repo
 
-- **Linux OS** (tested on Ubuntu)
-- **ARM GCC Toolchain:**  
-  Install with  
-  ```sh
-  sudo apt install gcc-arm-none-eabi
-  ```
-- **OpenOCD:**  
-  Install with  
-  ```sh
-  sudo apt install openocd
-  ```
-- **STM32 NUCLEO-F411RE board** connected via USB
+| Topic | Where to look |
+|---|---|
+| Driving STM32 peripherals from the reference manual | [drivers/src/](drivers/src/), [docs/wiki/drivers/](docs/wiki/drivers/) |
+| Layered, ISR-safe driver design | [docs/wiki/architecture.md](docs/wiki/architecture.md) |
+| Testing register-banging code on a host | [docs/wiki/testing.md](docs/wiki/testing.md), [tests/driver_stubs/](tests/driver_stubs/) |
+| Pure-function extraction for testability | `*_calc.h` / `*_calc.c` pairs in [drivers/inc/](drivers/inc/) |
+| Hardware-in-the-loop testing & perf baselines | [scripts/run_hil_tests.py](scripts/run_hil_tests.py), [docs/wiki/testing.md](docs/wiki/testing.md) |
+| Self-hosted CI with a real board | [.github/workflows/ci.yml](.github/workflows/ci.yml), [docs/wiki/ci.md](docs/wiki/ci.md) |
+| Image signing & verification (in progress) | [tools/](tools/), [lib/img/](lib/img/), [lib/crypto/](lib/crypto/), [docs/wiki/plans/001-bootloader-and-security.md](docs/wiki/plans/001-bootloader-and-security.md) |
+| Multi-agent development workflow | [scripts/worktree_new.sh](scripts/worktree_new.sh), [docs/wiki/agents.md](docs/wiki/agents.md) |
 
-## Building the Project
+## Active tracks
 
-1. **Clone the repository:**
-   ```sh
-   git clone https://github.com/vinibr01/stm32-bare-metal.git
-   cd stm32-bare-metal
-   git submodule update --init --recursive
-   ```
+Multi-phase plans live under [docs/wiki/plans/](docs/wiki/plans/):
 
-2. **Build the firmware:**
-   ```sh
-   make
-   ```
-   This builds the default target (`cli_simple`), the interactive CLI application.
-   
-   To build a specific example:
-   ```sh
-   make EXAMPLE=<example_name>
-   ```
-   
-   To build all examples:
-   ```sh
-   make all
-   ```
-   
-   Available targets:
+- **001 — Bootloader & embedded security** *(in progress)* — custom bootloader at
+  sector 0, ECDSA-P256 signed images, A/B slots with rollback-on-fail,
+  anti-rollback counter, OTA over UART, RDP option-byte protection. Crypto
+  primitives, image format, and host signing tooling have already landed.
+- **002 — Inter-board comms + DSP baseband** *(proposed)* — two NUCLEOs talking
+  over UART/SPI/I²C with framing, retransmit, and benchmarks; then a software
+  BPSK modem with FEC over a wired analog link, with BER-vs-SNR curves.
 
-   **CLI application:**
-   - `cli_simple` - Interactive CLI with LED control and SPI testing (default)
+Driver work and apps are tracked in [docs/wiki/roadmap.md](docs/wiki/roadmap.md).
 
-   **Basic demos:**
-   - `blink_simple` - LED blink with SysTick delay
-   - `blink_pwm` - LED breathing/fade using TIM2 PWM
-   - `button_simple` - Push button polling
-   - `button_interrupt` - Push button with EXTI interrupt handling
-   - `button_sleep` - Sleep mode with EXTI wakeup
-   - `serial_simple` - UART serial output with structured logging
-   - `serial_echo` - UART echo
-   - `shift_register_simple` - SN74HC595 shift register via SPI
-   - `timer_interrupt` - TIM2 update interrupt at 1 Hz
+## Layout
 
-3. **Clean build files:**
-   ```sh
-   make clean
-   ```
+```
+drivers/       Peripheral drivers (GPIO, UART, SPI, DMA, Timer, EXTI, SysTick, IWDG, CRC, Flash)
+utils/         Reusable utilities (CLI engine, DMA-buffered printf, string utils)
+lib/           Middleware libs (no main, no register access) — img, crypto, …
+apps/
+  basic/       Standalone peripheral demos (blink, button, PWM, IWDG, CRC, …)
+  cli/         Interactive CLI app (default build target) + HIL test harness
+tools/         Host-side utilities (image signing, future OTA)
+tests/         Host unit tests (Unity, native gcc)
+scripts/       Repo automation (HIL runner, MCP server, worktrees)
+docs/wiki/     Persistent project knowledge base
+```
 
-4. **Get help:**
-   ```sh
-   make help
-   ```
-   This displays all available make targets and examples.
+The wiki ([docs/wiki/index.md](docs/wiki/index.md)) is the source of truth for
+architecture, drivers, testing, CI, and plans.
 
-## Flashing and Debugging
-
-1. **Connect your NUCLEO board via USB.**
-
-2. **Flash directly using OpenOCD:**
-   ```sh
-   make flash EXAMPLE=<example_name>
-   ```
-   Or flash the default example:
-   ```sh
-   make flash
-   ```
-
-3. **Alternatively, flash using GDB:**
-
-   a. **Start OpenOCD:**
-   ```sh
-   make openocd
-   ```
-   or manually:
-   ```sh
-   openocd -f board/st_nucleo_f4.cfg
-   ```
-
-   b. **In another terminal, use GDB:**
-   ```sh
-   cd build/apps/basic/<example_name>/
-   arm-none-eabi-gdb <example_name>.elf
-   ```
-   Then in GDB:
-   ```
-   target remote localhost:3333
-   monitor reset init
-   monitor flash write_image erase <example_name>.elf
-   monitor reset init
-   monitor resume
-   ```
-
-## Debugging
-
-The project includes a convenient debug script for GDB debugging:
+## Quick start
 
 ```sh
-make debug EXAMPLE=<example_name>
+git clone --recurse-submodules https://github.com/ViniBR01/stm32-bare-metal.git
+cd stm32-bare-metal
+
+make test                    # host unit tests (no board needed)
+make                         # build the default CLI app
+make flash                   # flash via OpenOCD (NUCLEO connected over USB)
+make serial                  # open the serial console at 115200 baud
 ```
 
-This will:
-- Start OpenOCD in the background
-- Launch GDB with the specified example
-- Automatically connect to the target
-- Load the symbol table
+Type `help` in the CLI prompt to list commands (LED control, SPI throughput
+sweep with DWT-cycle-counter timing, uptime, and so on). New commands plug into
+the dispatch table in [apps/cli/cli_commands.c](apps/cli/cli_commands.c).
 
-## CLI Application
-
-The default target (`cli_simple`) is an interactive command-line interface designed as the foundation for manufacturing test software. It runs over UART and provides hardware test commands that can be extended as needed.
-
-### Quick Start
-
-1. **Flash the CLI application:**
-   ```sh
-   make flash
-   ```
-
-2. **Connect to the serial console:**
-   ```sh
-   picocom -b 115200 /dev/tty*  # Use the device name created when the board is connected
-   ```
-
-3. **Type `help` to see available commands.**
-
-### Available Commands
-
-| Command | Description |
-|---------|-------------|
-| `led_on` | Turn on LED2 |
-| `led_off` | Turn off LED2 |
-| `led_toggle` | Toggle LED2 state |
-| `spi_perf_test [spi_num] [prescaler] [buffer_size]` | Run SPI master TX throughput test |
-| `help` | List all available commands |
-
-The `spi_perf_test` command accepts optional arguments:
-- `spi_num`: 1-5 (default: 2) -- selects which SPI peripheral
-- `prescaler`: 2, 4, 8, 16, 32, 64, 128, 256 (default: 4) -- baud rate divider
-- `buffer_size`: 1-256 (default: 3) -- number of bytes per transfer
-
-It performs a timed full-duplex SPI transfer using the DWT cycle counter and reports clock speed, elapsed cycles/microseconds, throughput in KB/s, and TX/RX buffer contents.
-
-### CLI Features
-
-- **Tab auto-completion:** Press Tab to complete partial command names.
-- **Command history:** Navigate previous commands with Up/Down arrow keys (8-entry ring buffer).
-- **DMA-buffered output:** Printf output is buffered and flushed via DMA for non-blocking serial writes.
-- **ISR-safe architecture:** Character input is processed in interrupt context; command execution is deferred to the main loop so handlers can safely use `printf()`.
-
-## Serial Communication
-
-The CLI application (`cli_simple`) is the primary serial interface. See the [CLI Application](#cli-application) section above for setup and usage.
-
-For simpler serial demos, the basic examples are also available:
-
-1. **Flash a basic serial example:**
-   ```sh
-   make flash EXAMPLE=serial_simple  # Structured logging output
-   # or
-   make flash EXAMPLE=serial_echo    # Echo functionality
-   ```
-
-2. **Open a terminal on the host PC:**
-   ```sh
-   picocom -b 115200 /dev/tty*  # Use the device name created when the board is connected
-   ```
-
-## Dependencies
-
-The project includes the following third-party components:
-
-### Core Dependencies
-- **CMSIS** (Cortex Microcontroller Software Interface Standard)
-  - ARM's standardized hardware abstraction layer for Cortex-M processors
-  - Provides core CPU definitions, peripheral access, and startup code templates
-  - Located in `chip_headers/CMSIS/`
-
-- **STM32F4xx Device Headers**
-  - ST Microelectronics' device-specific register definitions for STM32F4 series
-  - Memory-mapped register addresses and bit field definitions
-  - Located in `chip_headers/CMSIS/Device/ST/STM32F4xx/`
-
-### Third-Party Libraries
-- **printf** ([mpaland/printf](https://github.com/mpaland/printf))
-  - Lightweight printf/sprintf implementation for embedded systems
-  - Used for CLI and direct printf usage
-  - No dependencies on standard C library
-  - Configurable features to minimize code size
-  - Located in `3rd_party/printf/`
-
-- **log_c**
-  - Minimal logging library for embedded C applications
-  - **Self-contained**: No printf dependency (~1.8KB compiled size)
-  - Multiple log levels (critical, error, warning, info, debug)
-  - Compile-time filtering and callback-based backend
-  - Internal formatting (supports %d, %u, %x, %s, %c)
-  - Located in `3rd_party/log_c/`
-
-### Internal Libraries
-- **CLI Engine** (`utils/src/cli.c`)
-  - Reusable command-line interface framework
-  - Command dispatch, tab auto-completion, command history
-  - ANSI escape sequence handling for arrow key navigation
-  - Located in `utils/`
-
-- **Printf DMA** (`utils/src/printf_dma.c`)
-  - Double-buffered, DMA-backed printf output
-  - Non-blocking serial writes with flush support
-  - Located in `utils/`
-
-- **String Utilities** (`utils/src/string_utils.c`)
-  - Custom string manipulation functions optimized for embedded use
-  - Includes safe string operations and formatting helpers
-  - Located in `utils/`
-
-- **Peripheral Drivers** (`drivers/`)
-  - GPIO abstraction (port/pin configure, read/write/toggle, alternate function)
-  - SPI master driver for all 5 instances (polled, full-duplex)
-  - SPI performance benchmarking with DWT cycle counter
-  - UART with DMA TX, RX interrupt, and callback support
-  - SysTick millisecond delay, EXTI interrupt configuration
-  - LED2, user button, sleep mode, and shift register drivers
-  - Logging platform integration layer for log_c
-  - Located in `drivers/`
-
-All dependencies are included in the repository or fetched via git submodules during the initial setup.
-
-## Logging System
-
-The project uses the `log_c` library for structured logging, with a custom platform integration layer that makes it easy to use on STM32.
-
-### Quick Start
-
-```c
-#include "log_platform.h"
-#include "log_c.h"
-
-int main(void) {
-    // Initialize logging with UART backend (one line!)
-    log_platform_init_uart();
-    
-    // Use logging macros
-    loginfo("System initialized");
-    logdebug("Debug information");
-    logerror("Error occurred");
-    
-    // ... rest of your code
-}
-```
-
-### Log Levels
-
-The library supports five log levels (plus OFF):
-- `logcritical()` - Unrecoverable errors
-- `logerror()` - Error conditions
-- `logwarning()` - Warning conditions
-- `loginfo()` - Informational messages (default level)
-- `logdebug()` - Debug-level messages
-
-### Compile-Time Log Level Configuration
-
-Control which log levels are compiled into your binary using the `LOG_LEVEL` build variable:
+Other useful targets:
 
 ```sh
-# Build with default level (INFO - includes critical, error, warning, info)
-make EXAMPLE=serial_simple
-
-# Build with DEBUG level (includes all messages for maximum runtime flexibility)
-make EXAMPLE=serial_simple LOG_LEVEL=LOG_LEVEL_DEBUG
-
-# Build with only critical and error messages
-make EXAMPLE=serial_simple LOG_LEVEL=LOG_LEVEL_ERROR
+make all                              # build every app
+make EXAMPLE=blink_pwm                # build a specific app
+make flash EXAMPLE=iwdg_basic         # flash a specific app
+make debug EXAMPLE=cli_simple         # OpenOCD + GDB attached
+make help                             # full target list
 ```
 
-Valid values:
-- `LOG_LEVEL_OFF` - Disable all logging
-- `LOG_LEVEL_CRITICAL` - Only critical messages
-- `LOG_LEVEL_ERROR` - Critical and error messages
-- `LOG_LEVEL_WARNING` - Critical, error, and warning messages
-- `LOG_LEVEL_INFO` - All except debug (default)
-- `LOG_LEVEL_DEBUG` - All messages
+### Hardware-in-the-loop
 
-Higher levels include all lower levels. Messages above the compile-time level are completely eliminated from the binary, saving code space.
-
-### Runtime Log Level Control
-
-**New Feature**: Change log verbosity dynamically without recompilation!
-
-The logging system now supports runtime filtering in addition to compile-time optimization:
-
-```c
-#include "log_platform.h"
-#include "log_c.h"
-
-int main(void) {
-    log_platform_init_uart();
-    
-    // Start with normal verbosity
-    loginfo("System starting");
-    logdebug("Debug message");  // Hidden if compiled with LOG_LEVEL_INFO
-    
-    // Enable debug logging at runtime (if compiled in)
-    log_platform_set_level(LOG_LEVEL_DEBUG);
-    logdebug("Now visible!");  // ✓ Shows if compiled with LOG_LEVEL_DEBUG
-    
-    // Reduce verbosity after init
-    log_platform_set_level(LOG_LEVEL_ERROR);
-    loginfo("Suppressed");     // Hidden at runtime
-    logerror("Still prints");  // ✓ Errors still show
-}
+```sh
+make clean && make EXAMPLE=cli_simple HIL_TEST=1
+make flash EXAMPLE=cli_simple HIL_TEST=1
+python3 scripts/run_hil_tests.py
 ```
 
-**Use cases:**
-- Debug issues without reflashing firmware
-- Reduce log output after initialization
-- Interactive control via CLI commands
-- Performance optimization in critical sections
+The HIL build links Unity onto the target and runs the full on-board suite
+(UART/GPIO/EXTI/SPI loopback, FPU, RCC/Timer/SysTick accuracy) over the serial
+port, validating perf against checked-in baselines.
 
-**Best practice:** Compile with `LOG_LEVEL_DEBUG` for development to have maximum runtime flexibility, then use `LOG_LEVEL_INFO` for production to save code space.
+## Toolchain
 
-### Thread and Interrupt Safety
+- `arm-none-eabi-gcc` (any reasonably recent GCC; tested with the Ubuntu and
+  Homebrew distributions)
+- `openocd` for flashing/debugging via the on-board ST-LINK
+- Python 3 for the host tools and HIL runner
 
-The logging system is designed to be safe for use in both main code and interrupt handlers:
-
-- **Thread-safe**: The platform layer uses a singleton pattern with static allocation
-- **Interrupt-safe**: UART writes are atomic and blocking
-- **No dynamic allocation**: All state is statically allocated
-- **Reentrant**: Safe to call from multiple contexts
-
-You can safely call logging functions from:
-- Main application code
-- RTOS tasks (if using an RTOS)
-- Interrupt handlers (though excessive logging in ISRs is not recommended)
-
-### Custom Backends
-
-For advanced use cases, you can redirect log output to custom destinations:
-
-```c
-#include "log_platform.h"
-
-void my_custom_putchar(char c) {
-    // Send to SPI, I2C, flash, network, etc.
-    spi_send_byte(c);
-}
-
-int main(void) {
-    // Initialize with custom backend
-    log_platform_init_custom(my_custom_putchar);
-    
-    // Logs now go to your custom function
-    loginfo("This goes to SPI");
-}
+```sh
+sudo apt install gcc-arm-none-eabi openocd python3      # Ubuntu
+brew install --cask gcc-arm-embedded && brew install openocd python   # macOS
 ```
-
-### Logging vs Printf
-
-**When to use logging macros** (`loginfo`, `logerror`, etc.):
-- Application-level informational messages
-- Error reporting and diagnostics
-- Debug traces during development
-- Messages that should be filtered by level
-
-**When to use printf directly**:
-- User interface output (CLI prompts, menus)
-- Data output that must always appear regardless of log level
-- Formatted data dumps
-
-The `serial_simple` example demonstrates proper logging usage.
-
-### Platform Integration Architecture
-
-The logging system uses a layered architecture:
-
-```
-Application Code
-    ↓ calls log_platform_init_uart()
-Platform Integration Layer (log_platform.c)
-    ↓ registers callback
-log_c library (self-contained, no printf)
-    ↓ calls output callback
-UART Driver (or custom backend)
-```
-
-This design:
-- **Self-contained log_c**: No printf dependency, smaller code size (~1.8KB vs ~4-6KB)
-- **Callback-based API**: Clean, explicit backend registration (no weak symbols)
-- **Platform layer**: Provides simple initialization for STM32 users
-- **Future-ready**: Singleton pattern enables runtime configuration
-- **Proper abstraction**: Demonstrates clean layering in embedded systems
-
-### Code Size Benefits
-
-With the self-contained log_c implementation:
-- **log_c library**: ~1.8KB (includes internal formatting)
-- **Total savings**: ~3-4KB compared to printf-based approach
-- **printf library**: Still available for CLI and direct printf usage
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
-
----
-
-**Note:** This project is for educational purposes and demonstrates low-level embedded programming on STM32 microcontrollers.
+MIT — see [LICENSE](LICENSE).
