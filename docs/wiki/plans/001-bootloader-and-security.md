@@ -86,7 +86,7 @@ See [image-format.md](001-bootloader/image-format.md).
 
 ### Phase 1.4 — Host tooling: `keygen.py`, `sign_image.py`
 
-**Status:** filed — [#148](https://github.com/ViniBR01/stm32-bare-metal/issues/148)
+**Status:** done — landed in PR [#150](https://github.com/ViniBR01/stm32-bare-metal/pull/150) for [#148](https://github.com/ViniBR01/stm32-bare-metal/issues/148). Three-way verification (micro-ecc round-trip, Python `cryptography`, OpenSSL `pkeyutl`) confirmed cross-language compatibility.
 
 **Scope:**
 - `keygen.py`: generate P-256 keypair, emit `bootloader_pubkey.c` with `const uint8_t pubkey[64]`
@@ -99,6 +99,8 @@ See [image-format.md](001-bootloader/image-format.md).
 See [signing.md](001-bootloader/signing.md).
 
 ### Phase 1.5 — Bootloader skeleton (no crypto yet)
+
+**Status:** filed — [#151](https://github.com/ViniBR01/stm32-bare-metal/issues/151)
 
 **Scope:**
 - New `apps/bootloader/loader/` with `linker/bootloader_ls.ld` (16 KB at 0x08000000)
