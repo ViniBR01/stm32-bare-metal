@@ -232,6 +232,31 @@ Should list two paths — one for each board.
 
 ---
 
+## Bootloader prerequisite (Plan 001 Phase 1.5+)
+
+Sector 0 of every board now holds the bootloader from `apps/bootloader/loader/`,
+and slot A (0x08010000) holds the cli_simple HIL image.  HIL CI re-flashes
+slot A on every run; sector 0 is **never** touched by the runner, so each
+board needs the bootloader programmed once before it can host HIL runs.
+
+```sh
+ssh hil-pi
+cd ~/stm32-bare-metal
+make EXAMPLE=bootloader
+# CI board:
+python3 scripts/run_hil_tests.py --hla-serial 066BFF554869774867234426 --skip-build --skip-flash  # confirms board is reachable
+make flash-bootloader EXAMPLE=bootloader     # for the currently-attached probe;
+                                              # repeat after switching the cable
+                                              # to the other board.
+```
+
+A bricked board (bad bootloader) is recovered via mass erase — see
+[plans/001-bootloader/bootloader-skeleton.md](plans/001-bootloader/bootloader-skeleton.md#recovery--bricked-board).
+
+The Pi runner also needs the Python `cryptography` package once
+(`pip3 install cryptography`); the CI workflow's "Verify Python signing
+dependencies" step will fail loudly if this drifts.
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -242,3 +267,5 @@ Should list two paths — one for each board.
 | rsync slow | Normal on first sync; subsequent runs only transfer diffs |
 | Build fails on Pi | SSH in and run `make EXAMPLE=cli_simple HIL_TEST=1` manually to see error |
 | `pip install mcp` fails | Try `pip3 install mcp` or `python3 -m pip install mcp` |
+| HIL run prints `BL: slot A header parse failed` | Slot A holds an unsigned or stale image; re-run `python3 scripts/run_hil_tests.py` to re-sign and re-flash. |
+| Board boots but UART silent | Bootloader missing from sector 0; flash via `make flash-bootloader EXAMPLE=bootloader`. |

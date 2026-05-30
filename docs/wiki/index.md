@@ -38,6 +38,7 @@ Multi-phase project plans. Each plan's phases are sized as individual GitHub iss
 | [plans/001-bootloader-and-security.md](plans/001-bootloader-and-security.md) | Bootloader, image signing, OTA, A/B slots, anti-rollback, RDP |
 | [plans/001-bootloader/image-format.md](plans/001-bootloader/image-format.md) | Plan 001 Phase 1.2 — image header & slot metadata on-flash format, CRC-32 spec, parser API |
 | [plans/001-bootloader/signing.md](plans/001-bootloader/signing.md) | Plan 001 Phase 1.4 — host signing workflow (`keygen.py`, `sign_image.py`) |
+| [plans/001-bootloader/bootloader-skeleton.md](plans/001-bootloader/bootloader-skeleton.md) | Plan 001 Phase 1.5 — bootloader skeleton, slot-A app linker, manual flash + recovery |
 | [plans/002-comms-and-dsp-baseband.md](plans/002-comms-and-dsp-baseband.md) | Two-board comms (UART/SPI/I²C) + software BPSK modem with FEC |
 
 ## Decisions

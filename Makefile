@@ -25,6 +25,8 @@ SUBDIRS := startup utils drivers 3rd_party lib apps
 #==============================================================================
 ALL_APPS := \
 	blink_simple \
+	bootloader \
+	app_blinky_signed \
 	button_interrupt \
 	button_simple \
 	button_sleep \
@@ -36,7 +38,7 @@ ALL_APPS := \
 #==============================================================================
 # Phony targets
 #==============================================================================
-.PHONY: all clean test $(SUBDIRS) flash debug openocd serial help $(EXAMPLE) $(ALL_APPS)
+.PHONY: all clean test keys flash-bootloader $(SUBDIRS) flash debug openocd serial help $(EXAMPLE) $(ALL_APPS)
 
 #==============================================================================
 # Build all apps
@@ -55,12 +57,12 @@ all:
 #==============================================================================
 # Build specific app
 #==============================================================================
-$(EXAMPLE): startup utils drivers 3rd_party lib
+$(EXAMPLE): startup utils drivers 3rd_party lib keys
 	@echo "Building app: $(EXAMPLE)"
 	$(MAKE) -C apps EXAMPLE=$(EXAMPLE)
 
 # Individual app targets
-$(ALL_APPS): startup utils drivers 3rd_party lib
+$(ALL_APPS): startup utils drivers 3rd_party lib keys
 	@echo "Building app: $@"
 	$(MAKE) -C apps EXAMPLE=$@
 
@@ -82,8 +84,27 @@ utils: 3rd_party
 lib: 3rd_party drivers
 	$(MAKE) -C lib
 
-apps: startup utils drivers 3rd_party lib
+apps: startup utils drivers 3rd_party lib keys
 	$(MAKE) -C apps EXAMPLE=$(EXAMPLE)
+
+#==============================================================================
+# Plan 001 dev keypair generation
+#
+# Produces $(DEV_PRIV) (the signing private key) and $(BL_PUBKEY_C) (the
+# matching pubkey C source linked into the bootloader).  The seed is fixed,
+# so re-running `make keys` is idempotent and reproducible across hosts —
+# crucial for CI builds that regenerate from a clean checkout.
+#
+# Outputs land under build/keys/, already gitignored via the build/ rule.
+#==============================================================================
+keys: $(DEV_PRIV) $(BL_PUBKEY_C)
+
+$(DEV_PRIV) $(BL_PUBKEY_C):
+	@mkdir -p $(KEYS_DIR)
+	@python3 tools/keygen.py \
+		--seed "$(KEY_SEED)" \
+		--priv-out $(DEV_PRIV) \
+		--pub-out $(BL_PUBKEY_C)
 
 #==============================================================================
 # Host unit tests (no cross-compiler required)
@@ -101,10 +122,36 @@ clean:
 
 #==============================================================================
 # Flash target (delegates to apps)
+#
+# WARNING: this programs the .elf at its linked address.  For apps linked
+# with linker/app_ls.ld that means slot A (0x08010000) — safe.  For the
+# bootloader build (linker/bootloader_ls.ld) it overwrites sector 0; use
+# `make flash-bootloader` instead so the intent is explicit.
 #==============================================================================
 flash: $(EXAMPLE)
+	@if [ "$(EXAMPLE)" = "bootloader" ]; then \
+		echo "Refusing to flash the bootloader via 'make flash'."; \
+		echo "Use 'make flash-bootloader' instead — it makes the intent explicit"; \
+		echo "and is the only path documented in bootloader-skeleton.md."; \
+		exit 1; \
+	fi
 	@echo "Flashing $(EXAMPLE).elf to target using OpenOCD..."
 	openocd -f board/st_nucleo_f4.cfg -c "program $(shell find $(BUILD_DIR)/apps -name $(EXAMPLE).elf) verify reset exit"
+
+#==============================================================================
+# flash-bootloader — explicit, manual-only sector-0 programming.
+#
+# Sector 0 contains the bootloader.  CI never invokes this; it is a one-time
+# step the operator performs on each NUCLEO board before that board can run
+# slot-A app images.  See docs/wiki/plans/001-bootloader/bootloader-skeleton.md
+# for the full procedure (including OpenOCD-based recovery if a bad image
+# bricks the chain).
+#==============================================================================
+flash-bootloader: bootloader
+	@echo "Programming bootloader to sector 0 (0x08000000)."
+	@echo "This is a manual operation; the HIL CI runner must NEVER call this."
+	openocd -f board/st_nucleo_f4.cfg \
+		-c "program $(BUILD_DIR)/apps/bootloader/loader/loader.elf verify reset exit"
 #==============================================================================
 # Debug target
 #==============================================================================

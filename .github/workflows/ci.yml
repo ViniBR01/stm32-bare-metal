@@ -26,6 +26,9 @@ jobs:
           # them to HTTPS automatically using the default GITHUB_TOKEN.
           submodules: recursive
 
+      - name: Install Python signing dependencies
+        run: pip3 install cryptography
+
       - name: Print build tool versions
         run: |
           gcc --version
@@ -73,6 +76,9 @@ jobs:
       - name: Install ARM toolchain
         run: sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-arm-none-eabi
 
+      - name: Install Python signing dependencies
+        run: pip3 install cryptography
+
       - name: Print toolchain version
         run: arm-none-eabi-gcc --version
 
@@ -95,6 +101,9 @@ jobs:
       - name: Print toolchain version
         run: arm-none-eabi-gcc --version
 
+      - name: Verify Python signing dependencies
+        run: python3 -c "import cryptography; import serial; print('deps OK')"
+
       - name: Run HIL tests
         run: python3 scripts/run_hil_tests.py --board ci --timeout 240 --baseline tests/baselines/performance.json --junit-xml hil-test-results.xml
 
@@ -104,5 +113,21 @@ jobs:
         with:
           name: HIL Tests
           path: hil-test-results.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      # Plan 001 Phase 1.5 — boot smoke test.
+      # Flashes app_blinky_signed and asserts the bootloader → app jump
+      # works end-to-end.  Runs after the cli_simple HIL pass so any
+      # baseline regressions surface independently.
+      - name: Run boot smoke test
+        run: python3 scripts/run_boot_smoke_test.py --board ci --timeout 15 --junit-xml boot-smoke-results.xml
+
+      - name: Publish boot smoke test results
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: Boot Smoke Test
+          path: boot-smoke-results.xml
           reporter: java-junit
           fail-on-error: false

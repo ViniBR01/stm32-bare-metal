@@ -100,16 +100,20 @@ See [signing.md](001-bootloader/signing.md).
 
 ### Phase 1.5 — Bootloader skeleton (no crypto yet)
 
-**Status:** filed — [#151](https://github.com/ViniBR01/stm32-bare-metal/issues/151)
+**Status:** in progress — [#151](https://github.com/ViniBR01/stm32-bare-metal/issues/151)
 
 **Scope:**
 - New `apps/bootloader/loader/` with `linker/bootloader_ls.ld` (16 KB at 0x08000000)
-- App linker script `linker/app_ls.ld` (slot A at 0x08010000, configurable)
-- Bootloader: minimal init (clock, UART for logs), read header from slot A, sanity check magic, jump to app reset vector
-- App template: relocatable to slot offset, vector table at app base via `SCB->VTOR`
+- App linker script `linker/app_ls.ld` (slot A at 0x08010000, configurable via `SLOT_BASE`)
+- Bootloader: minimal init (clock, UART for logs), read header from slot A, sanity check magic + CRC, jump to app reset vector
+- Shared startup writes `SCB->VTOR = &_app_vector_base` for every slot-A app build (linker-published symbol)
 - Trivial `app_blinky_signed` that blinks (signature ignored at this stage)
+- Every existing app re-linked at slot A and signed — HIL flashes the slot, never sector 0
+- Dev keypair generated from a fixed seed at build time under `build/keys/` (gitignored)
 
-**Validation:** HIL test that bootloader → app jump works end-to-end. App's blink LED toggles. Reset re-enters bootloader cleanly.
+**Validation:** boot smoke test asserts the bootloader → app jump on real hardware. cli_simple HIL job continues to pass with no test-code changes.
+
+See [bootloader-skeleton.md](001-bootloader/bootloader-skeleton.md).
 
 ### Phase 1.6 — Signature verification + verify-and-jump
 

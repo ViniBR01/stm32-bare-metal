@@ -10,6 +10,15 @@ extern uint32_t _edata;
 extern uint32_t _sbss;
 extern uint32_t _ebss;
 
+/*
+ * Slot-relocated app images export _app_vector_base from app_ls.ld.  The
+ * bootloader build (bootloader_ls.ld) does not, so we declare it weak with
+ * a default value of 0 — Reset_Handler skips the VTOR write in that case
+ * and the chip keeps the reset-default vector base of 0x08000000, which is
+ * exactly where the bootloader lives.
+ */
+extern uint32_t _app_vector_base __attribute__((weak));
+
 /* Function prototypes */
 void Reset_Handler(void);
 void SystemInit(void);
@@ -202,6 +211,21 @@ void Default_Handler(void)
 /* Reset Handler */
 void Reset_Handler(void)
 {
+    /*
+     * If this image is linked at a non-default flash base (i.e. an A/B slot
+     * app), point the NVIC at the relocated vector table before any
+     * interrupt fires.  The weak _app_vector_base symbol is defined by
+     * linker/app_ls.ld at the start of the app's vector table; for
+     * bootloader builds it is undefined and the weak ref resolves to 0,
+     * so we leave VTOR at the chip default of 0x08000000.
+     */
+    uintptr_t vbase = (uintptr_t)&_app_vector_base;
+    if (vbase != 0u) {
+        SCB->VTOR = (uint32_t)vbase;
+        __asm volatile ("dsb");
+        __asm volatile ("isb");
+    }
+
     /* Set NVIC priority grouping: all 4 bits = preemption, 0 sub-priority bits */
     NVIC_SetPriorityGrouping(NVIC_PRIORITY_GROUP);
 

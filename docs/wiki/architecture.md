@@ -18,7 +18,10 @@
 ```
 stm32-bare-metal/
 ├── chip_headers/          CMSIS + STM32F4xx device register definitions (read-only reference)
-├── linker/                Custom linker script (stm32_ls.ld) with stack/heap overflow detection
+├── linker/                Linker scripts:
+│                            - app_ls.ld         slot-A apps (default since Phase 1.5)
+│                            - bootloader_ls.ld  sector-0 bootloader (16 KB)
+│                            - stm32_ls.ld       legacy 0x08000000-base (unused)
 ├── startup/               Vector table and startup code (stm32f411_startup.c)
 ├── drivers/               Peripheral drivers (see Drivers section below)
 │   ├── inc/               Public headers + test_output.h (HIL machine-parseable output macros)
@@ -34,9 +37,12 @@ stm32-bare-metal/
 │   ├── README.md          Convention for what belongs here vs drivers/utils/
 │   └── skeleton/          Minimal stub library that proves lib/ build plumbing
 ├── apps/                  Application firmware images
-│   ├── basic/             Standalone peripheral demos
-│   └── cli/               Interactive CLI application (default build target)
-│       └── test_harness.c HIL test suite (compiled only with HIL_TEST=1)
+│   ├── basic/             Standalone peripheral demos (linked at slot A)
+│   ├── cli/               Interactive CLI application (default build target)
+│   │   └── test_harness.c HIL test suite (compiled only with HIL_TEST=1)
+│   └── bootloader/        Plan 001 bootloader and signed-app fixtures
+│       ├── loader/        The bootloader binary (sector 0, 16 KB)
+│       └── app_blinky_signed/  Smoke-test slot-A app proving the boot chain
 ├── tools/                 Host-side utilities that operate on firmware artifacts
 │                          (image signers, OTA flashers, BER plotters — populated
 │                          by Plans 001 and 002)
@@ -69,7 +75,8 @@ stm32-bare-metal/
 - **Optimisation:** `-O2 -flto -ffunction-sections -fdata-sections` (dead-code elimination via `--gc-sections`)
 - **Linker:** `--specs=nosys.specs` for syscall stubs; `-lc -lm -lgcc` for libc/math/compiler-rt
 - **Hierarchical Makefiles:** Each subdirectory compiles to a static library (`.a`); the top-level Makefile links them.
-- **Per-app linker script:** Default is `linker/stm32_ls.ld`. An app can override it by setting `LDSCRIPT := $(LINKER_DIR)/<app>_ls.ld` in its own Makefile after `include ../../Makefile.common`.
+- **Per-app linker script:** Default is `linker/app_ls.ld` — slot-A aware (`SLOT_BASE = 0x08010000`). The bootloader app overrides it to `linker/bootloader_ls.ld` (sector 0, 16 KB). Override on a per-app basis by setting `LDSCRIPT := $(LINKER_DIR)/<app>_ls.ld` in the app's Makefile after `include ../../Makefile.common`. The pre-Phase-1.5 default `linker/stm32_ls.ld` is retained for reference but no longer used by the build.
+- **Image signing:** Every app linked with `app_ls.ld` is post-processed by `tools/sign_image.py` into a `.signed.bin` carrying a 140-byte `img_header_t`. The bootloader parses that header before jumping. The dev keypair is regenerated from a fixed seed at the start of every build via `make keys` (outputs land under `build/keys/`, gitignored).
 - **Host tests:** Compiled with native `gcc` (no ARM toolchain needed). Unity framework from `3rd_party/unity/`.
 - **HIL tests:** `HIL_TEST=1` flag adds `-DHIL_TEST_MODE`, links `libunity_arm.a`, includes `test_harness.c`. Always `make clean` when switching.
 - **Log level:** Controlled at compile time via `LOG_LEVEL=LOG_LEVEL_DEBUG` (default: `LOG_LEVEL_INFO`).

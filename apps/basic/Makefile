@@ -71,9 +71,15 @@ help:
 # Build all apps
 all: $(APPS)
 
-# Pattern rule for building apps
+# Default image-version baked into every signed app header.  Bumped manually
+# as apps change; Phase 1.9 will tie this into the anti-rollback counter.
+IMAGE_VERSION ?= 1
+
+# Pattern rule for building apps.  Final target is the .signed.bin produced
+# by tools/sign_image.py — that is what flashes at slot A and what the
+# bootloader parses.  The unsigned .bin is kept as a debug aid.
 define build-app
-$(1): $(LOCAL_BUILD_DIR)/$(1)/$(1).bin
+$(1): $(LOCAL_BUILD_DIR)/$(1)/$(1).signed.bin
 	@echo "App $(1) built successfully!"
 
 $(LOCAL_BUILD_DIR)/$(1)/$(1).o: $(1).c
@@ -91,6 +97,15 @@ $(LOCAL_BUILD_DIR)/$(1)/$(1).bin: $(LOCAL_BUILD_DIR)/$(1)/$(1).elf
 	$$(CP) -O binary $$< $$@
 	@echo "Created $(1).bin"
 	@$$(SZ) $$<
+
+$(LOCAL_BUILD_DIR)/$(1)/$(1).signed.bin: $(LOCAL_BUILD_DIR)/$(1)/$(1).bin $$(DEV_PRIV)
+	@echo "Signing $(1).bin..."
+	python3 $$(ROOT_DIR)/tools/sign_image.py \
+		--priv-in $$(DEV_PRIV) \
+		--in $$< \
+		--out $$@ \
+		--image-type app \
+		--image-version $(IMAGE_VERSION)
 endef
 
 # Generate build rules for each app

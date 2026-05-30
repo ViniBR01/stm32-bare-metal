@@ -69,15 +69,23 @@ See `docs/wiki/agents.md` for parallelism rules, HIL constraints, and troublesho
 ## Build & Test Commands
 
 ```sh
-make test                    # Run host unit tests (Unity) — required before any PR
-make                         # Build default firmware app (cli_simple)
-make EXAMPLE=<name>          # Build a specific app
-make all                     # Build all firmware apps
-make clean                   # Remove all build artifacts
-make flash EXAMPLE=<name>    # Flash to NUCLEO board via OpenOCD
-make debug EXAMPLE=<name>    # Flash and attach GDB
-make serial                  # Connect to board serial port (115200 baud)
+make test                       # Run host unit tests (Unity) — required before any PR
+make                            # Build default firmware app (cli_simple)
+make EXAMPLE=<name>             # Build a specific app
+make all                        # Build all firmware apps
+make clean                      # Remove all build artifacts
+make flash EXAMPLE=<name>       # Flash signed app to slot A (0x08010000)
+make flash-bootloader           # Manual one-time only — programs sector 0
+make debug EXAMPLE=<name>       # Flash and attach GDB
+make serial                     # Connect to board serial port (115200 baud)
 ```
+
+Since Plan 001 Phase 1.5 (#151), every app except the bootloader is linked
+at slot A and signed by `tools/sign_image.py`. `make flash` programs the
+`.signed.bin` at `0x08010000`; `make flash-bootloader` is the only path
+that touches sector 0 and CI never invokes it. See
+[docs/wiki/plans/001-bootloader/bootloader-skeleton.md](docs/wiki/plans/001-bootloader/bootloader-skeleton.md)
+for layout, recovery, and the manual-flash procedure.
 
 ### HIL (Hardware-in-the-Loop) Testing
 
