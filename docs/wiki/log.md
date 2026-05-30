@@ -4,6 +4,25 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-05-29] merge | Plan 001 Phase 1.4 — host signing tooling (#148)
+
+`tools/keygen.py` and `tools/sign_image.py` produce signed firmware images
+consumable by the future bootloader. Both share `tools/_img_format.py` — a
+single Python source of truth for the on-flash format (struct layout, magic
+constants, CRC-32 algorithm) that mirrors `lib/img/inc/img_header.h`. The
+PEM private key is gitignored; the public key is emitted as a C source so
+it can be linked into the bootloader.
+
+Cross-language compatibility is enforced by a new round-trip suite at
+`tests/tools/sign_roundtrip/`: `make all` runs `keygen.py` + `sign_image.py`
+to produce fixtures, then a Unity test parses the result with the real C
+parser (`lib/img`) and verifies the signature with `lib/crypto`. Four
+cases — happy path, tampered payload (digest mismatch), tampered signature
+(verify returns 0), tampered header (CRC mismatch). Any drift between the
+Python tools and the C parser fails host-tests on the next CI run.
+
+Workflow documented in `docs/wiki/plans/001-bootloader/signing.md`.
+
 ## [2026-05-20] milestone | Repository refactor — Plan 000 landed (#136)
 
 Single PR with five commits, one per phase, to prepare the repo for multi-track

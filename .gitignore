@@ -66,3 +66,12 @@ tests/**/*.gcno
 tests/coverage.info
 tests/coverage-filtered.info
 tests/coverage-html/
+
+# Plan 001 signing artifacts (private keys must NEVER be committed)
+*.pem
+*.privkey
+tests/tools/sign_roundtrip/build/
+
+# Python bytecode caches
+__pycache__/
+*.pyc
