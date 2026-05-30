@@ -8,7 +8,6 @@
  */
 
 #include "led2.h"
-#include "rcc.h"
 #include "systick.h"
 #include "uart.h"
 
@@ -21,7 +20,7 @@ static void uart_print(const char *s)
 
 int main(void)
 {
-    rcc_init(RCC_CLK_SRC_HSI, 100000000u);
+    /* SystemInit (called from Reset_Handler) already configured the clock. */
     led2_init();
     systick_init();
     uart_init();

@@ -15,7 +15,6 @@
 
 #include "img_header.h"
 #include "led2.h"
-#include "rcc.h"
 #include "uart.h"
 
 /*
@@ -58,9 +57,11 @@ static void __attribute__((noreturn)) bootloader_halt(void)
 }
 
 /*
- * Hand control to the app.  At entry the bootloader has not enabled any
- * peripheral interrupts, so we only need to disable IRQs at the CPU level
- * and reload the main stack pointer + reset vector from the app's image.
+ * Hand control to the app.  Mask interrupts only across the VTOR/MSP
+ * change (so a stray IRQ can't observe a half-relocated state), then
+ * unmask before transferring control — the app's Reset_Handler expects
+ * the same PRIMASK state the chip has at hardware reset (interrupts
+ * enabled).
  */
 static void __attribute__((noreturn)) jump_to_app(uint32_t app_base)
 {
@@ -72,6 +73,7 @@ static void __attribute__((noreturn)) jump_to_app(uint32_t app_base)
     __asm volatile ("dsb");
     __asm volatile ("isb");
     __set_MSP(app_msp);
+    __asm volatile ("cpsie i");
     ((void (*)(void))app_reset)();
 
     /* Unreachable. */
@@ -80,10 +82,11 @@ static void __attribute__((noreturn)) jump_to_app(uint32_t app_base)
 
 int main(void)
 {
-    /* Bring up the system clock and a UART for boot logs.  The same
-     * 100 MHz / USART2 / 115200 settings used by every existing app, so the
-     * HIL serial reader needs no adjustment. */
-    rcc_init(RCC_CLK_SRC_HSI, 100000000u);
+    /* SystemInit (called from Reset_Handler before main) already brought
+     * the system clock up to 100 MHz from HSI via PLL.  Calling rcc_init
+     * a second time would attempt to clear PLLON while PLL is the active
+     * sysclk source — the chip stalls in that combination — so we just
+     * bring up USART2 here. */
     uart_init();
 
     uart_print("\r\nBL: stm32-bare-metal bootloader (Phase 1.5)\r\n");
