@@ -674,10 +674,29 @@ void test_exti_software_trigger_pb7(void)
 /* ====================================================================
  * Flash hardware tests — Tier 6
  *
- * Uses sector 4 (0x08010000, 64 KB) as the test area. Sector 4 starts
- * at the 64 KB offset, safely beyond the HIL firmware (~38 KB in
- * sectors 0–2). Sectors 0–3 contain application code and must NOT be
- * erased while the firmware is running.
+ * Uses sector 7 (0x08060000, 128 KB) as the scratch area.  Sector 7
+ * is reserved for slot B in Phase 1.7 of the bootloader plan but
+ * unused in Phase 1.5, which makes it the only sector that is both
+ * (a) inside the on-chip flash and (b) not currently mapped to
+ * anything the running firmware needs.
+ *
+ * History note (2026-05-30): this used to point at sector 4
+ * (`FLASH_TEST_SECTOR=4`, `FLASH_TEST_BASE_ADDR=0x08010000`), which
+ * happens to be the start of slot A under the Phase 1.5 bootloader
+ * skeleton.  Running `run_all_tests` on a slot-A image would erase
+ * the running image; the chip stayed alive long enough to print PASS
+ * (I-cache + prefetch) but the next reset dropped into
+ * `bootloader_halt()` with `mdw 0x08010000 4 == FFFFFFFF`.  The fix
+ * also moved the affected tests to a sector the firmware does not
+ * occupy and added an active-image guard
+ * (`test_flash_scratch_sector_is_safe`) that fails loudly if a future
+ * layout change moves the running image into the scratch sector.
+ * See docs/wiki/plans/001-bootloader/spi1-dma-fault-investigation.md
+ * for the full chain.
+ *
+ * Slot B (Phase 1.7) will reclaim sector 7.  When that happens, this
+ * test must move with it: re-run host tests + a HIL pass and update
+ * the constants below alongside the slot-B linker change.
  *
  * Wear-levelling strategy: a SINGLE erase per test run. The first test
  * erases + verifies, subsequent tests write to different offsets within
@@ -685,17 +704,47 @@ void test_exti_software_trigger_pb7(void)
  * wears out (STM32F411 flash endurance spec).
  * ==================================================================== */
 
-#define FLASH_TEST_SECTOR     4U
-#define FLASH_TEST_BASE_ADDR  0x08010000U
+#define FLASH_TEST_SECTOR     7U
+#define FLASH_TEST_BASE_ADDR  0x08060000U
 
-void test_flash_erase_sector1(void)
+/* Provided by linker/app_ls.ld for slot-relocated app builds; the
+ * bootloader build leaves it undefined and we never reach the flash
+ * tests from there, so the weak attribute keeps the link clean. */
+extern uint32_t _app_vector_base __attribute__((weak));
+
+void test_flash_scratch_sector_is_safe(void)
+{
+    /* Compile-time sanity: the constants in this file agree. */
+    TEST_ASSERT_EQUAL_HEX32_MESSAGE(
+        flash_get_sector_address(FLASH_TEST_SECTOR),
+        FLASH_TEST_BASE_ADDR,
+        "FLASH_TEST_BASE_ADDR does not match flash_get_sector_address(FLASH_TEST_SECTOR)");
+
+    /* Runtime guard: the scratch sector must not contain the running
+     * image's vector table.  Without this, a future linker / slot-base
+     * change could re-introduce the slot-A self-erase failure mode
+     * silently (the test would still pass while quietly bricking slot A
+     * on the next reset). */
+    uintptr_t vbase = (uintptr_t)&_app_vector_base;
+    TEST_ASSERT_NOT_EQUAL_MESSAGE(0u, vbase,
+        "_app_vector_base is 0 -- this test is only valid for slot-A app builds");
+
+    uint8_t app_sector = 0xFFu;
+    err_t rc = flash_sector_for_address((uint32_t)vbase, &app_sector);
+    TEST_ASSERT_EQUAL_MESSAGE(ERR_OK, rc,
+        "_app_vector_base is outside on-chip flash");
+    TEST_ASSERT_NOT_EQUAL_MESSAGE(FLASH_TEST_SECTOR, app_sector,
+        "FLASH_TEST_SECTOR equals the running app's sector -- erasing it would brick the slot");
+}
+
+void test_flash_erase_scratch_sector(void)
 {
     err_t ret = flash_unlock();
     TEST_ASSERT_EQUAL_MESSAGE(ERR_OK, ret, "flash_unlock() failed");
 
     ret = flash_erase_sector(FLASH_TEST_SECTOR);
     flash_lock();
-    TEST_ASSERT_EQUAL_MESSAGE(ERR_OK, ret, "flash_erase_sector(1) failed");
+    TEST_ASSERT_EQUAL_MESSAGE(ERR_OK, ret, "flash_erase_sector() failed");
 
     /* Verify erased state: first 32 bytes should all be 0xFF */
     uint8_t buf[32];
@@ -752,8 +801,10 @@ void test_flash_write_bytes_readback(void)
 
 void test_flash_sector_info(void)
 {
-    TEST_ASSERT_EQUAL_HEX32(0x08010000U, flash_get_sector_address(4));
-    TEST_ASSERT_EQUAL_UINT32(64U * 1024U, flash_get_sector_size(4));
+    TEST_ASSERT_EQUAL_HEX32(FLASH_TEST_BASE_ADDR,
+                            flash_get_sector_address(FLASH_TEST_SECTOR));
+    TEST_ASSERT_EQUAL_UINT32(128U * 1024U,
+                             flash_get_sector_size(FLASH_TEST_SECTOR));
 }
 
 /* ====================================================================
@@ -1110,10 +1161,13 @@ int run_unity_tests(void) {
      *   1 erase cycle per CI run → ~10K runs before wear-out.
      *   No external wiring required.
      * ---------------------------------------------------------- */
-    printf("\n--- Tier 6: Flash erase/write/read (sector 1) ---\n");
+    printf("\n--- Tier 6: Flash erase/write/read (scratch sector 7) ---\n");
     printf_dma_flush();
 
-    RUN_TEST(test_flash_erase_sector1);
+    /* Guard runs first: if the scratch sector overlaps the running
+     * image, every other test in this tier would happily nuke it. */
+    RUN_TEST(test_flash_scratch_sector_is_safe);
+    RUN_TEST(test_flash_erase_scratch_sector);
     RUN_TEST(test_flash_write_word_readback);
     RUN_TEST(test_flash_write_bytes_readback);
     RUN_TEST(test_flash_sector_info);

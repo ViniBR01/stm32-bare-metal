@@ -106,6 +106,56 @@ void test_get_sector_size_invalid_returns_zero(void)
 }
 
 /* ======================================================================== */
+/* Address-to-sector lookup                                                  */
+/* ======================================================================== */
+
+void test_sector_for_address_each_sector_base(void)
+{
+    static const uint32_t bases[8] = {
+        0x08000000U, 0x08004000U, 0x08008000U, 0x0800C000U,
+        0x08010000U, 0x08020000U, 0x08040000U, 0x08060000U,
+    };
+    for (uint8_t s = 0; s < 8; s++) {
+        uint8_t out = 0xFFU;
+        TEST_ASSERT_EQUAL(ERR_OK, flash_sector_for_address(bases[s], &out));
+        TEST_ASSERT_EQUAL_UINT8(s, out);
+    }
+}
+
+void test_sector_for_address_interior_byte(void)
+{
+    /* A byte well inside sector 4 (slot A under the bootloader). */
+    uint8_t out = 0xFFU;
+    TEST_ASSERT_EQUAL(ERR_OK, flash_sector_for_address(0x08010100U, &out));
+    TEST_ASSERT_EQUAL_UINT8(4U, out);
+
+    /* Last byte of sector 7 (highest valid flash byte). */
+    out = 0xFFU;
+    TEST_ASSERT_EQUAL(ERR_OK, flash_sector_for_address(0x0807FFFFU, &out));
+    TEST_ASSERT_EQUAL_UINT8(7U, out);
+}
+
+void test_sector_for_address_below_flash_base(void)
+{
+    uint8_t out = 0xFFU;
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG,
+                      flash_sector_for_address(0x07FFFFFFU, &out));
+}
+
+void test_sector_for_address_beyond_flash_end(void)
+{
+    uint8_t out = 0xFFU;
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG,
+                      flash_sector_for_address(0x08080000U, &out));
+}
+
+void test_sector_for_address_null_out(void)
+{
+    TEST_ASSERT_EQUAL(ERR_INVALID_ARG,
+                      flash_sector_for_address(0x08000000U, NULL));
+}
+
+/* ======================================================================== */
 /* Unlock / Lock                                                              */
 /* ======================================================================== */
 
@@ -391,6 +441,13 @@ int main(void)
     RUN_TEST(test_get_sector_size_sector4);
     RUN_TEST(test_get_sector_size_sectors_5_to_7);
     RUN_TEST(test_get_sector_size_invalid_returns_zero);
+
+    /* Address-to-sector lookup */
+    RUN_TEST(test_sector_for_address_each_sector_base);
+    RUN_TEST(test_sector_for_address_interior_byte);
+    RUN_TEST(test_sector_for_address_below_flash_base);
+    RUN_TEST(test_sector_for_address_beyond_flash_end);
+    RUN_TEST(test_sector_for_address_null_out);
 
     /* Unlock / Lock */
     RUN_TEST(test_unlock_when_already_unlocked);

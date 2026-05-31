@@ -113,6 +113,20 @@ uint32_t flash_get_sector_address(uint8_t sector);
  */
 uint32_t flash_get_sector_size(uint8_t sector);
 
+/**
+ * @brief Find the flash sector that contains a given absolute address.
+ *
+ * Inverse of `flash_get_sector_address()`.  Useful when code that has only
+ * a pointer (e.g. the running image's vector base, taken from a linker
+ * symbol) needs to assert it is not erasing its own sector.
+ *
+ * @param address  Absolute flash address.
+ * @param sector_out  On success, receives the sector index (0..7).
+ * @return ERR_OK if `address` is inside a sector, ERR_INVALID_ARG if it
+ *         lies outside the on-chip flash region.
+ */
+err_t flash_sector_for_address(uint32_t address, uint8_t *sector_out);
+
 #ifdef UNIT_TEST
 void flash_test_reset(void);
 #endif
