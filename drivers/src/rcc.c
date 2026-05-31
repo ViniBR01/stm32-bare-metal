@@ -121,6 +121,34 @@ err_t rcc_init(rcc_clk_src_t source, uint32_t target_sysclk_hz) {
     uint32_t source_freq = (source == RCC_CLK_SRC_HSE_BYPASS)
                            ? HSE_FREQ_HZ : HSI_FREQ_HZ;
 
+    /*
+     * Idempotent fast path.  When the bootloader hands control to an app
+     * already running on PLL, the app's Reset_Handler invokes SystemInit
+     * which calls us again with the same target.  Re-running the full
+     * sequence would clear PLLON while PLL is still the active sysclk
+     * source — the chip stalls in that combination because PLLRDY can
+     * never re-fall.  Detect "PLL already on, locked, and selected as
+     * sysclk" and just refresh the cached frequencies.
+     */
+    if ((RCC->CR & (RCC_CR_PLLON | RCC_CR_PLLRDY))
+            == (RCC_CR_PLLON | RCC_CR_PLLRDY)
+        && (RCC->CFGR & RCC_CFGR_SWS) == RCC_CFGR_SWS_PLL) {
+        /* rcc_init always programs HPRE = /1, so HCLK == SYSCLK.  Decode
+         * APB1/APB2 prescalers from the 3-bit PPREx field: top bit clear
+         * = /1, otherwise 1 << ((field & 0x3) + 1). */
+        uint32_t cfgr = RCC->CFGR;
+        uint32_t ppre1 = (cfgr & RCC_CFGR_PPRE1) >> RCC_CFGR_PPRE1_Pos;
+        uint32_t ppre2 = (cfgr & RCC_CFGR_PPRE2) >> RCC_CFGR_PPRE2_Pos;
+        uint32_t apb1_div = (ppre1 & 0x4u) ? (1u << ((ppre1 & 0x3u) + 1u)) : 1u;
+        uint32_t apb2_div = (ppre2 & 0x4u) ? (1u << ((ppre2 & 0x3u) + 1u)) : 1u;
+        s_sysclk        = target_sysclk_hz;
+        s_ahb_clk       = target_sysclk_hz;
+        s_apb1_clk      = s_ahb_clk / apb1_div;
+        s_apb2_clk      = s_ahb_clk / apb2_div;
+        s_apb1_timer_clk = (apb1_div == 1) ? s_apb1_clk : s_apb1_clk * 2;
+        return ERR_OK;
+    }
+
     /* No PLL needed — run directly from the oscillator */
     if (target_sysclk_hz == source_freq) {
         cache_default_clocks(source_freq);

@@ -83,22 +83,28 @@ def get_project_root() -> Path:
 
 def build_firmware(project_root: Path) -> Path:
     """
-    Build cli_simple firmware with HIL_TEST=1
-    
+    Build cli_simple firmware with HIL_TEST=1.
+
+    Since Plan 001 Phase 1.5 the cli_simple image is linked at slot A
+    (0x08010000) and signed by tools/sign_image.py.  This function returns
+    the path to the .signed.bin — the artifact the bootloader can parse and
+    jump into.  The bootloader itself is flashed manually once per board
+    via `make flash-bootloader` and is never touched by CI.
+
     Returns:
-        Path to the built .elf file
+        Path to the cli_simple.signed.bin file, or None on error.
     """
     log_info("Building firmware with HIL_TEST=1...")
-    
+
     try:
-        result = subprocess.run(
+        subprocess.run(
             ['make', 'clean'],
             cwd=project_root,
             capture_output=True,
             text=True,
             check=True
         )
-        
+
         result = subprocess.run(
             ['make', 'EXAMPLE=cli_simple', 'HIL_TEST=1'],
             cwd=project_root,
@@ -107,30 +113,30 @@ def build_firmware(project_root: Path) -> Path:
             check=True,
             timeout=120
         )
-        
-        # Find the built ELF file
+
         elf_path = project_root / 'build' / 'apps' / 'cli' / 'cli_simple' / 'cli_simple.elf'
-        
-        if not elf_path.exists():
-            log_error("Build completed but ELF file not found")
+        signed_path = project_root / 'build' / 'apps' / 'cli' / 'cli_simple' / 'cli_simple.signed.bin'
+
+        if not signed_path.exists():
+            log_error("Build completed but signed binary not found")
             print(result.stdout)
             if result.stderr:
                 log_error("Build stderr:")
                 print(result.stderr)
             return None
-        
-        log_success(f"Build complete: {elf_path.relative_to(project_root)}")
-        
-        # Print binary size
-        size_result = subprocess.run(
-            ['arm-none-eabi-size', str(elf_path)],
-            capture_output=True,
-            text=True
-        )
-        print(size_result.stdout)
-        
-        return elf_path
-        
+
+        log_success(f"Build complete: {signed_path.relative_to(project_root)}")
+
+        if elf_path.exists():
+            size_result = subprocess.run(
+                ['arm-none-eabi-size', str(elf_path)],
+                capture_output=True,
+                text=True
+            )
+            print(size_result.stdout)
+
+        return signed_path
+
     except subprocess.CalledProcessError as e:
         log_error(f"Build failed with exit code {e.returncode}")
         print(e.stdout)
@@ -140,47 +146,57 @@ def build_firmware(project_root: Path) -> Path:
         log_error("Build timed out after 120 seconds")
         return None
 
-def flash_firmware(elf_path: Path, hla_serial: str = '') -> bool:
+def flash_firmware(image_path: Path, hla_serial: str = '',
+                   slot_base: int = 0x08010000) -> bool:
     """
-    Flash firmware to STM32 board using OpenOCD.
+    Flash a signed firmware image into slot A via OpenOCD.
+
+    Sector 0 is reserved for the bootloader (see Plan 001 Phase 1.5) and
+    must NEVER be touched by this script — it is programmed manually once
+    per board via ``make flash-bootloader``.  CI only reflashes the slot.
 
     Args:
-        elf_path:    Path to the .elf file to flash.
+        image_path:  Path to the .signed.bin produced by tools/sign_image.py.
         hla_serial:  ST-LINK serial number to target.  When non-empty,
                      ``hla_serial`` is passed to OpenOCD so that it selects
                      the correct probe even when multiple ST-LINKs are
                      connected.
+        slot_base:   Flash address for the .signed.bin.  Default 0x08010000
+                     (slot A); Phase 1.7 will introduce slot B at a higher
+                     address.
 
     Returns:
-        True if successful, False otherwise
+        True if successful, False otherwise.
     """
-    log_info(f"Flashing {elf_path.name} via OpenOCD...")
+    log_info(f"Flashing {image_path.name} at {slot_base:#010x} via OpenOCD...")
 
     cmd = ['openocd']
 
-    # Pin to a specific ST-LINK probe when serial is known
     if hla_serial:
         cmd += ['-c', f'hla_serial {hla_serial}']
         log_info(f"Targeting ST-LINK serial: {hla_serial}")
 
+    # Raw .bin requires an explicit base address.  `verify` confirms the
+    # post-program flash contents match; `reset` re-runs the bootloader so
+    # the new slot-A image is the first thing it sees.
     cmd += [
         '-f', 'board/st_nucleo_f4.cfg',
-        '-c', f'program {elf_path} verify reset exit'
+        '-c', f'program {image_path} {slot_base:#010x} verify reset exit',
     ]
 
     try:
-        result = subprocess.run(
+        subprocess.run(
             cmd,
-            cwd=elf_path.parent.parent.parent.parent,  # Project root
+            cwd=get_project_root(),
             capture_output=True,
             text=True,
             check=True,
-            timeout=30
+            timeout=30,
         )
-        
+
         log_success("Flash complete")
         return True
-        
+
     except subprocess.CalledProcessError as e:
         log_error(f"Flash failed with exit code {e.returncode}")
         print(e.stderr)
@@ -631,27 +647,28 @@ def main():
         project_root = get_project_root()
         log_info(f"Project root: {project_root}")
 
-        # Build firmware
+        # Build firmware (produces cli_simple.signed.bin).
         if not args.skip_build:
-            elf_path = build_firmware(project_root)
-            if not elf_path:
+            image_path = build_firmware(project_root)
+            if not image_path:
                 return 2
         else:
             log_warning("Skipping build (--skip-build)")
-            elf_path = project_root / 'build' / 'apps' / 'cli' / 'cli_simple' / 'cli_simple.elf'
-            if not elf_path.exists():
-                log_error("No existing ELF file found - build required")
+            image_path = (project_root / 'build' / 'apps' / 'cli' / 'cli_simple'
+                          / 'cli_simple.signed.bin')
+            if not image_path.exists():
+                log_error("No existing signed image found - build required")
                 return 2
 
-        # Resolve board selection
-        # Resolve board role to serial number (overrides --hla-serial)
+        # Resolve board role to serial number (overrides --hla-serial).
         hla_serial = args.hla_serial
         if args.board:
             hla_serial = BOARD_REGISTRY[args.board]
 
-        # Flash firmware
+        # Flash the slot-A image only — the bootloader in sector 0 is
+        # programmed once per board and is never touched here.
         if not args.skip_flash:
-            if not flash_firmware(elf_path, hla_serial=hla_serial):
+            if not flash_firmware(image_path, hla_serial=hla_serial):
                 return 2
         else:
             log_warning("Skipping flash (--skip-flash)")

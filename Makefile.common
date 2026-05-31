@@ -86,14 +86,25 @@ CFLAGS := $(CFLAGS_BASE) $(COMMON_INCLUDES) -DLOG_LEVEL=$(LOG_LEVEL) $(HIL_TEST_
 #==============================================================================
 # Linker configuration
 #==============================================================================
-# Default linker script. An app can select its own by setting LDSCRIPT
-# (e.g. LDSCRIPT := $(LINKER_DIR)/bootloader_ls.ld) in its own Makefile
-# AFTER `include ../../Makefile.common`. LDFLAGS uses recursive expansion
-# so a later override of LDSCRIPT takes effect at link time.
-LDSCRIPT ?= $(LINKER_DIR)/stm32_ls.ld
+# Default linker script — slot A (0x08010000) since Plan 001 Phase 1.5.
+# Apps land at SLOT_BASE + sizeof(img_header_t); tools/sign_image.py prepends
+# the 140-byte header and produces a .signed.bin that the bootloader can
+# parse + jump into.  The bootloader app overrides LDSCRIPT to point at
+# linker/bootloader_ls.ld so it lives in sector 0 instead.
+#
+# Override on a per-app basis by setting LDSCRIPT := ... in the app's
+# Makefile AFTER `include ../../Makefile.common`.  LDFLAGS uses recursive
+# expansion so a later override of LDSCRIPT takes effect at link time.
+LDSCRIPT ?= $(LINKER_DIR)/app_ls.ld
+
+# Default slot base.  Phase 1.7 will introduce a slot-B build that overrides
+# this.  The value is forwarded to the linker as a --defsym so app_ls.ld
+# can compute the FLASH ORIGIN.
+SLOT_BASE ?= 0x08010000
 
 # Linker flags
-LDFLAGS = $(MCU_FLAGS) -flto -T $(LDSCRIPT) -Wl,--gc-sections --specs=nosys.specs
+LDFLAGS = $(MCU_FLAGS) -flto -T $(LDSCRIPT) -Wl,--gc-sections \
+          -Wl,--defsym=SLOT_BASE=$(SLOT_BASE) --specs=nosys.specs
 
 #==============================================================================
 # Library paths
@@ -104,6 +115,24 @@ PRINTF_LIB := $(BUILD_DIR)/3rd_party/libprintf.a
 LOG_C_LIB := $(BUILD_DIR)/3rd_party/liblog_c.a
 UTILS_LIB := $(BUILD_DIR)/utils/libutils.a
 UNITY_ARM_LIB := $(BUILD_DIR)/3rd_party/libunity_arm.a
+IMG_LIB := $(BUILD_DIR)/lib/img/libimg.a
+
+#==============================================================================
+# Plan 001 signing artifacts
+#
+# `make keys` generates a deterministic dev keypair via tools/keygen.py.  The
+# private key signs every app image (including the HIL cli_simple build) and
+# the matching public key is linked into the bootloader (Phase 1.6 will call
+# crypto_ecdsa_p256_verify against it; Phase 1.5 only links it).
+#
+# The seed is fixed so CI builds are reproducible.  The output lives under
+# build/keys/ which is already covered by the build/ .gitignore entry — no
+# private keys ever land in source control.
+#==============================================================================
+KEYS_DIR    := $(BUILD_DIR)/keys
+KEY_SEED    := stm32-bare-metal-dev-fixture
+DEV_PRIV    := $(KEYS_DIR)/dev_priv.pem
+BL_PUBKEY_C := $(KEYS_DIR)/bootloader_pubkey.c
 
 #==============================================================================
 # Common build rules
@@ -152,4 +181,5 @@ clean-module:
 export CC CP OD SZ AR
 export MCU_FLAGS CFLAGS LDFLAGS LDSCRIPT
 export ROOT_DIR BUILD_DIR HIL_TEST LIB_DIR
-export DRIVERS_LIB STARTUP_OBJ PRINTF_LIB LOG_C_LIB UTILS_LIB UNITY_ARM_LIB
+export DRIVERS_LIB STARTUP_OBJ PRINTF_LIB LOG_C_LIB UTILS_LIB UNITY_ARM_LIB IMG_LIB
+export KEYS_DIR KEY_SEED DEV_PRIV BL_PUBKEY_C

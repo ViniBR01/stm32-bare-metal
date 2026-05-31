@@ -66,11 +66,17 @@ help:
 	@echo ""
 	@echo "Example: make EXAMPLE=cli_simple"
 
+#==============================================================================
+# Image-version field stamped into the signed header.
+#==============================================================================
+IMAGE_VERSION ?= 1
+
 # Build all apps
 all: $(APPS)
 
-# Pattern rule for building the cli_simple app (multi-file)
-cli_simple: $(LOCAL_BUILD_DIR)/cli_simple/cli_simple.bin
+# Pattern rule for building the cli_simple app (multi-file).  Final target
+# is the signed binary; the unsigned .bin is kept as a debug aid.
+cli_simple: $(LOCAL_BUILD_DIR)/cli_simple/cli_simple.signed.bin
 	@echo "App cli_simple built successfully!"
 
 # Compile each .c file in this directory into an object file
@@ -91,6 +97,16 @@ $(LOCAL_BUILD_DIR)/cli_simple/cli_simple.bin: $(LOCAL_BUILD_DIR)/cli_simple/cli_
 	$(CP) -O binary $< $@
 	@echo "Created cli_simple.bin"
 	@$(SZ) $<
+
+# Sign the bin so the bootloader will accept it at slot A.
+$(LOCAL_BUILD_DIR)/cli_simple/cli_simple.signed.bin: $(LOCAL_BUILD_DIR)/cli_simple/cli_simple.bin $(DEV_PRIV)
+	@echo "Signing cli_simple.bin..."
+	python3 $(ROOT_DIR)/tools/sign_image.py \
+		--priv-in $(DEV_PRIV) \
+		--in $< \
+		--out $@ \
+		--image-type app \
+		--image-version $(IMAGE_VERSION)
 
 # Clean all build artifacts
 clean:

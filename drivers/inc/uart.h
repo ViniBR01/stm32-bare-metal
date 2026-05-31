@@ -76,6 +76,24 @@ typedef struct {
 void uart_init(void);
 
 /**
+ * @brief Tear down the currently-initialised UART instance.
+ *
+ * Disables the USART (CR1/CR2/CR3 cleared) and the matching NVIC entry,
+ * clears any pending interrupt, and resets driver-level state (active
+ * instance, callbacks, DMA buffers, error flags) so the next
+ * uart_init_config call starts clean.
+ *
+ * Designed for the bootloader -> app handover: the bootloader prints
+ * boot logs over USART2 (which arms RXNEIE + the NVIC entry), then
+ * calls uart_deinit() before jumping so a stray RX byte cannot raise
+ * USART2_IRQHandler against the app's not-yet-initialised state.
+ *
+ * Safe to call when no instance has been initialised — returns
+ * immediately.
+ */
+void uart_deinit(void);
+
+/**
  * @brief Initialize a UART instance with configurable parameters.
  *
  * Configures the specified USART instance at the requested baud rate.

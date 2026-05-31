@@ -248,3 +248,22 @@ uint32_t flash_get_sector_size(uint8_t sector)
     }
     return sector_sizes[sector];
 }
+
+err_t flash_sector_for_address(uint32_t address, uint8_t *sector_out)
+{
+    if (sector_out == NULL) {
+        return ERR_INVALID_ARG;
+    }
+    if (address < FLASH_BASE_ADDR || address > FLASH_END_ADDR) {
+        return ERR_INVALID_ARG;
+    }
+    for (uint8_t s = 0; s < FLASH_SECTOR_COUNT; s++) {
+        uint32_t base = sector_addresses[s];
+        uint32_t end  = base + sector_sizes[s];   /* one past last byte */
+        if (address >= base && address < end) {
+            *sector_out = s;
+            return ERR_OK;
+        }
+    }
+    return ERR_INVALID_ARG;
+}

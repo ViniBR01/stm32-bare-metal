@@ -4,6 +4,46 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-05-30] milestone | Plan 001 Phase 1.5 — bootloader skeleton (#151)
+
+The first on-target piece of the bootloader track lands in this PR. Sector 0
+(`0x08000000`, 16 KB) now holds `apps/bootloader/loader` linked with
+`linker/bootloader_ls.ld`; every other app — including `cli_simple` for HIL
+— is linked at slot A (`0x08010000`) via `linker/app_ls.ld` and post-
+processed by `tools/sign_image.py` into a `.signed.bin` carrying the
+140-byte `img_header_t`. The shared startup code writes
+`SCB->VTOR = &_app_vector_base` for every slot-A image; the bootloader
+build leaves the symbol weakly-undefined and skips the write.
+
+Signature verification is intentionally skipped at this stage — the
+bootloader trusts whatever lives in slot A, parses the header (magic + CRC
++ type), and jumps. Phase 1.6 will wire `crypto_ecdsa_p256_verify()`
+against the public key already linked into the loader binary.
+
+Notable shape decisions:
+
+- **Dev keypair from a fixed seed at build time.** `make keys` runs
+  `tools/keygen.py --seed stm32-bare-metal-dev-fixture` into
+  `build/keys/`, which is gitignored. CI regenerates on every run; no
+  private key ever lands in source control. Production keys obviously
+  would not work this way (Phase 1.11 production-gap doc).
+- **Migrate every app to slot A.** The default `LDSCRIPT` in
+  `Makefile.common` flips from `linker/stm32_ls.ld` to
+  `linker/app_ls.ld`, and every `apps/basic/*.c` and `apps/cli/cli_simple`
+  now produces a `.signed.bin` as its final artifact. Trying to flash an
+  unsigned binary at sector 0 is rejected by the new
+  `make flash-bootloader` / `make flash` split.
+- **HIL runner unchanged from the test side.** `scripts/run_hil_tests.py`
+  now flashes `cli_simple.signed.bin` at `0x08010000` instead of the
+  `.elf` at sector 0; the existing `START_TESTS`/`END_TESTS` framing is
+  untouched. A new `scripts/run_boot_smoke_test.py` flashes
+  `app_blinky_signed.signed.bin` and asserts the bootloader → app jump.
+- **Bootloader is manually flashed.** A new `make flash-bootloader`
+  target programs sector 0; CI never invokes it. Each NUCLEO board owned
+  by the rig needs the bootloader installed once before that board can
+  host HIL runs. Procedure + recovery documented in
+  `docs/wiki/plans/001-bootloader/bootloader-skeleton.md`.
+
 ## [2026-05-29] merge | Plan 001 Phase 1.4 — host signing tooling (#148)
 
 `tools/keygen.py` and `tools/sign_image.py` produce signed firmware images

@@ -61,10 +61,21 @@ def build_signed_image(
     *,
     image_type: int,
     image_version: int,
+    payload_offset: int = fmt.IMG_PAYLOAD_OFFSET_DEFAULT,
 ) -> bytes:
-    """Return a complete signed image: header || payload."""
+    """Return a complete signed image: header || padding || payload.
+
+    The default payload_offset is 256 so the payload's first word — which
+    is the app vector table — lands at a 128-byte boundary suitable for
+    the Cortex-M4 SCB->VTOR alignment requirement.  Bytes between the
+    140-byte header and the payload are zero-filled.
+    """
     if not payload:
         raise ValueError("payload is empty")
+    if payload_offset < fmt.IMG_HEADER_SIZE:
+        raise ValueError(
+            f"payload_offset {payload_offset} < header size {fmt.IMG_HEADER_SIZE}"
+        )
 
     digest, signature = sign_payload(priv_key, payload)
     header = fmt.pack_header(
@@ -73,8 +84,10 @@ def build_signed_image(
         payload_size=len(payload),
         sha256=digest,
         signature=signature,
+        payload_offset=payload_offset,
     )
-    return header + payload
+    pad = b"\x00" * (payload_offset - fmt.IMG_HEADER_SIZE)
+    return header + pad + payload
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -138,7 +151,8 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"signed image -> {args.out}")
     print(f"  payload size   : {len(payload)} bytes")
-    print(f"  total size     : {len(signed)} bytes (header={fmt.IMG_HEADER_SIZE})")
+    print(f"  total size     : {len(signed)} bytes "
+          f"(header={fmt.IMG_HEADER_SIZE}, payload_offset={fmt.IMG_PAYLOAD_OFFSET_DEFAULT})")
     print(f"  payload sha256 : {hashlib.sha256(payload).hexdigest()}")
     return 0
 

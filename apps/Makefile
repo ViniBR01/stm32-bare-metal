@@ -14,7 +14,7 @@ include ../Makefile.common
 #==============================================================================
 # Subdirectories
 #==============================================================================
-SUBDIRS := basic cli
+SUBDIRS := basic cli bootloader
 
 #==============================================================================
 # App to build (passed from root makefile via the EXAMPLE variable, kept for
@@ -30,12 +30,26 @@ EXAMPLE ?= blink_simple
 # Default target - build the specified app
 all: $(EXAMPLE)
 
-# Build specific app (delegate to appropriate subdirectory)
+# Build specific app (delegate to appropriate subdirectory).
+#
+# Three layouts are supported by the probe:
+#   1. dir/<app>.c                 — flat single-file app (apps/basic/*.c)
+#   2. dir/<app>/main.c            — per-app subdir, EXAMPLE matches subdir
+#                                    name (apps/bootloader/app_blinky_signed)
+#   3. dir/<app>/Makefile          — same shape but EXAMPLE != subdir,
+#                                    handled by the subdir's own Makefile
+#                                    (e.g. apps/cli — EXAMPLE=cli_simple)
+# We let the subdir Makefile do its own dispatch when neither (1) nor (2) hit.
 $(EXAMPLE):
-	@# Determine which subdirectory contains the app
 	@for dir in $(SUBDIRS); do \
-		if [ -f "$$dir/$(EXAMPLE).c" ]; then \
+		if [ -f "$$dir/$(EXAMPLE).c" ] || [ -f "$$dir/$(EXAMPLE)/main.c" ]; then \
 			$(MAKE) -C $$dir EXAMPLE=$(EXAMPLE); \
+			exit 0; \
+		fi; \
+	done; \
+	for dir in $(SUBDIRS); do \
+		if $(MAKE) -C $$dir -n $(EXAMPLE) >/dev/null 2>&1; then \
+			$(MAKE) -C $$dir $(EXAMPLE); \
 			exit 0; \
 		fi; \
 	done; \

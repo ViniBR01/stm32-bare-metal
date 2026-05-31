@@ -94,21 +94,55 @@ git clone --recurse-submodules https://github.com/ViniBR01/stm32-bare-metal.git
 cd stm32-bare-metal
 
 make test                    # host unit tests (no board needed)
-make                         # build the default CLI app
-make flash                   # flash via OpenOCD (NUCLEO connected over USB)
+```
+
+### Preparing a board (one-time, per NUCLEO)
+
+Plan 001 Phase 1.5 reserves sector 0 for a custom bootloader and links every
+app at slot A (`0x08010000`).  A board with a blank or factory sector 0
+won't run anything from this repo until the bootloader is in place.  Each
+NUCLEO needs the following step **once**:
+
+```sh
+make flash-bootloader
+```
+
+That target builds the bootloader, programs sector 0, and reads back the
+first two flash words to confirm the image is valid.  Pin to a specific
+ST-LINK probe with `BOARD=ci|dev` or `HLA_SERIAL=<serial>` if you have
+multiple boards plugged in:
+
+```sh
+make flash-bootloader BOARD=dev
+make flash-bootloader HLA_SERIAL=066CFF3833554B3043154235
+```
+
+The wrapper script ([scripts/flash_bootloader.py](scripts/flash_bootloader.py))
+refuses to run when `STM32_BARE_METAL_CI=1` is set, so CI runners can't
+accidentally reprogram sector 0.  Recovery if you ever brick the board is
+documented in
+[docs/wiki/plans/001-bootloader/bootloader-skeleton.md](docs/wiki/plans/001-bootloader/bootloader-skeleton.md).
+
+### Day-to-day flow
+
+```sh
+make                         # build the default CLI app (linked at slot A)
+make flash                   # flash signed image to slot A via OpenOCD
 make serial                  # open the serial console at 115200 baud
 ```
 
-Type `help` in the CLI prompt to list commands (LED control, SPI throughput
-sweep with DWT-cycle-counter timing, uptime, and so on). New commands plug into
-the dispatch table in [apps/cli/cli_commands.c](apps/cli/cli_commands.c).
+You should see the bootloader's `BL: jumping to slot A @ 0x08010200` line
+followed by the app's banner.  Type `help` in the CLI prompt to list
+commands (LED control, SPI throughput sweep with DWT-cycle-counter timing,
+uptime, and so on).  New commands plug into the dispatch table in
+[apps/cli/cli_commands.c](apps/cli/cli_commands.c).
 
 Other useful targets:
 
 ```sh
 make all                              # build every app
 make EXAMPLE=blink_pwm                # build a specific app
-make flash EXAMPLE=iwdg_basic         # flash a specific app
+make flash EXAMPLE=iwdg_basic         # flash a specific app to slot A
 make debug EXAMPLE=cli_simple         # OpenOCD + GDB attached
 make help                             # full target list
 ```

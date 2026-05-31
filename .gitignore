@@ -57,6 +57,7 @@ dkms.conf
 
 # IDEs and editors
 .vscode/
+.cursor/
 *~
 \#*\#
 

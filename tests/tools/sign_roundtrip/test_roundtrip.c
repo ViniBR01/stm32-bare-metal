@@ -88,8 +88,11 @@ static void test_signed_image_parses_and_verifies(void)
     TEST_ASSERT_EQUAL_UINT32(IMG_TYPE_APP, hdr.image_type);
     TEST_ASSERT_EQUAL_UINT32(7u, hdr.image_version);
     TEST_ASSERT_EQUAL_UINT32(256u, hdr.payload_size);
-    TEST_ASSERT_EQUAL_UINT32(sizeof(img_header_t), hdr.payload_offset);
-    TEST_ASSERT_EQUAL_size_t(sizeof(img_header_t) + 256u, g_image_len);
+    /* sign_image.py defaults payload_offset to 512 — STM32F4's vector
+     * table is up to 448 bytes, so SCB->VTOR requires the next-pow2
+     * (512) alignment.  Total image = padded-header + payload. */
+    TEST_ASSERT_EQUAL_UINT32(512u, hdr.payload_offset);
+    TEST_ASSERT_EQUAL_size_t(512u + 256u, g_image_len);
 
     /* Recompute the payload digest and confirm it matches what the signer
      * embedded. This is the integrity check side of the bootloader logic. */
