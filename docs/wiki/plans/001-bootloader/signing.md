@@ -41,8 +41,9 @@ pip install cryptography
                               ┌──────────────────────┐
                               │ payload.signed.bin   │
                               │ ┌─img_header_t (140)─┤
-                              │ ├─payload (N)────────┤
-                              │ └────────────────────┘
+                              │ ├─zero pad (116)─────┤  pads to 256 so
+                              │ ├─payload (N)────────┤  payload aligns
+                              │ └────────────────────┘  to VTOR (≥128 B)
                               └──────────────────────┘
 ```
 
@@ -83,9 +84,15 @@ python3 tools/sign_image.py \
 1. Computes SHA-256 of the payload.
 2. Signs the digest with ECDSA P-256, decodes DER → raw R || S (64 bytes).
 3. Packs the 140-byte `img_header_t` with magic, versions, payload size,
-   `payload_offset = 140`, the digest, the signature, and a CRC-32 trailer
+   `payload_offset = 256`, the digest, the signature, and a CRC-32 trailer
    over the preceding 136 bytes.
-4. Writes header + payload to `--out`.
+4. Writes header || 116-byte zero pad || payload to `--out`.
+
+The pad makes the payload's first word — the app vector table — land at
+a 128-byte boundary, which Cortex-M4 SCB->VTOR requires (TBLOFF[6:0]
+must be zero).  The bootloader simply jumps to `slot_base + payload_offset`,
+so changing the offset is a header-only operation — no other parts of
+the bootloader or signer need to learn the value.
 
 The CRC algorithm is IEEE 802.3 / zlib (polynomial `0xEDB88320`, init
 `0xFFFFFFFF`, reflected, final XOR `0xFFFFFFFF`) and is implemented in

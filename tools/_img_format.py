@@ -32,6 +32,14 @@ IMG_SIGNATURE_SIZE = 64  # ECDSA P-256 raw R||S
 IMG_HEADER_SIZE = 140
 IMG_SLOT_METADATA_SIZE = 36
 
+# Default payload_offset used by sign_image.py.  The payload's first word
+# is the app vector table, which Cortex-M4 SCB->VTOR requires aligned to a
+# power-of-two >= the vector table size.  STM32F4 has 96 IRQs (vectors
+# 0..111), so the table is up to 448 bytes, requiring 512-byte alignment.
+# The 140-byte header is followed by 372 bytes of zero padding so the
+# payload's first word lands at a 512-byte boundary.
+IMG_PAYLOAD_OFFSET_DEFAULT = 512
+
 # Pubkey size mirrors CRYPTO_ECDSA_P256_PUBKEY_LEN in lib/crypto/inc/crypto.h.
 CRYPTO_ECDSA_P256_PUBKEY_LEN = 64
 

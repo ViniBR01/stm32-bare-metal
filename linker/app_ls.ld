@@ -20,10 +20,15 @@
 
 ENTRY(Reset_Handler)
 
-/* sizeof(img_header_t).  Pinned in lib/img/inc/img_header.h with a
- * _Static_assert and validated by the round-trip test.  If the on-flash
- * format ever changes, both spots must move together. */
-__img_header_size = 0x8C;
+/* Payload offset stamped into img_header_t.payload_offset by
+ * tools/sign_image.py.  STM32F4 supports up to 96 external IRQs
+ * (vectors 0..111), giving a worst-case 448-byte vector table.
+ * SCB->VTOR requires alignment to the next power-of-two of that size
+ * (512 = 0x200), so we pad the 140-byte header to land the payload's
+ * first word (the app vector table) at a 512-byte boundary.
+ * Must match IMG_PAYLOAD_OFFSET_DEFAULT in tools/_img_format.py.  If
+ * either side moves, both must move together. */
+__img_payload_offset = 0x200;
 
 /* Default = slot A.  Override with --defsym=SLOT_BASE=... for slot B. */
 PROVIDE(SLOT_BASE = 0x08010000);
@@ -36,8 +41,8 @@ __slot_size_bytes = 192K;
 
 MEMORY
 {
-    FLASH(rx) : ORIGIN = SLOT_BASE + __img_header_size,
-                LENGTH = __slot_size_bytes - __img_header_size
+    FLASH(rx) : ORIGIN = SLOT_BASE + __img_payload_offset,
+                LENGTH = __slot_size_bytes - __img_payload_offset
     SRAM(rwx) : ORIGIN = 0x20000000, LENGTH = 128K
 }
 
