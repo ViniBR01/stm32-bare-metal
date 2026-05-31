@@ -16,8 +16,11 @@ documented here, so the boot sequence below is still accurate; only the
             │ Bootloader (apps/bootloader/  │     linker/bootloader_ls.ld
             │ loader)                       │     never re-flashed by CI
 0x08004000  ├───────────────────────────────┤  Sector 1,  16 KB
-            │ Reserved — slot metadata      │  Phase 1.7 will populate this
-0x0800C000  │ (Phase 1.7)                   │
+            │ Slot A metadata (Phase 1.7)   │  see ab-slots.md
+0x08008000  ├───────────────────────────────┤  Sector 2,  16 KB
+            │ Slot B metadata (Phase 1.7)   │
+0x0800C000  ├───────────────────────────────┤  Sector 3,  16 KB
+            │ Reserved (Phase 1.9)          │
 0x08010000  ├───────────────────────────────┤  Sector 4,  64 KB  (slot A)
             │ img_header_t (140 B)          │     written by sign_image.py
             │ ─────────────                 │
@@ -25,8 +28,10 @@ documented here, so the boot sequence below is still accurate; only the
             │ .rodata + ...                 │     ORIGIN = SLOT_BASE + 0x8C
 0x08020000  ├───────────────────────────────┤  Sector 5, 128 KB
             │ slot A continued              │
-0x08040000  ├───────────────────────────────┤  Sector 6+ (slot B in 1.7)
-            │ ...                           │
+0x08040000  ├───────────────────────────────┤  Sector 6, 128 KB  (slot B)
+            │ Slot B image (Phase 1.7)      │     same linker, SLOT_BASE override
+0x08060000  ├───────────────────────────────┤  Sector 7, 128 KB
+            │ Reserved                      │
 0x08080000  └───────────────────────────────┘  end of flash (512 KB)
 ```
 

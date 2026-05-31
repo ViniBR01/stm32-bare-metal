@@ -4,6 +4,47 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-05-31] milestone | Plan 001 Phase 1.7 — A/B slots and fallback (#158)
+
+The bootloader now reads two slot-metadata blobs from sectors 1 and 2,
+picks an active slot using a deterministic decision tree, verifies it,
+and falls back to the other slot on any failure. If both fail, it logs
+`BL: both slots failed verify` and halts. Phase 1.6's verify call is
+reused unchanged inside a small wrapper; this phase only adds the
+slot-pick + retry around it.
+
+New `SLOT={A,B}` Makefile knob: any app linked with `app_ls.ld` can
+target either slot. Slot-B output paths carry a `_b` suffix so they
+do not clobber slot-A artefacts. `make EXAMPLE=cli_simple SLOT=B`
+produces a slot-B-linked signed image at 0x08040000.
+
+`lib/flash/` middleware lands with `flash_slot_validate_range()`
+(refuses sector-0 overlap), `flash_slot_erase()`, and
+`flash_slot_commit_metadata()` (erase-then-program-then-readback,
+power-cut-safe). 14 host unit tests cover the validators; the
+mutating helpers are exercised by the new HIL test.
+
+`tools/partition_dump.py` decodes both metadata blobs and image
+headers from a connected board (or a 512 KB flash dump). Useful for
+HIL debugging and for confirming the right slot is active after an
+OTA-style swap.
+
+`scripts/run_ab_slot_test.py` wires four HIL passes into CI:
+
+- clean A active → boots A, no fallback
+- clean B active → boots B, no fallback
+- A corrupt + active, B clean → fallback to B, app boots
+- both corrupt → halt, app never runs
+
+All four pass on the dev board with verify times ~143 ms (slot A) and
+~149 ms (slot B). loader.bin grew from 10 748 → 11 692 bytes
+(~4.5 KB headroom in sector 0).
+
+Scope cut: rollback-on-crash semantics (bootloader incrementing
+`fail_count` before each jump) deferred to land alongside Phase 1.9
+anti-rollback writes. The metadata struct already carries the field;
+the bootloader does not yet write it.
+
 ## [2026-05-31] milestone | Plan 001 Phase 1.6 — verify-and-jump (#156)
 
 Bootloader now verifies the slot-A image before jumping: SHA-256 over the

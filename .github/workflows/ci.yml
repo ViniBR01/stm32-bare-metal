@@ -148,3 +148,19 @@ jobs:
           path: verify-results.xml
           reporter: java-junit
           fail-on-error: false
+
+      # Plan 001 Phase 1.7 — A/B slot fallback test.  Builds slot-A
+      # and slot-B variants of app_blinky_signed, drives the chip
+      # through four scenarios (clean A, clean B, A bad fallback to B,
+      # both bad halt), and asserts the bootloader log lines.
+      - name: Run A/B slot test
+        run: python3 scripts/run_ab_slot_test.py --board ci --timeout 25 --junit-xml ab-slot-results.xml
+
+      - name: Publish A/B slot test results
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: A/B Slot Test
+          path: ab-slot-results.xml
+          reporter: java-junit
+          fail-on-error: false
