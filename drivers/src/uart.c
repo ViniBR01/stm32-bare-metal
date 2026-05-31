@@ -265,6 +265,40 @@ void uart_write(char ch) {
     USART2->DR = (ch & 0xFF);
 }
 
+void uart_puts(const char *s) {
+    while (*s) {
+        uart_write(*s++);
+    }
+}
+
+void uart_print_hex32(uint32_t v) {
+    static const char hex[] = "0123456789ABCDEF";
+    char buf[11];
+    buf[0] = '0';
+    buf[1] = 'x';
+    for (int i = 0; i < 8; ++i) {
+        buf[2 + i] = hex[(v >> ((7 - i) * 4)) & 0xFu];
+    }
+    buf[10] = '\0';
+    uart_puts(buf);
+}
+
+void uart_print_dec32(uint32_t v) {
+    /* uint32_t max is 4294967295 — 10 digits + NUL fits in 11 bytes. */
+    char buf[11];
+    int  i = (int)sizeof(buf) - 1;
+    buf[i--] = '\0';
+    if (v == 0) {
+        buf[i--] = '0';
+    } else {
+        while (v != 0 && i >= 0) {
+            buf[i--] = (char)('0' + (v % 10u));
+            v /= 10u;
+        }
+    }
+    uart_puts(&buf[i + 1]);
+}
+
 void uart_write_dma(const char* data, uint16_t length) {
     /* Check if DMA is already busy */
     if (tx_busy || length == 0) {

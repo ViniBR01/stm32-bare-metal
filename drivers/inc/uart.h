@@ -127,6 +127,35 @@ char uart_read(void);
 void uart_write(char ch);
 
 /**
+ * @brief Write a NUL-terminated string to UART (blocking, byte-by-byte).
+ *
+ * Convenience helper for printf-free contexts (e.g. the bootloader, where
+ * the sector-0 budget rules out pulling in printf_dma).  Stops at the
+ * first '\0'.  Each byte goes through uart_write(), so '\n' still
+ * gets the CRLF conversion.
+ *
+ * @param s NUL-terminated string; passing NULL is undefined behaviour.
+ */
+void uart_puts(const char *s);
+
+/**
+ * @brief Print a uint32_t as "0xNNNNNNNN" using uart_puts under the hood.
+ *
+ * Always prints exactly 10 characters (the "0x" prefix plus 8 uppercase
+ * hex digits).  No format-string machinery — safe to use from the
+ * bootloader.
+ */
+void uart_print_hex32(uint32_t v);
+
+/**
+ * @brief Print a uint32_t in base-10 (no leading zeros, no sign, no width).
+ *
+ * Stack-only, no allocations, no printf dependency.  Used by the
+ * bootloader's verify-time log line.
+ */
+void uart_print_dec32(uint32_t v);
+
+/**
  * @brief Write data to UART using DMA (non-blocking)
  *
  * Transmits a buffer over UART TX using DMA. Returns immediately if DMA

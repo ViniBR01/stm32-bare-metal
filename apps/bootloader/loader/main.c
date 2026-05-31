@@ -33,42 +33,14 @@
 
 extern const uint8_t bootloader_pubkey[CRYPTO_ECDSA_P256_PUBKEY_LEN];
 
-/* Fixed-buffer console — no printf, no DMA: keeps sector-0 footprint tiny. */
-static void uart_print(const char *s)
-{
-    while (*s) {
-        uart_write(*s++);
-    }
-}
-
-static void uart_print_hex32(uint32_t v)
-{
-    static const char hex[] = "0123456789ABCDEF";
-    char buf[11];
-    buf[0] = '0';
-    buf[1] = 'x';
-    for (int i = 0; i < 8; ++i) {
-        buf[2 + i] = hex[(v >> ((7 - i) * 4)) & 0xFu];
-    }
-    buf[10] = '\0';
-    uart_print(buf);
-}
-
-static void uart_print_dec32(uint32_t v)
-{
-    char buf[11];
-    int  i = (int)sizeof(buf) - 1;
-    buf[i--] = '\0';
-    if (v == 0) {
-        buf[i--] = '0';
-    } else {
-        while (v != 0 && i >= 0) {
-            buf[i--] = (char)('0' + (v % 10u));
-            v /= 10u;
-        }
-    }
-    uart_print(&buf[i + 1]);
-}
+/*
+ * The bootloader's UART log path uses uart_puts / uart_print_hex32 /
+ * uart_print_dec32 from drivers/inc/uart.h — they were lifted out of
+ * this file in #160.  Keeping them in the driver lets app_blinky_signed
+ * and any future printf-free app reuse the same loop, and
+ * -ffunction-sections + --gc-sections drops them from apps that don't
+ * reference them so there's no link-cost regression.
+ */
 
 static const char *slot_name(flash_slot_id_t s)
 {
@@ -195,18 +167,18 @@ static verify_status_t verify_slot(flash_slot_id_t slot, uint32_t *app_base_out,
     img_err_t rc = img_header_parse((const uint8_t *)slot_base,
                                     sizeof(img_header_t), &hdr);
     if (rc != IMG_OK) {
-        uart_print("BL: slot ");
-        uart_print(slot_name(slot));
-        uart_print(" header parse failed: rc=");
+        uart_puts("BL: slot ");
+        uart_puts(slot_name(slot));
+        uart_puts(" header parse failed: rc=");
         uart_print_hex32((uint32_t)rc);
-        uart_print("\r\n");
+        uart_puts("\r\n");
         return VERIFY_FAIL_PARSE;
     }
 
     if (hdr.image_type != IMG_TYPE_APP) {
-        uart_print("BL: slot ");
-        uart_print(slot_name(slot));
-        uart_print(" image_type != APP\r\n");
+        uart_puts("BL: slot ");
+        uart_puts(slot_name(slot));
+        uart_puts(" image_type != APP\r\n");
         return VERIFY_FAIL_TYPE;
     }
 
@@ -220,16 +192,16 @@ static verify_status_t verify_slot(flash_slot_id_t slot, uint32_t *app_base_out,
     crypto_sha256(payload, hdr.payload_size, computed);
 
     if (crypto_memcmp_ct(computed, hdr.sha256, CRYPTO_SHA256_DIGEST_LEN) != 0) {
-        uart_print("BL: slot ");
-        uart_print(slot_name(slot));
-        uart_print(" verify FAILED: sha mismatch\r\n");
+        uart_puts("BL: slot ");
+        uart_puts(slot_name(slot));
+        uart_puts(" verify FAILED: sha mismatch\r\n");
         return VERIFY_FAIL_SHA;
     }
 
     if (crypto_ecdsa_p256_verify(bootloader_pubkey, computed, hdr.signature) != 1) {
-        uart_print("BL: slot ");
-        uart_print(slot_name(slot));
-        uart_print(" verify FAILED: ecdsa reject\r\n");
+        uart_puts("BL: slot ");
+        uart_puts(slot_name(slot));
+        uart_puts(" verify FAILED: ecdsa reject\r\n");
         return VERIFY_FAIL_ECDSA;
     }
 
@@ -242,7 +214,7 @@ int main(void)
 {
     uart_init();
 
-    uart_print("\r\nBL: stm32-bare-metal bootloader (Phase 1.7)\r\n");
+    uart_puts("\r\nBL: stm32-bare-metal bootloader (Phase 1.7)\r\n");
 
     /* Read both metadata blobs.  All-FF (erased) sector → parse fails →
      * treat as "invalid" without halting; that's how a fresh chip with
@@ -251,18 +223,18 @@ int main(void)
     int a_ok = read_slot_metadata(FLASH_SLOT_A, &md_a);
     int b_ok = read_slot_metadata(FLASH_SLOT_B, &md_b);
 
-    uart_print("BL: metadata A=");
-    uart_print(a_ok ? "ok" : "invalid");
-    uart_print(" B=");
-    uart_print(b_ok ? "ok" : "invalid");
-    uart_print("\r\n");
+    uart_puts("BL: metadata A=");
+    uart_puts(a_ok ? "ok" : "invalid");
+    uart_puts(" B=");
+    uart_puts(b_ok ? "ok" : "invalid");
+    uart_puts("\r\n");
 
     flash_slot_id_t first  = pick_active_slot(a_ok, &md_a, b_ok, &md_b);
     flash_slot_id_t second = (first == FLASH_SLOT_A) ? FLASH_SLOT_B : FLASH_SLOT_A;
 
-    uart_print("BL: trying slot ");
-    uart_print(slot_name(first));
-    uart_print("\r\n");
+    uart_puts("BL: trying slot ");
+    uart_puts(slot_name(first));
+    uart_puts("\r\n");
 
     uint32_t app_base = 0u;
     uint32_t cycles   = 0u;
@@ -272,32 +244,32 @@ int main(void)
     if (st == VERIFY_OK) {
         winner = first;
     } else {
-        uart_print("BL: falling back to slot ");
-        uart_print(slot_name(second));
-        uart_print("\r\n");
+        uart_puts("BL: falling back to slot ");
+        uart_puts(slot_name(second));
+        uart_puts("\r\n");
         st = verify_slot(second, &app_base, &cycles);
         if (st == VERIFY_OK) {
             winner = second;
         } else {
-            uart_print("BL: both slots failed verify\r\n");
+            uart_puts("BL: both slots failed verify\r\n");
             bootloader_halt();
         }
     }
 
     uint32_t ms = cycles / 100000u;
-    uart_print("BL: verify ok slot=");
-    uart_print(slot_name(winner));
-    uart_print(" in ");
+    uart_puts("BL: verify ok slot=");
+    uart_puts(slot_name(winner));
+    uart_puts(" in ");
     uart_print_dec32(cycles);
-    uart_print(" cycles (~");
+    uart_puts(" cycles (~");
     uart_print_dec32(ms);
-    uart_print(" ms)\r\n");
+    uart_puts(" ms)\r\n");
 
-    uart_print("BL: jumping to slot ");
-    uart_print(slot_name(winner));
-    uart_print(" @ ");
+    uart_puts("BL: jumping to slot ");
+    uart_puts(slot_name(winner));
+    uart_puts(" @ ");
     uart_print_hex32(app_base);
-    uart_print("\r\n");
+    uart_puts("\r\n");
 
     jump_to_app(app_base);
 }
