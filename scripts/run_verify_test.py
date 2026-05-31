@@ -49,10 +49,24 @@ CYCLES_PER_MS_AT_100_MHZ = 100_000
 HARD_CAP_MS = 500
 HARD_CAP_CYCLES = HARD_CAP_MS * CYCLES_PER_MS_AT_100_MHZ
 
+"""Log-line patterns.
+
+Phase 1.6 emitted:
+    BL: verify ok in <N> cycles (~<M> ms)
+    BL: verify FAILED: <reason>
+
+Phase 1.7 added a slot annotation:
+    BL: verify ok slot=<X> in <N> cycles (~<M> ms)
+    BL: slot <X> verify FAILED: <reason>
+
+The regexes accept either form so this script keeps working if a future
+phase tweaks the format again — the cycle count and the FAILED keyword
+are the load-bearing parts.
+"""
 VERIFY_OK_RE = re.compile(
-    r"BL:\s+verify\s+ok\s+in\s+(\d+)\s+cycles\s+\(~(\d+)\s+ms\)"
+    r"BL:\s+verify\s+ok(?:\s+slot=\w+)?\s+in\s+(\d+)\s+cycles\s+\(~(\d+)\s+ms\)"
 )
-VERIFY_FAIL_PREFIX = "BL: verify FAILED:"
+VERIFY_FAIL_RE = re.compile(r"BL:(?:\s+slot\s+\w+)?\s+verify\s+FAILED:")
 APP_ALIVE_LINE = "APP: blinky alive"
 
 
@@ -147,7 +161,7 @@ def capture_lines(port: str, timeout: int, stop_on_fail: bool = False) -> list[s
                 if line:
                     lines.append(line)
                     print(f"  {line}")
-                    if stop_on_fail and VERIFY_FAIL_PREFIX in line:
+                    if stop_on_fail and VERIFY_FAIL_RE.search(line):
                         # Keep reading briefly to confirm the app does NOT come up.
                         time.sleep(2.0)
                         while ser.in_waiting:
@@ -195,8 +209,8 @@ def assert_clean_pass(lines: list[str]) -> tuple[bool, list[str]]:
 
 def assert_tampered_pass(lines: list[str]) -> tuple[bool, list[str]]:
     failures: list[str] = []
-    if not any(VERIFY_FAIL_PREFIX in s for s in lines):
-        failures.append(f"missing '{VERIFY_FAIL_PREFIX} <reason>' line")
+    if not any(VERIFY_FAIL_RE.search(s) for s in lines):
+        failures.append("missing 'BL: ... verify FAILED: <reason>' line")
     if any(APP_ALIVE_LINE in s for s in lines):
         failures.append(
             f"app started despite tampered image — saw {APP_ALIVE_LINE!r}"
