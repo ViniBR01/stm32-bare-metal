@@ -146,12 +146,23 @@ flash: $(EXAMPLE)
 # slot-A app images.  See docs/wiki/plans/001-bootloader/bootloader-skeleton.md
 # for the full procedure (including OpenOCD-based recovery if a bad image
 # bricks the chain).
+#
+# Delegates to scripts/flash_bootloader.py so we get the post-flash readback
+# sanity check, the STM32_BARE_METAL_CI=1 guard, and optional ST-LINK pinning
+# via `BOARD=ci|dev` or `HLA_SERIAL=...` for free.  Pass extra args with
+# `BOOTLOADER_FLASH_ARGS="--skip-build"` etc.
 #==============================================================================
+BOARD ?=
+HLA_SERIAL ?=
+BOOTLOADER_FLASH_ARGS ?=
+
 flash-bootloader: bootloader
 	@echo "Programming bootloader to sector 0 (0x08000000)."
 	@echo "This is a manual operation; the HIL CI runner must NEVER call this."
-	openocd -f board/st_nucleo_f4.cfg \
-		-c "program $(BUILD_DIR)/apps/bootloader/loader/loader.elf verify reset exit"
+	@python3 scripts/flash_bootloader.py --skip-build \
+		$(if $(BOARD),--board $(BOARD)) \
+		$(if $(HLA_SERIAL),--hla-serial $(HLA_SERIAL)) \
+		$(BOOTLOADER_FLASH_ARGS)
 #==============================================================================
 # Debug target
 #==============================================================================

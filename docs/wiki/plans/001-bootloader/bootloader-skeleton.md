@@ -122,8 +122,9 @@ every board (`ci` and `dev` ST-LINK serials live in
 [scripts/run_hil_tests.py:40-43](../../../../scripts/run_hil_tests.py#L40-L43)).
 
 ```sh
-make EXAMPLE=bootloader
-make flash-bootloader EXAMPLE=bootloader
+make flash-bootloader                          # auto-detect probe
+make flash-bootloader BOARD=dev                # pin to dev rig
+make flash-bootloader HLA_SERIAL=066CFF...     # pin by ST-LINK serial
 ```
 
 `make flash-bootloader` is a separate target that **only** programs sector
@@ -131,6 +132,17 @@ make flash-bootloader EXAMPLE=bootloader
 flash` so a typo cannot trash sector 0.  `make flash` itself refuses
 when invoked with `EXAMPLE=bootloader` — flashing the bootloader is always
 explicit.
+
+The target delegates to
+[scripts/flash_bootloader.py](../../../../scripts/flash_bootloader.py), which:
+
+- builds `make EXAMPLE=bootloader` (skip with `BOOTLOADER_FLASH_ARGS=--skip-build`);
+- runs OpenOCD with the appropriate `adapter serial` argument;
+- reads back the first two words of flash and asserts MSP = `0x20020000`
+  and the reset vector falls inside sector 0 with the Thumb bit set, so a
+  bad flash fails loudly instead of silently;
+- refuses to run when `STM32_BARE_METAL_CI=1` is set in the environment,
+  so the HIL CI runner cannot reprogram sector 0 even by mistake.
 
 After this one-time step, every subsequent slot-A image flashed by
 `scripts/run_hil_tests.py` (or by `make flash EXAMPLE=<name>` from a dev
