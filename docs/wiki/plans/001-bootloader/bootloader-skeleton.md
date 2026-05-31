@@ -4,9 +4,10 @@ This page documents the bootloader skeleton landed by Phase 1.5 — the
 on-flash partition layout, the boot sequence, the manual-flash procedure,
 and the OpenOCD-based recovery procedure for a bricked board.
 
-The signature-verification path is intentionally absent from this phase;
-Phase 1.6 wires `crypto_ecdsa_p256_verify()` into the boot path against the
-public key already linked into the bootloader.
+The signature-verification path is described in [verify-and-jump.md](verify-and-jump.md)
+(Phase 1.6) — it slots in between the header-parse success and the jump
+documented here, so the boot sequence below is still accurate; only the
+"jump" arrow is gated on a successful ECDSA verify.
 
 ## Memory map
 

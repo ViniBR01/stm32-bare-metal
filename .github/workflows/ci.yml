@@ -131,3 +131,20 @@ jobs:
           path: boot-smoke-results.xml
           reporter: java-junit
           fail-on-error: false
+
+      # Plan 001 Phase 1.6 — verify-and-jump test.
+      # Asserts that the bootloader's signature path accepts a clean
+      # signed image and rejects a tampered one.  Runs after the boot
+      # smoke test so a header-parse regression surfaces independently
+      # of the verify path.
+      - name: Run verify test
+        run: python3 scripts/run_verify_test.py --board ci --timeout 20 --baseline tests/baselines/bootloader_verify.json --junit-xml verify-results.xml
+
+      - name: Publish verify test results
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: Verify Test
+          path: verify-results.xml
+          reporter: java-junit
+          fail-on-error: false

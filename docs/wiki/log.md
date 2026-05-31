@@ -4,6 +4,34 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-05-31] milestone | Plan 001 Phase 1.6 — verify-and-jump (#156)
+
+Bootloader now verifies the slot-A image before jumping: SHA-256 over the
+payload is constant-time-compared against `hdr.sha256`, then
+`crypto_ecdsa_p256_verify()` checks `hdr.signature` against the linked-in
+`bootloader_pubkey[64]`. The DWT cycle counter brackets both calls and the
+result is logged as `BL: verify ok in <cycles> cycles (~<ms> ms)`. Failures
+emit a distinct `BL: verify FAILED: <reason>` line and halt — no slot-B
+fallback yet (Phase 1.7).
+
+`libcrypto.a` (SHA-256 ~1 KB + micro-ecc P-256 verify ~5 KB) is linked into
+the loader; final `loader.bin` measures 10 748 / 16 384 bytes, leaving
+~5.6 KB headroom. A post-link `stat` guard in the bootloader Makefile
+fails the build if sector 0 is ever exceeded — the linker's `_etext` ASSERT
+does not see the `.data` LMA copy, so the bin-level check is the
+authoritative final guard.
+
+A new `scripts/run_verify_test.py` HIL job runs after the boot smoke test:
+flashes the clean `app_blinky_signed.signed.bin` and asserts both `BL:
+verify ok` and `APP: blinky alive` appear; then flips a byte in the
+payload region (file offset `payload_offset + 4`, NOT inside the header —
+that would only trip CRC and never reach the verify path) and asserts
+`BL: verify FAILED:` with no `APP: blinky alive`. `tests/baselines/
+bootloader_verify.json` records the soft 50 % tolerance plus the 500 ms
+hard cap from Plan 001 §1.3.
+
+See [plans/001-bootloader/verify-and-jump.md](plans/001-bootloader/verify-and-jump.md).
+
 ## [2026-05-30] milestone | Plan 001 Phase 1.5 — bootloader skeleton (#151)
 
 The first on-target piece of the bootloader track lands in this PR. Sector 0
