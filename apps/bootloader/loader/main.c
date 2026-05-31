@@ -1,12 +1,23 @@
 /*
- * Bootloader — Plan 001 Phase 1.5 (skeleton) + Phase 1.6 (verify-and-jump).
+ * Bootloader — Plan 001 Phase 1.5 (skeleton) + 1.6 (verify) + 1.7 (A/B + fallback).
  *
- * Lives in sector 0 (0x08000000, 16 KB).  After parsing the slot-A
- * img_header_t (lib/img), Phase 1.6 computes SHA-256 over the payload,
- * compares it constant-time against hdr.sha256, then verifies an
- * ECDSA-P256 signature against the bootloader_pubkey baked into this
- * image at link time.  Verify time is captured with the DWT cycle counter
- * and logged on success.  Any failure halts; slot-B fallback is Phase 1.7.
+ * Lives in sector 0 (0x08000000, 16 KB).  Boot flow:
+ *
+ *   1. Read both slot-metadata blobs (sectors 1 and 2).  Pick the active
+ *      slot:
+ *        - exactly one active + CRC valid     → that slot
+ *        - both active                        → higher monotonic_counter
+ *        - neither / both invalid             → default to A
+ *   2. Verify the active slot's image (header parse + SHA-256 + ECDSA).
+ *      On failure, fall back to the other slot and verify it.
+ *   3. If both slots fail verify, halt with a distinct log line.
+ *   4. Otherwise jump.
+ *
+ * Phase 1.6's verify call is invoked unchanged from a small wrapper —
+ * Phase 1.7 only adds the slot-pick + retry around it.  fail_count and
+ * monotonic_counter live in the metadata struct but the bootloader does
+ * not yet write them; that lands with rollback-on-crash semantics in a
+ * later phase together with Phase 1.9 anti-rollback.
  */
 
 #include <stdint.h>
@@ -15,22 +26,12 @@
 #include "stm32f4xx.h"
 
 #include "crypto.h"
+#include "flash_slot.h"
 #include "img_header.h"
 #include "led2.h"
 #include "uart.h"
 
-/*
- * Public key emitted by tools/keygen.py into $(BL_PUBKEY_C) and compiled
- * into this image.  The matching private key signs every app the bootloader
- * is asked to verify.  See Makefile.common's `keys` target.
- */
 extern const uint8_t bootloader_pubkey[CRYPTO_ECDSA_P256_PUBKEY_LEN];
-
-/*
- * Slot A starts at sector 4 (0x08010000).  The signed image lives there:
- * 140-byte img_header_t followed by the raw payload (vector table + code).
- */
-#define SLOT_A_BASE  0x08010000u
 
 /* Fixed-buffer console — no printf, no DMA: keeps sector-0 footprint tiny. */
 static void uart_print(const char *s)
@@ -53,10 +54,9 @@ static void uart_print_hex32(uint32_t v)
     uart_print(buf);
 }
 
-/* Decimal print for a uint32_t — used by the verify-time log line. */
 static void uart_print_dec32(uint32_t v)
 {
-    char buf[11];  /* 4294967295 fits in 10 digits + NUL */
+    char buf[11];
     int  i = (int)sizeof(buf) - 1;
     buf[i--] = '\0';
     if (v == 0) {
@@ -68,6 +68,11 @@ static void uart_print_dec32(uint32_t v)
         }
     }
     uart_print(&buf[i + 1]);
+}
+
+static const char *slot_name(flash_slot_id_t s)
+{
+    return (s == FLASH_SLOT_A) ? "A" : "B";
 }
 
 /* Slow blink + halt.  Visible failure mode for a stuck rig. */
@@ -105,49 +110,107 @@ static void __attribute__((noreturn)) jump_to_app(uint32_t app_base)
     __asm volatile ("cpsie i");
     ((void (*)(void))app_reset)();
 
-    /* Unreachable. */
     for (;;) { }
 }
 
-int main(void)
+/*
+ * Read the metadata blob for `slot`.  Returns 1 if the parse succeeded
+ * (the buffer was a valid img_slot_metadata_t with matching magic, CRC,
+ * version), 0 otherwise.  An all-0xFF (erased) sector counts as
+ * "invalid" because the CRC will never match.
+ */
+/*
+ * The bootloader uses just the slot-base / metadata-address constants
+ * from lib/flash, not any of its mutation code, so we resolve them
+ * inline rather than linking libflash.a into sector 0.
+ */
+static uint32_t slot_base_inline(flash_slot_id_t s)
 {
-    /* SystemInit (called from Reset_Handler before main) already brought
-     * the system clock up to 100 MHz from HSI via PLL.  Calling rcc_init
-     * a second time would attempt to clear PLLON while PLL is the active
-     * sysclk source — the chip stalls in that combination — so we just
-     * bring up USART2 here. */
-    uart_init();
+    return (s == FLASH_SLOT_A) ? FLASH_SLOT_A_BASE : FLASH_SLOT_B_BASE;
+}
 
-    uart_print("\r\nBL: stm32-bare-metal bootloader (Phase 1.6)\r\n");
+static uint32_t slot_metadata_inline(flash_slot_id_t s)
+{
+    return (s == FLASH_SLOT_A) ? FLASH_SLOT_A_METADATA : FLASH_SLOT_B_METADATA;
+}
+
+static int read_slot_metadata(flash_slot_id_t slot, img_slot_metadata_t *out)
+{
+    img_err_t rc = img_slot_metadata_parse((const uint8_t *)slot_metadata_inline(slot),
+                                           sizeof(img_slot_metadata_t),
+                                           out);
+    return (rc == IMG_OK) ? 1 : 0;
+}
+
+/*
+ * Pick the active slot to verify first.
+ *
+ *   - If only one metadata blob is valid AND it has active != 0    → that slot
+ *   - If both valid AND both active                                → higher
+ *                                                                    monotonic_counter
+ *                                                                    wins (ties → A)
+ *   - If only one valid (active or not)                            → that slot
+ *   - If neither valid                                             → A (skeleton-
+ *                                                                    compatible
+ *                                                                    default)
+ */
+static flash_slot_id_t pick_active_slot(int a_ok, const img_slot_metadata_t *a,
+                                        int b_ok, const img_slot_metadata_t *b)
+{
+    if (a_ok && b_ok) {
+        if (a->active && !b->active) return FLASH_SLOT_A;
+        if (b->active && !a->active) return FLASH_SLOT_B;
+        return (b->monotonic_counter > a->monotonic_counter) ? FLASH_SLOT_B
+                                                             : FLASH_SLOT_A;
+    }
+    if (a_ok) return FLASH_SLOT_A;
+    if (b_ok) return FLASH_SLOT_B;
+    return FLASH_SLOT_A;
+}
+
+/*
+ * Run header parse + SHA-256 + ECDSA verify on `slot`.  On success, sets
+ * *app_base_out to the absolute address of the app vector table and
+ * returns IMG_OK.  Logs every step with a slot annotation so HIL can
+ * grep the path.  Returns the same img_err_t used by Phase 1.6 plus
+ * IMG_OK on full success; signature-rejection is mapped to a non-OK
+ * value (we reuse IMG_ERR_BAD_CRC since the failure means "this image
+ * cannot be trusted" and the parser already exhausts the existing
+ * codes).
+ */
+typedef enum {
+    VERIFY_OK              = 0,
+    VERIFY_FAIL_PARSE      = 1,
+    VERIFY_FAIL_TYPE       = 2,
+    VERIFY_FAIL_SHA        = 3,
+    VERIFY_FAIL_ECDSA      = 4,
+} verify_status_t;
+
+static verify_status_t verify_slot(flash_slot_id_t slot, uint32_t *app_base_out,
+                                   uint32_t *cycles_out)
+{
+    const uint32_t slot_base = slot_base_inline(slot);
 
     img_header_t hdr;
-    img_err_t rc = img_header_parse((const uint8_t *)SLOT_A_BASE,
+    img_err_t rc = img_header_parse((const uint8_t *)slot_base,
                                     sizeof(img_header_t), &hdr);
     if (rc != IMG_OK) {
-        uart_print("BL: slot A header parse failed: rc=");
+        uart_print("BL: slot ");
+        uart_print(slot_name(slot));
+        uart_print(" header parse failed: rc=");
         uart_print_hex32((uint32_t)rc);
         uart_print("\r\n");
-        bootloader_halt();
+        return VERIFY_FAIL_PARSE;
     }
 
     if (hdr.image_type != IMG_TYPE_APP) {
-        uart_print("BL: slot A image_type != APP\r\n");
-        bootloader_halt();
+        uart_print("BL: slot ");
+        uart_print(slot_name(slot));
+        uart_print(" image_type != APP\r\n");
+        return VERIFY_FAIL_TYPE;
     }
 
-    /*
-     * Phase 1.6 — verify the signed payload before jumping.
-     *
-     * 1. Compute SHA-256 over the payload region in flash.
-     * 2. Constant-time compare against hdr.sha256 (catches plain bit-flips
-     *    and short-circuits the expensive ECDSA path on a clearly tampered
-     *    image, while still hitting verify even for header-clean tampers).
-     * 3. ECDSA-P256 verify the signature against the computed digest.
-     *
-     * DWT->CYCCNT brackets the whole verify so the log captures the full
-     * cost, not just the ECDSA step.  Hard cap is 500 ms per Plan 001 §1.3.
-     */
-    const uint8_t *payload = (const uint8_t *)(SLOT_A_BASE + hdr.payload_offset);
+    const uint8_t *payload = (const uint8_t *)(slot_base + hdr.payload_offset);
 
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CYCCNT = 0;
@@ -157,29 +220,82 @@ int main(void)
     crypto_sha256(payload, hdr.payload_size, computed);
 
     if (crypto_memcmp_ct(computed, hdr.sha256, CRYPTO_SHA256_DIGEST_LEN) != 0) {
-        uart_print("BL: verify FAILED: sha mismatch\r\n");
-        bootloader_halt();
+        uart_print("BL: slot ");
+        uart_print(slot_name(slot));
+        uart_print(" verify FAILED: sha mismatch\r\n");
+        return VERIFY_FAIL_SHA;
     }
 
     if (crypto_ecdsa_p256_verify(bootloader_pubkey, computed, hdr.signature) != 1) {
-        uart_print("BL: verify FAILED: ecdsa reject\r\n");
-        bootloader_halt();
+        uart_print("BL: slot ");
+        uart_print(slot_name(slot));
+        uart_print(" verify FAILED: ecdsa reject\r\n");
+        return VERIFY_FAIL_ECDSA;
     }
 
-    uint32_t cycles = DWT->CYCCNT;
-    /* SYSCLK is 100 MHz; 100 000 cycles == 1 ms.  Verify completes in tens
-     * of millions of cycles, so neither this division nor the uint32_t
-     * format width can overflow for any realistic payload. */
-    uint32_t ms = cycles / 100000u;
+    *cycles_out = DWT->CYCCNT;
+    *app_base_out = slot_base + hdr.payload_offset;
+    return VERIFY_OK;
+}
 
-    uart_print("BL: verify ok in ");
+int main(void)
+{
+    uart_init();
+
+    uart_print("\r\nBL: stm32-bare-metal bootloader (Phase 1.7)\r\n");
+
+    /* Read both metadata blobs.  All-FF (erased) sector → parse fails →
+     * treat as "invalid" without halting; that's how a fresh chip with
+     * no metadata yet still boots slot A. */
+    img_slot_metadata_t md_a, md_b;
+    int a_ok = read_slot_metadata(FLASH_SLOT_A, &md_a);
+    int b_ok = read_slot_metadata(FLASH_SLOT_B, &md_b);
+
+    uart_print("BL: metadata A=");
+    uart_print(a_ok ? "ok" : "invalid");
+    uart_print(" B=");
+    uart_print(b_ok ? "ok" : "invalid");
+    uart_print("\r\n");
+
+    flash_slot_id_t first  = pick_active_slot(a_ok, &md_a, b_ok, &md_b);
+    flash_slot_id_t second = (first == FLASH_SLOT_A) ? FLASH_SLOT_B : FLASH_SLOT_A;
+
+    uart_print("BL: trying slot ");
+    uart_print(slot_name(first));
+    uart_print("\r\n");
+
+    uint32_t app_base = 0u;
+    uint32_t cycles   = 0u;
+
+    flash_slot_id_t winner;
+    verify_status_t st = verify_slot(first, &app_base, &cycles);
+    if (st == VERIFY_OK) {
+        winner = first;
+    } else {
+        uart_print("BL: falling back to slot ");
+        uart_print(slot_name(second));
+        uart_print("\r\n");
+        st = verify_slot(second, &app_base, &cycles);
+        if (st == VERIFY_OK) {
+            winner = second;
+        } else {
+            uart_print("BL: both slots failed verify\r\n");
+            bootloader_halt();
+        }
+    }
+
+    uint32_t ms = cycles / 100000u;
+    uart_print("BL: verify ok slot=");
+    uart_print(slot_name(winner));
+    uart_print(" in ");
     uart_print_dec32(cycles);
     uart_print(" cycles (~");
     uart_print_dec32(ms);
     uart_print(" ms)\r\n");
 
-    uint32_t app_base = SLOT_A_BASE + hdr.payload_offset;
-    uart_print("BL: jumping to slot A @ ");
+    uart_print("BL: jumping to slot ");
+    uart_print(slot_name(winner));
+    uart_print(" @ ");
     uart_print_hex32(app_base);
     uart_print("\r\n");
 

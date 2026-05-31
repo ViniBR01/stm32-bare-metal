@@ -33,12 +33,18 @@ LOCAL_BUILD_DIR := $(BUILD_DIR)/apps/bootloader/loader
 LOADER_SRCS := main.c $(BL_PUBKEY_C)
 LOADER_OBJS := $(LOCAL_BUILD_DIR)/main.o $(LOCAL_BUILD_DIR)/bootloader_pubkey.o
 
-# Bootloader-specific includes: lib/img (header parser) + lib/crypto (Phase 1.6).
-LOADER_CFLAGS := -I$(LIB_DIR)/img/inc -I$(LIB_DIR)/crypto/inc
+# Bootloader-specific includes:
+#   lib/img    — header + slot metadata parser
+#   lib/crypto — SHA-256 + ECDSA verify (Phase 1.6)
+#   lib/flash  — slot-id constants only (Phase 1.7); the bootloader links
+#                no flash mutation code, just the address constants from
+#                the public header.
+LOADER_CFLAGS := -I$(LIB_DIR)/img/inc -I$(LIB_DIR)/crypto/inc -I$(LIB_DIR)/flash/inc
 
 # CRYPTO_LIB ahead of IMG_LIB so the linker resolves crypto symbols first
 # inside the start-group; IMG_LIB does not depend on crypto, so order is
-# only meaningful for predictability.
+# only meaningful for predictability.  No FLASH_LIB — the bootloader uses
+# only inlined constants from flash_slot.h, not any libflash.a symbols.
 LOADER_DEPS := $(CRYPTO_LIB) $(IMG_LIB) $(DRIVERS_LIB) $(STARTUP_OBJ)
 
 .PHONY: all clean help bootloader
