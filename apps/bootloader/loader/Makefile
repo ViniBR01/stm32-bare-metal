@@ -33,10 +33,13 @@ LOCAL_BUILD_DIR := $(BUILD_DIR)/apps/bootloader/loader
 LOADER_SRCS := main.c $(BL_PUBKEY_C)
 LOADER_OBJS := $(LOCAL_BUILD_DIR)/main.o $(LOCAL_BUILD_DIR)/bootloader_pubkey.o
 
-# Bootloader-specific includes (mainly lib/img for img_header_parse).
-LOADER_CFLAGS := -I$(LIB_DIR)/img/inc
+# Bootloader-specific includes: lib/img (header parser) + lib/crypto (Phase 1.6).
+LOADER_CFLAGS := -I$(LIB_DIR)/img/inc -I$(LIB_DIR)/crypto/inc
 
-LOADER_DEPS := $(IMG_LIB) $(DRIVERS_LIB) $(STARTUP_OBJ)
+# CRYPTO_LIB ahead of IMG_LIB so the linker resolves crypto symbols first
+# inside the start-group; IMG_LIB does not depend on crypto, so order is
+# only meaningful for predictability.
+LOADER_DEPS := $(CRYPTO_LIB) $(IMG_LIB) $(DRIVERS_LIB) $(STARTUP_OBJ)
 
 .PHONY: all clean help bootloader
 
@@ -69,10 +72,23 @@ $(LOCAL_BUILD_DIR)/loader.elf: $(LOADER_OBJS) $(LOADER_DEPS)
 		-o $@ $(LOADER_OBJS) -Wl,--start-group $(LOADER_DEPS) -Wl,--end-group -lc -lm -lgcc
 	@echo "Linking complete."
 
+# Sector-0 budget guard.  The linker ASSERT in bootloader_ls.ld covers
+# _etext only — it does not see the .data LMA copy that ends up in flash.
+# This bin-level check is the authoritative final guard against the
+# bootloader exceeding 16 KB.  Works on both BSD stat (macOS) and GNU stat.
+SECTOR0_LIMIT := 16384
+
 $(LOCAL_BUILD_DIR)/loader.bin: $(LOCAL_BUILD_DIR)/loader.elf
 	$(CP) -O binary $< $@
 	@echo "Created loader.bin"
 	@$(SZ) $<
+	@sz=$$(stat -f%z $@ 2>/dev/null || stat -c%s $@); \
+	if [ $$sz -gt $(SECTOR0_LIMIT) ]; then \
+		echo "ERROR: loader.bin $$sz bytes > $(SECTOR0_LIMIT) (sector 0 budget)"; \
+		exit 1; \
+	else \
+		echo "loader.bin size OK: $$sz / $(SECTOR0_LIMIT) bytes"; \
+	fi
 
 clean:
 	@echo "Cleaning bootloader loader..."

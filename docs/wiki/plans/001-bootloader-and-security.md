@@ -117,6 +117,8 @@ See [bootloader-skeleton.md](001-bootloader/bootloader-skeleton.md).
 
 ### Phase 1.6 — Signature verification + verify-and-jump
 
+**Status:** in progress — [#156](https://github.com/ViniBR01/stm32-bare-metal/issues/156)
+
 **Scope:**
 - Bootloader includes embedded public key
 - Computes SHA-256 over app payload, verifies ECDSA against header signature
@@ -124,6 +126,8 @@ See [bootloader-skeleton.md](001-bootloader/bootloader-skeleton.md).
 - Time the verify with the cycle counter; log the result.
 
 **Validation:** Signed image boots; tampered byte fails verify and bootloader halts. HIL test asserts both cases via UART output. Verify time recorded as a baseline.
+
+See [verify-and-jump.md](001-bootloader/verify-and-jump.md).
 
 ### Phase 1.7 — A/B slots and fallback
 

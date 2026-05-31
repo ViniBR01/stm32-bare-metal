@@ -1,0 +1,13 @@
+{
+  "_comment": "Bootloader ECDSA-P256 verify time on NUCLEO-F411RE @ 100 MHz, measured by scripts/run_verify_test.py over the app_blinky_signed.signed.bin payload (SHA-256 + uECC P-256 verify, uECC_SQUARE_FUNC=0). Hard cap: 500 ms (50 000 000 cycles) per Plan 001 §1.3 (docs/wiki/plans/001-bootloader-and-security.md). The 'cycles' field is null until the first HIL run on the dev board records a baseline; until then run_verify_test.py only enforces the hard cap. Tolerance is generous (50%) because verify time scales with payload size; Phase 1.7 will tighten it once the signed-app fixture stabilises.",
+
+  "bootloader_verify_p256_app_blinky": {
+    "cycles": 14487786,
+    "ms": 144,
+    "tolerance_percent": 50,
+    "hard_cap_cycles": 50000000,
+    "hard_cap_ms": 500,
+    "last_updated": "2026-05-31",
+    "notes": "Captured on dev NUCLEO-F411RE via scripts/run_verify_test.py --board dev. SHA-256 over 2 564-byte app_blinky_signed payload + ECDSA P-256 verify; ECDSA dominates."
+  }
+}
