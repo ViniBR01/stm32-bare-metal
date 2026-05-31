@@ -214,13 +214,51 @@ def capture_lines(port: str, timeout: int) -> list[str]:
 
 
 def reset_and_capture(hla_serial: str, timeout: int) -> list[str]:
-    """Reset the chip via OpenOCD, then drain UART."""
-    openocd(hla_serial, "reset run")
-    time.sleep(2)
+    """Open the serial port first to drain any prior-boot output, THEN
+    issue a reset.  Programming the slot already booted the chip once
+    (OpenOCD's `program ... reset exit`); without this ordering we'd
+    capture a mix of the prior boot and the new one."""
     port = hil.find_serial_port(hla_serial=hla_serial)
     if not port:
         hil.log_error("Serial port not found")
         return []
+    try:
+        import serial
+    except ImportError:
+        hil.log_error("pyserial not installed")
+        return []
+
+    # Open + drain.
+    ser = None
+    last_err = None
+    for _ in range(3):
+        try:
+            ser = serial.Serial(port, 115200, timeout=0.2)
+            break
+        except Exception as e:
+            last_err = e
+            time.sleep(1.0)
+    if ser is None:
+        hil.log_error(f"Serial open failed: {last_err}")
+        return []
+    try:
+        ser.reset_input_buffer()
+        # Drain any in-flight bytes from the previous post-flash boot.
+        deadline = time.time() + 1.5
+        while time.time() < deadline:
+            if ser.in_waiting:
+                ser.read(ser.in_waiting)
+                deadline = time.time() + 0.3
+            else:
+                time.sleep(0.05)
+        ser.reset_input_buffer()
+    finally:
+        try: ser.close()
+        except Exception: pass
+
+    # Now reset and recapture.
+    openocd(hla_serial, "reset run")
+    time.sleep(0.5)
     return capture_lines(port, timeout)
 
 
