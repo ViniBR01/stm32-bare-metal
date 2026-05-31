@@ -11,13 +11,6 @@
 #include "systick.h"
 #include "uart.h"
 
-static void uart_print(const char *s)
-{
-    while (*s) {
-        uart_write(*s++);
-    }
-}
-
 int main(void)
 {
     /* SystemInit (called from Reset_Handler) already configured the clock. */
@@ -25,7 +18,7 @@ int main(void)
     systick_init();
     uart_init();
 
-    uart_print("APP: blinky alive\r\n");
+    uart_puts("APP: blinky alive\r\n");
 
     while (1) {
         led2_toggle();
