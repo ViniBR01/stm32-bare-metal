@@ -16,6 +16,7 @@ typedef enum {
     ERR_INVALID_ARG = -1,   /**< Bad parameter (NULL, out of range, etc.) */
     ERR_TIMEOUT     = -2,   /**< Hardware did not become ready in time */
     ERR_BUSY        = -3,   /**< Resource already in use / already allocated */
+    ERR_VERIFY      = -4,   /**< Read-back / integrity check did not match write */
 } err_t;
 
 #endif /* ERROR_H */

@@ -21,15 +21,14 @@ include ../../../Makefile.common
 # Slot-A linker script
 #==============================================================================
 LDSCRIPT := $(LINKER_DIR)/app_ls.ld
-SLOT_BASE ?= 0x08010000
 LDFLAGS  += -Wl,--defsym=SLOT_BASE=$(SLOT_BASE)
 
-LOCAL_BUILD_DIR := $(BUILD_DIR)/apps/bootloader/app_blinky_signed
+LOCAL_BUILD_DIR := $(BUILD_DIR)/apps/bootloader/app_blinky_signed$(SLOT_SUFFIX)
 
 OBJ  := $(LOCAL_BUILD_DIR)/main.o
-ELF  := $(LOCAL_BUILD_DIR)/app_blinky_signed.elf
-BIN  := $(LOCAL_BUILD_DIR)/app_blinky_signed.bin
-SBIN := $(LOCAL_BUILD_DIR)/app_blinky_signed.signed.bin
+ELF  := $(LOCAL_BUILD_DIR)/app_blinky_signed$(SLOT_SUFFIX).elf
+BIN  := $(LOCAL_BUILD_DIR)/app_blinky_signed$(SLOT_SUFFIX).bin
+SBIN := $(LOCAL_BUILD_DIR)/app_blinky_signed$(SLOT_SUFFIX).signed.bin
 
 DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
 

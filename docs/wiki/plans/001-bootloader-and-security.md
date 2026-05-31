@@ -131,14 +131,20 @@ See [verify-and-jump.md](001-bootloader/verify-and-jump.md).
 
 ### Phase 1.7 — A/B slots and fallback
 
+**Status:** in progress — [#158](https://github.com/ViniBR01/stm32-bare-metal/issues/158)
+
 **Scope:**
-- `lib/flash/` middleware (absorbed from former Phase 1.1 scope): slot-erase wrapper, atomic metadata commit primitive, sector-range validator
-- Slot metadata in dedicated sector with active flag, fail counter
-- Bootloader picks active slot, increments fail counter before jump, app must clear it after init (rollback-on-crash)
-- If active slot verify fails, try the other slot; if both fail, halt with diagnostics
-- `partition_dump.py` host tool to read and pretty-print
+- `lib/flash/` middleware: slot-erase wrapper, atomic metadata commit primitive, sector-range validator (refuses sector 0 overlap).
+- Slot metadata in dedicated sectors (A in sector 1, B in sector 2), each carrying `active`, `fail_count`, `monotonic_counter`.
+- Bootloader picks active slot using a deterministic decision tree (one-active wins, both-active resolves on `monotonic_counter`, neither-valid defaults to A).
+- If active slot verify fails, try the other slot; if both fail, halt with diagnostics.
+- New `SLOT={A,B}` Makefile knob: any app linked with `app_ls.ld` builds for either slot.
+- `tools/partition_dump.py` host tool to read and pretty-print metadata + headers.
+- **Deferred to a later phase:** rollback-on-crash semantics (bootloader incrementing `fail_count` before jump). The 16 KB metadata sector erase + reprogram on every boot is too costly to land alongside the slot-pick logic and is more naturally combined with Phase 1.9 anti-rollback writes.
 
 **Validation:** HIL tests for: clean A→A boot, clean B→B boot, A bad → fallback to B, both bad → halt.
+
+See [ab-slots.md](001-bootloader/ab-slots.md).
 
 ### Phase 1.8 — OTA over UART (`framing` lib + `ota_send.py`)
 

@@ -97,10 +97,20 @@ CFLAGS := $(CFLAGS_BASE) $(COMMON_INCLUDES) -DLOG_LEVEL=$(LOG_LEVEL) $(HIL_TEST_
 # expansion so a later override of LDSCRIPT takes effect at link time.
 LDSCRIPT ?= $(LINKER_DIR)/app_ls.ld
 
-# Default slot base.  Phase 1.7 will introduce a slot-B build that overrides
-# this.  The value is forwarded to the linker as a --defsym so app_ls.ld
-# can compute the FLASH ORIGIN.
-SLOT_BASE ?= 0x08010000
+# Slot selector + base address.  Set SLOT=B to build for slot B; default is A.
+# The value is forwarded to the linker as a --defsym so app_ls.ld can compute
+# FLASH ORIGIN, and embedded into output paths so A and B builds don't
+# clobber each other.
+SLOT      ?= A
+ifeq ($(SLOT),A)
+  SLOT_BASE   ?= 0x08010000
+  SLOT_SUFFIX :=
+else ifeq ($(SLOT),B)
+  SLOT_BASE   ?= 0x08040000
+  SLOT_SUFFIX := _b
+else
+  $(error SLOT must be A or B, got '$(SLOT)')
+endif
 
 # Linker flags
 LDFLAGS = $(MCU_FLAGS) -flto -T $(LDSCRIPT) -Wl,--gc-sections \
@@ -117,6 +127,7 @@ UTILS_LIB := $(BUILD_DIR)/utils/libutils.a
 UNITY_ARM_LIB := $(BUILD_DIR)/3rd_party/libunity_arm.a
 IMG_LIB := $(BUILD_DIR)/lib/img/libimg.a
 CRYPTO_LIB := $(BUILD_DIR)/lib/crypto/libcrypto.a
+FLASH_LIB := $(BUILD_DIR)/lib/flash/libflash.a
 
 #==============================================================================
 # Plan 001 signing artifacts
@@ -182,5 +193,6 @@ clean-module:
 export CC CP OD SZ AR
 export MCU_FLAGS CFLAGS LDFLAGS LDSCRIPT
 export ROOT_DIR BUILD_DIR HIL_TEST LIB_DIR
-export DRIVERS_LIB STARTUP_OBJ PRINTF_LIB LOG_C_LIB UTILS_LIB UNITY_ARM_LIB IMG_LIB CRYPTO_LIB
+export DRIVERS_LIB STARTUP_OBJ PRINTF_LIB LOG_C_LIB UTILS_LIB UNITY_ARM_LIB IMG_LIB CRYPTO_LIB FLASH_LIB
 export KEYS_DIR KEY_SEED DEV_PRIV BL_PUBKEY_C
+export SLOT SLOT_BASE SLOT_SUFFIX
