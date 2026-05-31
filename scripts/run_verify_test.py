@@ -119,8 +119,24 @@ def capture_lines(port: str, timeout: int, stop_on_fail: bool = False) -> list[s
         return []
 
     lines: list[str] = []
+    # Retry serial open: a previous HIL step (boot smoke test) may have just
+    # released ttyACM0 and on the Pi runner the kernel sometimes still holds
+    # an exclusive lock for ~1 s afterwards.  Three short retries cover that
+    # without masking a real 'port not available' failure.
+    ser = None
+    last_err = None
+    for attempt in range(3):
+        try:
+            ser = serial.Serial(port, 115200, timeout=2)
+            break
+        except Exception as e:
+            last_err = e
+            time.sleep(1.0)
+    if ser is None:
+        hil.log_error(f"Serial error: could not open {port}: {last_err}")
+        sys.stdout.flush()
+        return []
     try:
-        ser = serial.Serial(port, 115200, timeout=2)
         ser.reset_input_buffer()
         time.sleep(0.5)
 
@@ -210,6 +226,23 @@ def maybe_check_baseline(cycles: int, baseline_path: Path) -> str:
             f"(baseline {expected} ±{tol_pct}%)")
 
 
+def write_junit_error_xml(path: str, message: str) -> None:
+    """Emit a JUnit XML with a single errored testcase so the test-reporter
+    step always finds a file, even when the test fails before Pass A
+    completes (e.g. serial port could not be opened)."""
+    suites = Element("testsuites")
+    suite = SubElement(suites, "testsuite",
+                       name="Verify (Phase 1.6)",
+                       tests="1", failures="0", errors="1", time="0")
+    tc = SubElement(suite, "testcase",
+                    classname="verify_test",
+                    name="harness_setup",
+                    time="0")
+    SubElement(tc, "error", message=message).text = message
+    indent(suites)
+    ElementTree(suites).write(path, encoding="unicode", xml_declaration=True)
+
+
 def write_junit_xml(path: str,
                     clean_ok: bool, clean_fails: list[str], cycles: int | None,
                     tamper_ok: bool, tamper_fails: list[str],
@@ -264,6 +297,13 @@ def run_pass(image_path: Path, hla_serial: str, timeout: int,
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Force line-buffered stdout so progress lines reach CI logs even if the
+    # script exits early — pipe-buffered output gets dropped on sys.exit().
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--board", choices=list(hil.BOARD_REGISTRY.keys()),
                         help='Board role: "ci" or "dev".')
@@ -286,16 +326,25 @@ def main(argv: list[str] | None = None) -> int:
                  / "app_blinky_signed" / "app_blinky_signed.signed.bin")
         if not clean.exists():
             hil.log_error("No existing signed image found - build required")
+            sys.stdout.flush()
+            write_junit_error_xml(args.junit_xml,
+                                  "No existing signed image found - build required")
             return 2
     else:
         clean = build_smoke_app(project_root)
         if not clean:
+            sys.stdout.flush()
+            write_junit_error_xml(args.junit_xml,
+                                  "Failed to build app_blinky_signed")
             return 2
 
     # ----- Pass A: clean image -----
     hil.log_info("=== Pass A: clean signed image ===")
     clean_lines = run_pass(clean, hla_serial, args.timeout, stop_on_fail=False)
     if not clean_lines:
+        sys.stdout.flush()
+        write_junit_error_xml(args.junit_xml,
+                              "Pass A: no serial output (flash or serial open failed)")
         return 2
 
     clean_ok, clean_fails = assert_clean_pass(clean_lines)
@@ -312,6 +361,9 @@ def main(argv: list[str] | None = None) -> int:
         tampered = make_tampered_image(clean)
     except Exception as e:
         hil.log_error(f"Could not build tampered image: {e}")
+        sys.stdout.flush()
+        write_junit_error_xml(args.junit_xml,
+                              f"Could not build tampered image: {e}")
         return 2
 
     tamper_lines = run_pass(tampered, hla_serial, args.timeout, stop_on_fail=True)
@@ -320,6 +372,9 @@ def main(argv: list[str] | None = None) -> int:
     except OSError:
         pass
     if not tamper_lines:
+        sys.stdout.flush()
+        write_junit_error_xml(args.junit_xml,
+                              "Pass B: no serial output (flash or serial open failed)")
         return 2
 
     tamper_ok, tamper_fails = assert_tampered_pass(tamper_lines)
