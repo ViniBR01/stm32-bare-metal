@@ -124,36 +124,43 @@ def make_tampered_image(clean: Path) -> Path:
     return tmp
 
 
-def capture_lines(port: str, timeout: int, stop_on_fail: bool = False) -> list[str]:
-    """Open the serial port, drain output until timeout or early-exit."""
+def open_serial_port(port: str):
+    """Open the serial port with a short retry loop.
+
+    Returns a `serial.Serial` instance or `None` on failure.  A previous
+    HIL step (boot smoke test) may have just released ttyACM0 and on the
+    Pi runner the kernel sometimes still holds an exclusive lock for
+    ~1 s afterwards.  Three short retries cover that without masking a
+    real 'port not available' failure.
+    """
     try:
         import serial
     except ImportError:
         hil.log_error("pyserial not installed. Run: pip3 install pyserial")
-        return []
+        return None
 
-    lines: list[str] = []
-    # Retry serial open: a previous HIL step (boot smoke test) may have just
-    # released ttyACM0 and on the Pi runner the kernel sometimes still holds
-    # an exclusive lock for ~1 s afterwards.  Three short retries cover that
-    # without masking a real 'port not available' failure.
-    ser = None
     last_err = None
-    for attempt in range(3):
+    for _ in range(3):
         try:
-            ser = serial.Serial(port, 115200, timeout=2)
-            break
+            return serial.Serial(port, 115200, timeout=2)
         except Exception as e:
             last_err = e
             time.sleep(1.0)
-    if ser is None:
-        hil.log_error(f"Serial error: could not open {port}: {last_err}")
-        sys.stdout.flush()
-        return []
-    try:
-        ser.reset_input_buffer()
-        time.sleep(0.5)
+    hil.log_error(f"Serial error: could not open {port}: {last_err}")
+    sys.stdout.flush()
+    return None
 
+
+def capture_lines(ser, timeout: int, stop_on_fail: bool = False) -> list[str]:
+    """Drain output from an already-open serial port until timeout or early-exit.
+
+    The port must be opened *before* flashing — see issue #164.  Opening
+    after `flash_firmware()` returns races the bootloader's ~150 ms boot
+    print sequence and intermittently loses the early `BL: verify ok ...`
+    line on the Pi runner.
+    """
+    lines: list[str] = []
+    try:
         deadline = time.time() + timeout
         while time.time() < deadline:
             if ser.in_waiting:
@@ -178,7 +185,6 @@ def capture_lines(port: str, timeout: int, stop_on_fail: bool = False) -> list[s
                         break
             else:
                 time.sleep(0.05)
-        ser.close()
     except Exception as e:
         hil.log_error(f"Serial error: {e}")
     return lines
@@ -297,17 +303,39 @@ def write_junit_xml(path: str,
 
 def run_pass(image_path: Path, hla_serial: str, timeout: int,
              *, stop_on_fail: bool) -> list[str]:
-    """Flash one image, capture serial output, return the lines seen."""
-    if not hil.flash_firmware(image_path, hla_serial=hla_serial):
-        return []
+    """Flash one image, capture serial output, return the lines seen.
 
-    time.sleep(2)  # let the chip reset and start running
+    The serial port is opened *before* flashing so that the OpenOCD reset
+    that kicks the chip into the bootloader feeds the same already-open
+    port — every byte from the boot banner onward lands in the kernel's
+    input buffer for `ser`.  Opening after the flash (the previous
+    behavior) raced the bootloader's ~150 ms boot prints and lost the
+    leading `BL: verify ok ...` line ~1/4 of the time on the Pi runner
+    (issue #164).
+    """
     port = hil.find_serial_port(hla_serial=hla_serial)
     if not port:
         hil.log_error("Serial port not found")
         return []
 
-    return capture_lines(port, timeout, stop_on_fail=stop_on_fail)
+    ser = open_serial_port(port)
+    if ser is None:
+        return []
+
+    try:
+        ser.reset_input_buffer()
+        if not hil.flash_firmware(image_path, hla_serial=hla_serial):
+            return []
+        # Brief settle so the bootloader has begun emitting before we read.
+        # No longer 2 s — we are already attached to the port and will
+        # block on `ser.readline()` for up to `timeout` seconds anyway.
+        time.sleep(0.2)
+        return capture_lines(ser, timeout, stop_on_fail=stop_on_fail)
+    finally:
+        try:
+            ser.close()
+        except Exception:
+            pass
 
 
 def main(argv: list[str] | None = None) -> int:
