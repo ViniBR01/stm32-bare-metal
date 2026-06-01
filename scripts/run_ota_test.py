@@ -254,13 +254,30 @@ def request_ota_via_cli(ser) -> None:
     write_line(ser, "ota_request")
     # Bootloader prints "OTA: ready" once the magic is consumed and OTA mode
     # has wired up. We block here so the host serial port doesn't race a
-    # mid-boot OTA receiver.
-    def saw_ready(lines):
-        return any(OTA_READY_LINE in l for l in lines)
-    _, ready = capture_until(ser, saw_ready, timeout_s=5.0)
-    if not ready:
-        raise RuntimeError("bootloader never advertised 'OTA: ready'")
-    hil.log_info("bootloader is in OTA mode")
+    # mid-boot OTA receiver. If the chip boots back into the cli without
+    # ever emitting "OTA: ready", the bootloader on sector 0 is older than
+    # Phase 1.8 — surface that as an actionable error rather than a generic
+    # timeout, since CI cannot reflash sector 0 itself (see CLAUDE.md +
+    # scripts/flash_bootloader.py STM32_BARE_METAL_CI=1 guard).
+    def saw_ready_or_old_bl(lines):
+        for l in lines:
+            if OTA_READY_LINE in l:
+                return True
+            if "stm32-bare-metal bootloader" in l and "(Phase 1.8)" not in l:
+                return True
+        return False
+    lines, _ = capture_until(ser, saw_ready_or_old_bl, timeout_s=5.0)
+    if any(OTA_READY_LINE in l for l in lines):
+        hil.log_info("bootloader is in OTA mode")
+        return
+    stale = next((l for l in lines if "stm32-bare-metal bootloader" in l), None)
+    if stale and "(Phase 1.8)" not in stale:
+        raise RuntimeError(
+            f"sector 0 has a pre-Phase-1.8 bootloader ({stale.strip()}); "
+            "reflash with `make flash-bootloader BOARD=ci` on the Pi runner "
+            "before re-running this test"
+        )
+    raise RuntimeError("bootloader never advertised 'OTA: ready'")
 
 
 def run_ota_send(project_root: Path, port: str, image: Path, slot: str) -> int:
