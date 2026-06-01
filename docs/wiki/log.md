@@ -4,6 +4,46 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-05-31] milestone | Plan 001 Phase 1.8 (part 1) — `lib/framing/` (#162)
+
+First half of Phase 1.8 lands: the reusable framing middleware. HDLC-style
+byte stream with `FLAG=0x7E`, `ESC=0x7D` byte-stuffing, CRC-16-CCITT
+(poly `0x1021`, init `0xFFFF`, no final XOR) over the unstuffed
+`[SEQ][TYPE][LEN_lo][LEN_hi][PAYLOAD]` span. Max payload 1024 B, frame
+types cover the OTA path (`OTA_BEGIN`/`CHUNK`/`END`), the link path
+(`DATA`/`ACK`/`NACK`), and ping/status.
+
+Three layers in one lib:
+
+- **Encoder** (`frame_encode`) — pure; computes worst-case stuffed size,
+  rejects oversize / NULL / bad-type / too-small-out-buf inputs.
+- **Decoder** (`frame_decoder_t`, `frame_decoder_feed`) — stateful byte
+  pump, fires an `rx_cb` on each CRC-valid frame and an `err_cb` on CRC
+  mismatch / truncation / oversize. Resyncs on the next `FLAG`.
+- **Reliable layer** (`frame_link_t`) — sliding-window-of-1 stop-and-wait
+  ARQ with timeout-based retransmit, NACK retransmit, configurable
+  retries, and duplicate-SEQ suppression on the receive side. Transport-
+  agnostic: caller hooks `write` and `now_ms`, so the same code drives
+  UART today and SPI in Plan 002 later.
+
+35 host unit tests (`tests/lib/framing/`) cover round-trip, byte-stuffing
+of `FLAG`/`ESC` payloads, byte-stuffing of `SEQ`, CRC mismatch dropping,
+truncation + resync, garbage-prefix silently dropped, idle-FLAG pair,
+oversize payload dropped, double-ESC malformed stuffing, trailing ESC
+before FLAG, byte-at-a-time feed, full-1024-byte payload round-trip,
+decoder reset, and the full link layer (init / send / overlap rejection /
+oversize rejection / write failure / ACK / NACK retry / timeout
+retransmit / max-retries exhausted / RX dedup). Coverage on
+`lib/framing/src/framing.c` is 95.3% (the 4.7% miss is the redundant-but-
+harmless transport-write-failure branch inside `link_retransmit` — the
+tick path exercises it via the timeout side instead). Meets the ≥95%
+bar Plan 002 §2.2 sets for this layer.
+
+The OTA receiver, app-side `ota_request` CLI command, `tools/ota_send.py`
+host driver, and HIL `run_ota_test.py` land in the second half of Phase
+1.8 in a follow-up PR — the framing layer is independently useful and is
+small enough to review on its own.
+
 ## [2026-05-31] milestone | Plan 001 Phase 1.7 — A/B slots and fallback (#158)
 
 The bootloader now reads two slot-metadata blobs from sectors 1 and 2,

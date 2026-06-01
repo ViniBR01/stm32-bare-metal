@@ -128,6 +128,7 @@ UNITY_ARM_LIB := $(BUILD_DIR)/3rd_party/libunity_arm.a
 IMG_LIB := $(BUILD_DIR)/lib/img/libimg.a
 CRYPTO_LIB := $(BUILD_DIR)/lib/crypto/libcrypto.a
 FLASH_LIB := $(BUILD_DIR)/lib/flash/libflash.a
+FRAMING_LIB := $(BUILD_DIR)/lib/framing/libframing.a
 
 #==============================================================================
 # Plan 001 signing artifacts
@@ -193,6 +194,6 @@ clean-module:
 export CC CP OD SZ AR
 export MCU_FLAGS CFLAGS LDFLAGS LDSCRIPT
 export ROOT_DIR BUILD_DIR HIL_TEST LIB_DIR
-export DRIVERS_LIB STARTUP_OBJ PRINTF_LIB LOG_C_LIB UTILS_LIB UNITY_ARM_LIB IMG_LIB CRYPTO_LIB FLASH_LIB
+export DRIVERS_LIB STARTUP_OBJ PRINTF_LIB LOG_C_LIB UTILS_LIB UNITY_ARM_LIB IMG_LIB CRYPTO_LIB FLASH_LIB FRAMING_LIB
 export KEYS_DIR KEY_SEED DEV_PRIV BL_PUBKEY_C
 export SLOT SLOT_BASE SLOT_SUFFIX
