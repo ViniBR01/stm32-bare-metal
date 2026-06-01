@@ -15,7 +15,7 @@ include ../Makefile.common
 # Subdirectories — each is a single middleware library.
 # Add a new lib by creating lib/<name>/{Makefile,inc,src} and listing it here.
 #==============================================================================
-SUBDIRS := skeleton crypto img flash
+SUBDIRS := skeleton crypto img flash framing
 
 #==============================================================================
 # Build rules
