@@ -225,13 +225,29 @@ def setup_slot_a_active(hla_serial: str, signed_a: Path) -> None:
 
 def request_ota_via_cli(ser) -> None:
     """Wait for the CLI prompt, then issue the ota_request command."""
+    # cli_simple prints "\n> " after every command. The serial port opens
+    # ~7 s after flash-and-reset on the Pi runner — well after the welcome
+    # banner has already drained — so we cannot rely on the banner string.
+    # Inject a bare newline; cli_simple echoes "\r\n> " in response, and
+    # we accept either the welcome banner OR a lone ">" as proof the CLI
+    # is alive.
     def saw_prompt(lines):
-        return any(APP_PROMPT in l for l in lines)
+        for l in lines:
+            if APP_PROMPT in l:
+                return True
+            if l.strip() == ">":
+                return True
+        return False
     drain_serial(ser, settle_s=0.5)
-    # The cli_simple welcome banner prints ~immediately after VTOR jump.
-    # If we missed it (port opened too late), poke for one to appear.
-    write_line(ser, "")  # bare newline forces a fresh prompt
-    lines, ok = capture_until(ser, saw_prompt, timeout_s=5.0)
+    write_line(ser, "")
+    _, ok = capture_until(ser, saw_prompt, timeout_s=5.0)
+    if not ok:
+        # Try once more — first newline can race the cli's command pump on
+        # a slow boot; a second injection after a short pause usually
+        # succeeds.
+        time.sleep(0.5)
+        write_line(ser, "")
+        _, ok = capture_until(ser, saw_prompt, timeout_s=5.0)
     if not ok:
         raise RuntimeError("cli prompt never appeared")
     hil.log_info("cli prompt seen — issuing ota_request")
