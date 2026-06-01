@@ -30,22 +30,34 @@ LOCAL_BUILD_DIR := $(BUILD_DIR)/apps/bootloader/loader
 #==============================================================================
 # Sources
 #==============================================================================
-LOADER_SRCS := main.c $(BL_PUBKEY_C)
-LOADER_OBJS := $(LOCAL_BUILD_DIR)/main.o $(LOCAL_BUILD_DIR)/bootloader_pubkey.o
+# Phase 1.8 splits the loader across three TUs:
+#   - main.c     : reset-vector entry, magic-flag check, slot pick + verify-
+#                  and-jump (Phase 1.5–1.7).
+#   - verify.c   : header parse + SHA-256 + ECDSA — shared with ota.c so the
+#                  same correctness path covers normal boot AND OTA.
+#   - ota.c      : Phase 1.8 OTA receiver state machine — framing decoder,
+#                  flash writer, atomic active-slot swap.
+LOADER_SRCS := main.c verify.c ota.c $(BL_PUBKEY_C)
+LOADER_OBJS := $(LOCAL_BUILD_DIR)/main.o \
+               $(LOCAL_BUILD_DIR)/verify.o \
+               $(LOCAL_BUILD_DIR)/ota.o \
+               $(LOCAL_BUILD_DIR)/bootloader_pubkey.o
 
 # Bootloader-specific includes:
-#   lib/img    — header + slot metadata parser
-#   lib/crypto — SHA-256 + ECDSA verify (Phase 1.6)
-#   lib/flash  — slot-id constants only (Phase 1.7); the bootloader links
-#                no flash mutation code, just the address constants from
-#                the public header.
-LOADER_CFLAGS := -I$(LIB_DIR)/img/inc -I$(LIB_DIR)/crypto/inc -I$(LIB_DIR)/flash/inc
+#   lib/img     — header + slot metadata parser
+#   lib/crypto  — SHA-256 + ECDSA verify (Phase 1.6)
+#   lib/flash   — slot constants + Phase 1.8 mutation primitives
+#   lib/framing — Phase 1.8 OTA wire protocol
+LOADER_CFLAGS := -I$(LIB_DIR)/img/inc -I$(LIB_DIR)/crypto/inc \
+                 -I$(LIB_DIR)/flash/inc -I$(LIB_DIR)/framing/inc
 
 # CRYPTO_LIB ahead of IMG_LIB so the linker resolves crypto symbols first
-# inside the start-group; IMG_LIB does not depend on crypto, so order is
-# only meaningful for predictability.  No FLASH_LIB — the bootloader uses
-# only inlined constants from flash_slot.h, not any libflash.a symbols.
-LOADER_DEPS := $(CRYPTO_LIB) $(IMG_LIB) $(DRIVERS_LIB) $(STARTUP_OBJ)
+# inside the start-group; FLASH_LIB and FRAMING_LIB land alongside since
+# Phase 1.8 needs both the slot-erase + commit-metadata path and the
+# framing decoder.  --gc-sections drops anything the OTA path doesn't
+# call, so a non-OTA boot pays only for the cold-path flag check.
+LOADER_DEPS := $(CRYPTO_LIB) $(FRAMING_LIB) $(FLASH_LIB) $(IMG_LIB) \
+               $(DRIVERS_LIB) $(STARTUP_OBJ)
 
 .PHONY: all clean help bootloader
 
@@ -58,7 +70,19 @@ bootloader: $(LOCAL_BUILD_DIR)/loader.bin
 	@echo "Bootloader built successfully ($(LOCAL_BUILD_DIR)/loader.bin)."
 
 # Compile main.c.
-$(LOCAL_BUILD_DIR)/main.o: main.c
+$(LOCAL_BUILD_DIR)/main.o: main.c verify.h ota.h
+	$(make-build-dir)
+	@echo "Compiling: $<"
+	$(CC) $(CFLAGS) $(LOADER_CFLAGS) -o $@ $<
+
+# Compile verify.c.
+$(LOCAL_BUILD_DIR)/verify.o: verify.c verify.h
+	$(make-build-dir)
+	@echo "Compiling: $<"
+	$(CC) $(CFLAGS) $(LOADER_CFLAGS) -o $@ $<
+
+# Compile ota.c.
+$(LOCAL_BUILD_DIR)/ota.o: ota.c ota.h verify.h
 	$(make-build-dir)
 	@echo "Compiling: $<"
 	$(CC) $(CFLAGS) $(LOADER_CFLAGS) -o $@ $<

@@ -164,3 +164,20 @@ jobs:
           path: ab-slot-results.xml
           reporter: java-junit
           fail-on-error: false
+
+      # Plan 001 Phase 1.8 — OTA over UART end-to-end test.  Drives the
+      # CLI's ota_request command, runs tools/ota_send.py against the
+      # bootloader's OTA receiver, and verifies both the clean OTA path
+      # (slot A → B with STATUS=ok) and the tampered OTA path
+      # (STATUS=verify_failed, slot A still active on next boot).
+      - name: Run OTA test
+        run: python3 scripts/run_ota_test.py --board ci --junit-xml ota-results.xml
+
+      - name: Publish OTA test results
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: OTA Test
+          path: ota-results.xml
+          reporter: java-junit
+          fail-on-error: false

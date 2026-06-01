@@ -6,8 +6,10 @@
 #include "printf.h"
 #include "printf_dma.h"
 #include "rcc.h"
+#include "rtc_backup.h"
 #include "sleep_mode.h"
 #include "spi_perf.h"
+#include "stm32f4xx.h"
 #include "systick.h"
 #include "timer.h"
 #include "uart.h"
@@ -483,6 +485,35 @@ static int cmd_standby_mode(const char *args)
     return 0;
 }
 
+/*
+ * Plan 001 Phase 1.8 — request the bootloader to enter OTA mode on the
+ * next reset.  Writes the OTA magic into RTC_BKP_DR0, drains pending
+ * UART output, and triggers NVIC_SystemReset().  The bootloader sees the
+ * magic at its earliest startup, clears it, and runs bootloader_ota_run().
+ *
+ * Backup registers survive a CPU reset (and a brief power loss while VDD
+ * is held up by the chip's bypass caps), so the magic reliably reaches
+ * the bootloader.  See docs/wiki/plans/001-bootloader/ota.md.
+ */
+static int cmd_ota_request(const char *args)
+{
+    (void)args;
+    printf("Entering OTA mode on next reset (writing magic to RTC_BKP_DR0)\n");
+    printf_dma_flush();
+
+    rtc_backup_enable_writes();
+    rtc_backup_write_dr0(RTC_BACKUP_OTA_MAGIC);
+
+    /* Tiny dwell so the final UART byte makes it onto the wire before
+     * the reset clears the TX shift register. */
+    for (volatile uint32_t i = 0; i < 100000u; ++i) {
+        __asm volatile ("nop");
+    }
+    NVIC_SystemReset();
+    /* unreachable */
+    return 0;
+}
+
 // Command table (help command is automatically added by CLI library)
 static const cli_command_t commands[] = {
     {"uptime",        "Print uptime (hh:mm:ss.mmm)", cmd_uptime},
@@ -497,6 +528,7 @@ static const cli_command_t commands[] = {
     {"crc_test",      "CRC32 of flash <addr> [words]",    cmd_crc_test},
     {"stop_mode",     "Enter Stop mode (wake on interrupt)",      cmd_stop_mode},
     {"standby_mode",  "Enter Standby mode (full reset on wake)",  cmd_standby_mode},
+    {"ota_request",   "Reboot into bootloader OTA mode",          cmd_ota_request},
     {"fault_test",    "Trigger a fault (nullptr|divzero|illegal)", cmd_fault_test},
 #ifdef ENABLE_HW_FPU
     {"fpu_test",      "Validate HW FPU is working", cmd_fpu_test},
