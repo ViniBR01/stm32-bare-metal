@@ -3,19 +3,25 @@
 
 Drives the bootloader OTA receiver end-to-end on a real NUCLEO-F411RE.
 
-  Pass 1  Clean OTA, slot A → slot B.
-            Boot the running cli_simple from slot A, verify it's alive,
-            send `ota_request`, wait for the chip to reset into the
-            bootloader's OTA mode, run tools/ota_send.py with a freshly
-            built slot-B image, verify STATUS=ok, wait for the chip to
-            reset, and assert the bootloader log shows
-            'verify ok slot=B'.
+  Pass 1  Clean OTA, slot A (cli_simple) → slot B (app_blinky_signed).
+            Boot the running cli_simple from slot A, wait for the CLI
+            prompt, send `ota_request`, wait for the chip to reset into
+            the bootloader's OTA mode, run tools/ota_send.py with a
+            freshly built slot-B app_blinky_signed image, verify
+            STATUS=ok, wait for the chip to reset, and assert the
+            bootloader log shows 'verify ok slot=B' followed by the
+            blinky's 'APP: blinky alive' line.
 
   Pass 2  Tampered OTA leaves the previously-active slot active.
             Reset the chip back to slot A as the active slot, request
             OTA again, but stream a tampered slot-B image.  Assert that
             ota_send.py reports STATUS=verify_failed and that the next
-            reset still boots slot A.
+            reset still boots slot A (cli_simple).
+
+The two slots run different apps on purpose: cli_simple's Makefile
+isn't yet SLOT-aware (a separate hygiene fix), and using two different
+apps end-to-end actually proves the OTA path more thoroughly than
+cycling the same image between slots.
 
 This is the first HIL exercise of `flash_slot_commit_metadata` and
 `flash_slot_erase` running on real hardware — Phase 1.7 only validated
@@ -54,20 +60,42 @@ OTA_READY_LINE   = "OTA: ready"
 OTA_OK_LINE_RE   = re.compile(r"OTA:\s+ok\s+slot=(\w)")
 VERIFY_OK_RE     = re.compile(r"BL:\s+verify\s+ok\s+slot=(\w)")
 APP_PROMPT       = "STM32 CLI Example"
+BLINKY_ALIVE     = "APP: blinky alive"
 
 
 # -------------------- Build helpers --------------------
+#
+# Slot A always carries cli_simple (slot-A only because cli_simple's Makefile
+# isn't yet SLOT-aware; that's a separate hygiene fix).  We need cli_simple
+# for the `ota_request` CLI command that triggers the bootloader OTA flow.
+#
+# Slot B is the OTA target.  Any signed image that the bootloader will
+# verify works — we use app_blinky_signed because its Makefile already
+# threads $(SLOT_SUFFIX) through every output path, so `make EXAMPLE=
+# app_blinky_signed SLOT=B` produces a clean app_blinky_signed_b.signed.bin
+# without colliding with the slot-A artifact.
 
-def build_cli_for_slot(project_root: Path, slot: str) -> Path:
-    hil.log_info(f"Building cli_simple for slot {slot}...")
+def build_cli_simple(project_root: Path) -> Path:
+    hil.log_info("Building cli_simple (slot A app — provides ota_request)...")
     subprocess.run(
-        ["make", "EXAMPLE=cli_simple", f"SLOT={slot}"],
+        ["make", "EXAMPLE=cli_simple"],
         cwd=project_root, check=True, timeout=180,
     )
-    suffix = "" if slot == "A" else "_b"
     signed = (project_root / "build" / "apps" / "cli"
-              / f"cli_simple{suffix}"
-              / f"cli_simple{suffix}.signed.bin")
+              / "cli_simple" / "cli_simple.signed.bin")
+    if not signed.exists():
+        raise RuntimeError(f"expected {signed} after build")
+    return signed
+
+
+def build_blinky_for_slot_b(project_root: Path) -> Path:
+    hil.log_info("Building app_blinky_signed for slot B (OTA target)...")
+    subprocess.run(
+        ["make", "EXAMPLE=app_blinky_signed", "SLOT=B"],
+        cwd=project_root, check=True, timeout=180,
+    )
+    signed = (project_root / "build" / "apps" / "bootloader"
+              / "app_blinky_signed_b" / "app_blinky_signed_b.signed.bin")
     if not signed.exists():
         raise RuntimeError(f"expected {signed} after build")
     return signed
@@ -269,10 +297,12 @@ def pass_clean_ota(
                   if VERIFY_OK_RE.search(l)), None)
         if m and m.group(1) != "B":
             fails.append(f"booted slot {m.group(1)} after OTA, expected B")
-        # Also confirm the new app is alive.
-        def saw_prompt(lines):
-            return any(APP_PROMPT in l for l in lines)
-        capture_until(ser, saw_prompt, timeout_s=5.0)
+        # Slot B is app_blinky_signed; confirm its alive line.
+        def saw_blinky(lines):
+            return any(BLINKY_ALIVE in l for l in lines)
+        _, alive = capture_until(ser, saw_blinky, timeout_s=5.0)
+        if not alive:
+            fails.append(f"did not see '{BLINKY_ALIVE}' after OTA reset")
     finally:
         ser.close()
 
@@ -382,8 +412,8 @@ def main() -> int:
     os.chdir(project_root)
 
     try:
-        signed_a = build_cli_for_slot(project_root, "A")
-        signed_b = build_cli_for_slot(project_root, "B")
+        signed_a = build_cli_simple(project_root)
+        signed_b = build_blinky_for_slot_b(project_root)
     except Exception as e:
         hil.log_error(f"build failed: {e}")
         return 2
