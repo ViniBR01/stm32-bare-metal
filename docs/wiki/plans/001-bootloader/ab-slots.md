@@ -194,5 +194,9 @@ keeps this enforced.
   unchanged jump path).
 - Phase 1.6: [verify-and-jump.md](verify-and-jump.md) (the per-slot
   verify call).
+- Phase 1.8: [ota.md](ota.md) — the OTA receiver is the first
+  in-product writer of `flash_slot_commit_metadata`; documents the
+  active-flag-swap power-cut window referenced by this page's slot-
+  pick algorithm.
 - Plan 001 overview:
   [001-bootloader-and-security.md](../001-bootloader-and-security.md).

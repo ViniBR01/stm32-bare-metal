@@ -4,6 +4,61 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-06-01] milestone | Plan 001 Phase 1.8 (part 2) — bootloader OTA receiver (#162)
+
+Closes Phase 1.8.  Building on the framing layer from part 1
+([#163](https://github.com/ViniBR01/stm32-bare-metal/pull/163)),
+this drop wires up the end-to-end OTA path: app → bootloader →
+host tool → bootloader → reset into the new image.
+
+New components:
+
+- **RTC backup driver** (`drivers/{inc,src}/rtc_backup.{h,c}`) —
+  three-function helper: enable backup-domain writes, read DR0,
+  write DR0.  ~30 LOC, used only by the OTA entry path.
+- **`ota_request` CLI command** (`apps/cli/cli_commands.c`) —
+  writes `RTC_BACKUP_OTA_MAGIC` (0x4F544131) into `RTC_BKP_DR0`
+  and triggers `NVIC_SystemReset()`.  Backup register survives
+  the reset, so the bootloader sees the magic at boot and enters
+  OTA mode instead of normal verify-and-jump.
+- **Bootloader OTA receiver** (`apps/bootloader/loader/ota.{h,c}`)
+  — UART → framing decoder → state machine.  Drives
+  `flash_slot_erase`, `flash_write_bytes`, the reused `verify_slot`
+  path (lifted out of `main.c` into `verify.{h,c}` so OTA and
+  normal boot share the same SHA + ECDSA correctness path), and
+  `flash_slot_commit_metadata` for the atomic active-slot swap.
+  Refuses to overwrite the currently-active slot.
+- **`tools/ota_send.py`** + **`tools/_framing.py`** — host driver.
+  `_framing.py` is the Python mirror of `lib/framing/` (CRC,
+  stuffing, decoder).  `ota_send.py` is the user-facing tool:
+  PING → OTA_BEGIN → loop OTA_CHUNK → OTA_END → STATUS, with
+  per-chunk progress and sliding-window-1 retry.
+- **HIL `scripts/run_ota_test.py`** — wired into CI.  Two passes:
+  clean OTA flips active A → B and the new app boots; tampered
+  OTA reports STATUS=verify_failed and slot A stays active.
+
+The first 16 KB sector is now at **15604 / 16384 bytes** —
+about 780 bytes of headroom, comfortably under the cap.  The
+sector-0 budget guard in `apps/bootloader/loader/Makefile`
+keeps it enforced.
+
+Active-slot swap is power-cut safe by design:
+
+- A power cut **before** the new metadata commits leaves both
+  slots untouched.
+- A power cut **between** writing the target's `active=1` and
+  clearing the previous slot's `active=1` leaves both bits set;
+  the existing slot-pick decision tree falls back to the higher
+  `monotonic_counter`, which is by construction the freshly-OTA'd
+  slot.
+
+`docs/wiki/plans/001-bootloader/ota.md` documents the wire
+protocol, the receiver state machine, the swap window, the
+operator-forced recovery procedure (write the magic via OpenOCD
+if both slots are bricked at the app layer), and the production
+gap (no transport authentication / replay protection beyond the
+per-image signature, by design — Plan 001 §"Out of scope").
+
 ## [2026-05-31] milestone | Plan 001 Phase 1.8 (part 1) — `lib/framing/` (#162)
 
 First half of Phase 1.8 lands: the reusable framing middleware. HDLC-style

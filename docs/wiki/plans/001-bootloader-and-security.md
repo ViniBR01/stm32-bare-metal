@@ -148,13 +148,17 @@ See [ab-slots.md](001-bootloader/ab-slots.md).
 
 ### Phase 1.8 — OTA over UART (`framing` lib + `ota_send.py`)
 
+**Status:** in progress — [#162](https://github.com/ViniBR01/stm32-bare-metal/issues/162). Part 1 ([#163](https://github.com/ViniBR01/stm32-bare-metal/pull/163)) landed `lib/framing/`. Part 2 lands the bootloader OTA receiver, the app-side `ota_request` CLI command, the `tools/ota_send.py` host driver, and the `scripts/run_ota_test.py` HIL test.
+
 **Scope:**
-- `lib/framing/`: HDLC-style framing with byte-stuffing, CRC-16, ACK/NACK, sequence numbers
-- Bootloader OTA mode entered via magic command from app (writes flag in backup register or RAM, resets)
-- Bootloader receives image into inactive slot, verifies, swaps active slot atomically
-- `tools/ota_send.py` host driver
+- `lib/framing/`: HDLC-style framing with byte-stuffing, CRC-16, ACK/NACK, sequence numbers — Part 1, landed.
+- Bootloader OTA mode entered via magic command from app (writes flag in backup register or RAM, resets) — Part 2.
+- Bootloader receives image into inactive slot, verifies, swaps active slot atomically — Part 2.
+- `tools/ota_send.py` host driver — Part 2.
 
 **Validation:** End-to-end OTA from PC → device → reboot into new image. HIL automation in CI.
+
+See [001-bootloader/ota.md](001-bootloader/ota.md).
 
 ### Phase 1.9 — Anti-rollback
 
