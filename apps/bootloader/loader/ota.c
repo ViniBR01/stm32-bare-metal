@@ -423,6 +423,21 @@ void bootloader_ota_run(void)
     led2_init();
     led2_on();
 
+    /*
+     * uart_init() armed USART2's RXNE interrupt, but the OTA receiver
+     * polls bytes via uart_read().  If we leave the IRQ enabled, the
+     * shared handler will fire on every received byte, read DR (which
+     * clears RXNE), find rx_callback == NULL, and silently drop the
+     * byte — uart_read() then spins forever waiting for an RXNE that
+     * has already been consumed.  Disable the interrupt here so the
+     * polled loop owns the RXNE flag end-to-end.
+     */
+    USART2->CR1 &= ~USART_CR1_RXNEIE;
+    /* Drain any byte that already raced in before we disabled the IRQ. */
+    if (USART2->SR & USART_SR_RXNE) {
+        (void)USART2->DR;
+    }
+
     memset(&s_sess, 0, sizeof(s_sess));
     s_sess.prev_active      = scan_active_slot();
     s_sess.max_seen_counter = scan_max_monotonic();
