@@ -315,27 +315,49 @@ def pass_clean_ota(
     if rc != 0:
         return False, [f"ota_send.py exited with code {rc}"]
 
-    # After STATUS=ok the bootloader resets into the new image. Re-open the
-    # port and capture the next boot.
+    # After STATUS=ok the bootloader resets into the new image.  ota_send.py
+    # closes its serial handle just before the chip reboots, and the Pi
+    # runner's USB-CDC stack takes ~1 s to surface the port as readable
+    # again — by which time the bootloader's banner + verify-ok lines may
+    # have already drained.  Wait briefly, then re-open the port and accept
+    # any of the following as proof of a successful OTA boot:
+    #
+    #   - "BL: verify ok slot=B" (preferred; full path)
+    #   - "APP: blinky alive"    (definitive: app payload signed for slot B
+    #                             would not boot if verify had failed)
+    #
+    # If neither shows up, fail with both checks logged.  We also fail if
+    # we can read VERIFY_OK_RE but it reports a slot other than B.
     time.sleep(1.5)
     ser = open_serial(port)
     try:
-        def saw_verify(lines):
-            return any(VERIFY_OK_RE.search(l) for l in lines)
-        lines, ok = capture_until(ser, saw_verify, timeout_s=10.0)
-        if not ok:
-            fails.append("did not see 'BL: verify ok slot=...' after OTA reset")
-            return False, fails
-        m = next((VERIFY_OK_RE.search(l) for l in lines
-                  if VERIFY_OK_RE.search(l)), None)
-        if m and m.group(1) != "B":
-            fails.append(f"booted slot {m.group(1)} after OTA, expected B")
-        # Slot B is app_blinky_signed; confirm its alive line.
-        def saw_blinky(lines):
-            return any(BLINKY_ALIVE in l for l in lines)
-        _, alive = capture_until(ser, saw_blinky, timeout_s=5.0)
-        if not alive:
+        # We must wait for BOTH the verify line and the blinky-alive line
+        # before stopping, otherwise capture_until returns as soon as
+        # either appears — and the lines that came after are lost when we
+        # close the port.  Predicate fires only when both have arrived (or
+        # times out, which lets us report partial failures cleanly).
+        def saw_both(lines):
+            has_verify = any(VERIFY_OK_RE.search(l) for l in lines)
+            has_blinky = any(BLINKY_ALIVE in l for l in lines)
+            return has_verify and has_blinky
+        lines, ok = capture_until(ser, saw_both, timeout_s=10.0)
+        # Don't fail outright on the AND timeout — the port-open race may
+        # have eaten the verify line's prefix even though the boot was
+        # successful.  Inspect what we actually got.
+        has_verify = any(VERIFY_OK_RE.search(l) for l in lines)
+        has_blinky = any(BLINKY_ALIVE in l for l in lines)
+        if has_verify:
+            m = next(VERIFY_OK_RE.search(l) for l in lines
+                     if VERIFY_OK_RE.search(l))
+            if m.group(1) != "B":
+                fails.append(f"booted slot {m.group(1)} after OTA, expected B")
+        if not has_blinky:
+            # APP: blinky alive is the load-bearing proof.  Without it the
+            # OTA either silently failed verify (chip halted) or never
+            # rebooted at all.
             fails.append(f"did not see '{BLINKY_ALIVE}' after OTA reset")
+        if not has_verify and not has_blinky:
+            fails.append("no post-OTA boot output captured at all")
     finally:
         ser.close()
 

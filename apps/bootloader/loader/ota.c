@@ -79,10 +79,20 @@ static ota_session_t s_sess;
  * Wire helpers
  * ------------------------------------------------------------------------ */
 
+/*
+ * Write a buffer to USART2 byte-for-byte without any CR/LF translation.
+ * uart_write() injects a '\r' before every '\n' for terminal-friendly
+ * text output — that is correct for the bootloader's log lines, but it
+ * silently corrupts binary frame bytes because every 0x0A in a payload,
+ * header, or CRC would gain a stray 0x0D prefix on the wire and break
+ * the host's framing decoder.  We bypass uart_write() here and poke the
+ * data register directly.
+ */
 static void uart_write_bytes(const uint8_t *buf, size_t len)
 {
     for (size_t i = 0; i < len; ++i) {
-        uart_write((char)buf[i]);
+        while (!(USART2->SR & USART_SR_TXE)) { /* spin */ }
+        USART2->DR = buf[i];
     }
 }
 
