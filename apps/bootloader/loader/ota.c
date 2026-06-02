@@ -424,16 +424,26 @@ void bootloader_ota_run(void)
     led2_on();
 
     /*
-     * uart_init() armed USART2's RXNE interrupt, but the OTA receiver
-     * polls bytes via uart_read().  If we leave the IRQ enabled, the
-     * shared handler will fire on every received byte, read DR (which
-     * clears RXNE), find rx_callback == NULL, and silently drop the
-     * byte — uart_read() then spins forever waiting for an RXNE that
-     * has already been consumed.  Disable the interrupt here so the
-     * polled loop owns the RXNE flag end-to-end.
+     * uart_init() arms three USART2 interrupt sources: RXNEIE (per byte),
+     * IDLEIE (when the line goes idle after activity), and CR3_EIE
+     * (overrun/framing/noise).  All three race the polled OTA loop:
+     *
+     *   - RXNEIE: handler reads DR, clears RXNE, drops the byte (no
+     *     callback registered).  uart_read() then spins forever.
+     *   - IDLEIE: handler reads DR to clear the flag, which steals
+     *     whatever byte was sitting in the receive register at that
+     *     instant.  Inter-byte gaps inside a single frame on USB-CDC
+     *     are enough to trigger this and corrupt the decoder.
+     *   - EIE / ORE: same — handler reads DR to clear, byte gone.
+     *
+     * The OTA receiver wants none of that; it owns the bus end-to-end
+     * via uart_read().  Disable all three before the polled loop and
+     * mask the NVIC line so the ISR cannot run at all.  Drain any
+     * byte that already raced in before the disable took effect.
      */
-    USART2->CR1 &= ~USART_CR1_RXNEIE;
-    /* Drain any byte that already raced in before we disabled the IRQ. */
+    USART2->CR1 &= ~(USART_CR1_RXNEIE | USART_CR1_IDLEIE);
+    USART2->CR3 &= ~USART_CR3_EIE;
+    NVIC_DisableIRQ(USART2_IRQn);
     if (USART2->SR & USART_SR_RXNE) {
         (void)USART2->DR;
     }
