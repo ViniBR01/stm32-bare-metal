@@ -43,6 +43,7 @@ Multi-phase project plans. Each plan's phases are sized as individual GitHub iss
 | [plans/001-bootloader/ab-slots.md](plans/001-bootloader/ab-slots.md) | Plan 001 Phase 1.7 — A/B slot fallback, dual metadata sectors, lib/flash middleware, SLOT=B build knob, partition_dump.py |
 | [plans/001-bootloader/ota.md](plans/001-bootloader/ota.md) | Plan 001 Phase 1.8 — OTA over UART, RTC backup-register entry, framing receiver, atomic active-slot swap, ota_send.py |
 | [plans/001-bootloader/anti-rollback.md](plans/001-bootloader/anti-rollback.md) | Plan 001 Phase 1.9 — anti-rollback floor, fail_count rollback-on-crash, bl_handshake helper, OTA STATUS=rollback_rejected |
+| [plans/001-bootloader/rdp.md](plans/001-bootloader/rdp.md) | Plan 001 Phase 1.10 — readout protection (RDP) levels, option-byte mechanics, threat model, set_rdp.py + HIL test |
 | [plans/002-comms-and-dsp-baseband.md](plans/002-comms-and-dsp-baseband.md) | Two-board comms (UART/SPI/I²C) + software BPSK modem with FEC |
 
 ## Decisions
