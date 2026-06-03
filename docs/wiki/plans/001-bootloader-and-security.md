@@ -171,6 +171,8 @@ See [001-bootloader/ota.md](001-bootloader/ota.md).
 
 ### Phase 1.10 — Option byte protection (RDP)
 
+**Status:** in progress — [#169](https://github.com/ViniBR01/stm32-bare-metal/issues/169)
+
 **Scope:**
 - Document RDP Level 0/1/2 semantics for STM32F4
 - Script to set RDP Level 1 (mass-erase on regression to L0; debug locked)
@@ -178,6 +180,8 @@ See [001-bootloader/ota.md](001-bootloader/ota.md).
 - **Do NOT enable RDP Level 2 on the dev board** — it is permanent. Document the procedure only, leave it as a manual experiment with a separate "burn" board if the user chooses.
 
 **Validation:** HIL confirms debug-attach fails when RDP-1 is set; reverting to L0 mass-erases as expected.
+
+See [rdp.md](001-bootloader/rdp.md).
 
 ### Phase 1.11 — Threat model & docs
 

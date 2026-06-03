@@ -123,6 +123,15 @@ accidentally reprogram sector 0.  Recovery if you ever brick the board is
 documented in
 [docs/wiki/plans/001-bootloader/bootloader-skeleton.md](docs/wiki/plans/001-bootloader/bootloader-skeleton.md).
 
+> **DANGER — RDP Level 2 is permanent.** Plan 001 Phase 1.10 ships
+> `scripts/set_rdp.py`, which can flip the chip into readout-protection
+> Level 1 (recoverable, mass-erases on regression) or Level 2 (permanent,
+> chip becomes a paperweight). The script gates `--level 2` behind
+> `RDP_L2_BURN_BOARD=1` and refuses any write under `STM32_BARE_METAL_CI=1`
+> or against the CI ST-LINK serial. Read
+> [docs/wiki/plans/001-bootloader/rdp.md](docs/wiki/plans/001-bootloader/rdp.md)
+> before running it on any board you want to keep.
+
 ### Day-to-day flow
 
 ```sh
