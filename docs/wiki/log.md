@@ -4,6 +4,53 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-06-03] milestone | Plan 001 Phase 1.10 — RDP-1 tooling + HIL test (#169)
+
+Adds the readout-protection (RDP) option-byte story: docs, a host
+script that toggles RDP levels via OpenOCD, and a manual-trigger HIL
+test that cycles the dev board through L0 → L1 → L0 with assertions
+at each step.
+
+New components:
+
+- **`docs/wiki/plans/001-bootloader/rdp.md`** — RM0383 §3.7/§3.8.1
+  in plain English: L0/L1/L2 semantics, OPTKEYR unlock + OPTCR write
+  sequence, threat-model fit (closes the OpenOCD-attaches-and-reads
+  attack), explicit non-goals (glitching, side-channels, decapping,
+  backup-domain registers), and the manual recovery procedure if an
+  L1 → L0 mass-erase is interrupted.
+- **`scripts/set_rdp.py`** — three-mode tool: `--status` reads the
+  current RDP level (always safe); `--level {0,1,2} --confirm`
+  drives `stm32f2x options_write` through OpenOCD. Refusal stack:
+  `--level` requires `--confirm`; `--level 2` additionally requires
+  `RDP_L2_BURN_BOARD=1`; `STM32_BARE_METAL_CI=1` and the CI
+  ST-LINK serial both kill any write path. Reuses
+  `run_hil_tests.BOARD_REGISTRY` so all three OpenOCD-driving
+  scripts (`run_hil_tests`, `flash_bootloader`, `set_rdp`) agree on
+  which serial is which board.
+- **`scripts/run_rdp_test.py`** — six-step HIL flow: assert L0
+  start → set L1 → assert `dump_image` is blocked or all-FF →
+  confirm bootloader still UART-prints → regress to L0 (mass
+  erase) → reflash bootloader + slot-A app from build artifacts so
+  the rig comes home in a working state. Refuses to run on the CI
+  board's ST-LINK serial; refuses to run with
+  `STM32_BARE_METAL_CI=1`.
+- **`.github/workflows/rdp-test.yml`** — manual `workflow_dispatch`
+  trigger gated behind a typed-string confirmation input. Targets
+  `--board dev`. Not part of the standard `hil-tests` job because
+  the L1 → L0 mass erase would block every other HIL test that
+  follows it on the same chip.
+
+Cross-references updated: `bootloader-skeleton.md` and `ota.md` now
+both flag that their OpenOCD-based recovery paths require an
+L1 → L0 regression first under RDP-1. The plan page bumps Phase
+1.10 to "in progress" and links to the new `rdp.md`.
+
+Out of scope (deliberately): RDP Level 2 actuation, WRP sector
+write-protect bits, PCROP. RDP-2 is documented but not driven by
+any tooling — the gating env-var is meant to make a "let me try
+this" mistake impossible.
+
 ## [2026-06-01] milestone | Plan 001 Phase 1.8 (part 2) — bootloader OTA receiver (#162)
 
 Closes Phase 1.8.  Building on the framing layer from part 1

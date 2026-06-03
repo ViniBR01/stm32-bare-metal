@@ -132,6 +132,15 @@ will accept the new image because both slots' metadata is invalid (the
 "slot A is the implicit active", so target slot B will work; flashing
 slot A is a separate `make flash` operation if needed).
 
+**Not available under RDP-1.** Phase 1.10 ([rdp.md](rdp.md)) closes
+the OpenOCD attack surface, which is the same surface this recovery
+path relies on. On a chip running RDP-1, `mww` writes to the backup
+domain are blocked alongside everything else on the debug bus. The
+only recovery from a both-slots-bricked state under RDP-1 is to
+regress to L0 with `scripts/set_rdp.py --level 0 --confirm`, which
+mass-erases user flash, then reflash the bootloader and slot A
+manually. See [rdp.md §Manual recovery](rdp.md#manual-recovery-from-a-stuck-state).
+
 ## Production gap notes
 
 The protocol provides authenticity through the per-image ECDSA-P256
