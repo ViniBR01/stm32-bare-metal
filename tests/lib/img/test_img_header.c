@@ -396,6 +396,198 @@ void test_metadata_null_out(void)
                           img_slot_metadata_parse(raw, sizeof(raw), NULL));
 }
 
+/* ====================================================================
+ * Phase 1.9 anti-rollback helpers — pure functions, host-testable.
+ * ==================================================================== */
+
+/* ---------- img_header_meets_floor ---------- */
+
+void test_meets_floor_equal_passes(void)
+{
+    img_header_t h = { .image_version = 5u };
+    TEST_ASSERT_EQUAL_INT(1, img_header_meets_floor(&h, 5u));
+}
+
+void test_meets_floor_above_passes(void)
+{
+    img_header_t h = { .image_version = 7u };
+    TEST_ASSERT_EQUAL_INT(1, img_header_meets_floor(&h, 5u));
+}
+
+void test_meets_floor_below_fails(void)
+{
+    img_header_t h = { .image_version = 4u };
+    TEST_ASSERT_EQUAL_INT(0, img_header_meets_floor(&h, 5u));
+}
+
+void test_meets_floor_zero_floor_always_passes(void)
+{
+    img_header_t h = { .image_version = 0u };
+    /* Pristine-chip seed: floor=0 must accept every signed image. */
+    TEST_ASSERT_EQUAL_INT(1, img_header_meets_floor(&h, 0u));
+}
+
+void test_meets_floor_null_header_fails(void)
+{
+    TEST_ASSERT_EQUAL_INT(0, img_header_meets_floor(NULL, 0u));
+}
+
+/* ---------- img_compute_floor ---------- */
+
+void test_compute_floor_picks_higher_of_two(void)
+{
+    img_slot_metadata_t a = { .monotonic_counter = 3u };
+    img_slot_metadata_t b = { .monotonic_counter = 7u };
+    TEST_ASSERT_EQUAL_UINT32(7u, img_compute_floor(1, &a, 1, &b));
+}
+
+void test_compute_floor_picks_a_when_b_invalid(void)
+{
+    img_slot_metadata_t a = { .monotonic_counter = 11u };
+    TEST_ASSERT_EQUAL_UINT32(11u, img_compute_floor(1, &a, 0, NULL));
+}
+
+void test_compute_floor_picks_b_when_a_invalid(void)
+{
+    img_slot_metadata_t b = { .monotonic_counter = 13u };
+    TEST_ASSERT_EQUAL_UINT32(13u, img_compute_floor(0, NULL, 1, &b));
+}
+
+void test_compute_floor_zero_when_both_invalid(void)
+{
+    /* Pristine chip — both metadata sectors all-FF, floor seeds to 0. */
+    TEST_ASSERT_EQUAL_UINT32(0u, img_compute_floor(0, NULL, 0, NULL));
+}
+
+void test_compute_floor_handles_max_uint32(void)
+{
+    img_slot_metadata_t a = { .monotonic_counter = 0xFFFFFFFFu };
+    img_slot_metadata_t b = { .monotonic_counter = 0u };
+    TEST_ASSERT_EQUAL_HEX32(0xFFFFFFFFu, img_compute_floor(1, &a, 1, &b));
+}
+
+/* ---------- img_compute_new_floor ---------- */
+
+void test_new_floor_promotes_to_image_version(void)
+{
+    TEST_ASSERT_EQUAL_UINT32(7u, img_compute_new_floor(3u, 7u));
+}
+
+void test_new_floor_keeps_current_when_image_lower(void)
+{
+    TEST_ASSERT_EQUAL_UINT32(7u, img_compute_new_floor(7u, 3u));
+}
+
+void test_new_floor_handles_equal(void)
+{
+    TEST_ASSERT_EQUAL_UINT32(5u, img_compute_new_floor(5u, 5u));
+}
+
+/* ---------- img_fail_count_increment / tripped ---------- */
+
+void test_fail_count_increment_below_max(void)
+{
+    TEST_ASSERT_EQUAL_UINT32(1u, img_fail_count_increment(0u));
+    TEST_ASSERT_EQUAL_UINT32(2u, img_fail_count_increment(1u));
+    TEST_ASSERT_EQUAL_UINT32(3u, img_fail_count_increment(2u));
+}
+
+void test_fail_count_increment_clamps_at_max(void)
+{
+    TEST_ASSERT_EQUAL_UINT32(IMG_FAIL_COUNT_MAX,
+                             img_fail_count_increment(IMG_FAIL_COUNT_MAX));
+    /* Above-max input (e.g. injected by an OpenOCD operator) clamps too. */
+    TEST_ASSERT_EQUAL_UINT32(IMG_FAIL_COUNT_MAX, img_fail_count_increment(99u));
+}
+
+void test_fail_count_tripped_threshold(void)
+{
+    TEST_ASSERT_EQUAL_INT(0, img_fail_count_tripped(0u));
+    TEST_ASSERT_EQUAL_INT(0, img_fail_count_tripped(IMG_FAIL_COUNT_MAX - 1u));
+    TEST_ASSERT_EQUAL_INT(1, img_fail_count_tripped(IMG_FAIL_COUNT_MAX));
+    TEST_ASSERT_EQUAL_INT(1, img_fail_count_tripped(IMG_FAIL_COUNT_MAX + 1u));
+}
+
+/* ---------- img_pick_active_slot ---------- */
+
+void test_pick_active_only_a_active(void)
+{
+    img_slot_metadata_t a = { .active = 1u, .monotonic_counter = 1u };
+    img_slot_metadata_t b = { .active = 0u, .monotonic_counter = 1u };
+    TEST_ASSERT_EQUAL_INT(0, img_pick_active_slot(1, &a, 1, &b));
+}
+
+void test_pick_active_only_b_active(void)
+{
+    img_slot_metadata_t a = { .active = 0u, .monotonic_counter = 1u };
+    img_slot_metadata_t b = { .active = 1u, .monotonic_counter = 1u };
+    TEST_ASSERT_EQUAL_INT(1, img_pick_active_slot(1, &a, 1, &b));
+}
+
+void test_pick_active_both_set_picks_higher_counter(void)
+{
+    img_slot_metadata_t a = { .active = 1u, .monotonic_counter = 5u };
+    img_slot_metadata_t b = { .active = 1u, .monotonic_counter = 9u };
+    TEST_ASSERT_EQUAL_INT(1, img_pick_active_slot(1, &a, 1, &b));
+}
+
+void test_pick_active_neither_active_picks_higher_counter(void)
+{
+    img_slot_metadata_t a = { .active = 0u, .monotonic_counter = 4u };
+    img_slot_metadata_t b = { .active = 0u, .monotonic_counter = 6u };
+    TEST_ASSERT_EQUAL_INT(1, img_pick_active_slot(1, &a, 1, &b));
+}
+
+void test_pick_active_only_a_valid(void)
+{
+    img_slot_metadata_t a = { .active = 1u };
+    TEST_ASSERT_EQUAL_INT(0, img_pick_active_slot(1, &a, 0, NULL));
+}
+
+void test_pick_active_only_b_valid(void)
+{
+    img_slot_metadata_t b = { .active = 1u };
+    TEST_ASSERT_EQUAL_INT(1, img_pick_active_slot(0, NULL, 1, &b));
+}
+
+void test_pick_active_both_invalid_defaults_a(void)
+{
+    /* Pristine chip — bootloader still has to pick something. */
+    TEST_ASSERT_EQUAL_INT(0, img_pick_active_slot(0, NULL, 0, NULL));
+}
+
+/* ---------- img_slot_metadata_finalize ---------- */
+
+void test_finalize_yields_parseable_metadata(void)
+{
+    img_slot_metadata_t md;
+    memset(&md, 0xAA, sizeof(md));   /* garbage starting state */
+    md.active            = 1u;
+    md.fail_count        = 2u;
+    md.monotonic_counter = 9u;
+    img_slot_metadata_finalize(&md);
+
+    TEST_ASSERT_EQUAL_HEX32(IMG_SLOT_METADATA_MAGIC, md.magic);
+    TEST_ASSERT_EQUAL_UINT32(IMG_SLOT_METADATA_VERSION, md.metadata_version);
+    TEST_ASSERT_EQUAL_UINT32(0u, md.reserved[0]);
+    TEST_ASSERT_EQUAL_UINT32(0u, md.reserved[1]);
+    TEST_ASSERT_EQUAL_UINT32(0u, md.reserved[2]);
+
+    /* Round-trip through the parser to confirm the CRC is right. */
+    img_slot_metadata_t parsed;
+    TEST_ASSERT_EQUAL_INT(IMG_OK,
+        img_slot_metadata_parse((const uint8_t *)&md, sizeof(md), &parsed));
+    TEST_ASSERT_EQUAL_UINT32(1u, parsed.active);
+    TEST_ASSERT_EQUAL_UINT32(2u, parsed.fail_count);
+    TEST_ASSERT_EQUAL_UINT32(9u, parsed.monotonic_counter);
+}
+
+void test_finalize_null_is_noop(void)
+{
+    /* Just must not crash. */
+    img_slot_metadata_finalize(NULL);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -425,5 +617,33 @@ int main(void)
     RUN_TEST(test_metadata_tampered_byte_fails_crc);
     RUN_TEST(test_metadata_null_buf);
     RUN_TEST(test_metadata_null_out);
+    /* Phase 1.9 — anti-rollback floor */
+    RUN_TEST(test_meets_floor_equal_passes);
+    RUN_TEST(test_meets_floor_above_passes);
+    RUN_TEST(test_meets_floor_below_fails);
+    RUN_TEST(test_meets_floor_zero_floor_always_passes);
+    RUN_TEST(test_meets_floor_null_header_fails);
+    RUN_TEST(test_compute_floor_picks_higher_of_two);
+    RUN_TEST(test_compute_floor_picks_a_when_b_invalid);
+    RUN_TEST(test_compute_floor_picks_b_when_a_invalid);
+    RUN_TEST(test_compute_floor_zero_when_both_invalid);
+    RUN_TEST(test_compute_floor_handles_max_uint32);
+    RUN_TEST(test_new_floor_promotes_to_image_version);
+    RUN_TEST(test_new_floor_keeps_current_when_image_lower);
+    RUN_TEST(test_new_floor_handles_equal);
+    /* Phase 1.9 — fail_count clamp */
+    RUN_TEST(test_fail_count_increment_below_max);
+    RUN_TEST(test_fail_count_increment_clamps_at_max);
+    RUN_TEST(test_fail_count_tripped_threshold);
+    /* Phase 1.9 — slot pick + finalize */
+    RUN_TEST(test_pick_active_only_a_active);
+    RUN_TEST(test_pick_active_only_b_active);
+    RUN_TEST(test_pick_active_both_set_picks_higher_counter);
+    RUN_TEST(test_pick_active_neither_active_picks_higher_counter);
+    RUN_TEST(test_pick_active_only_a_valid);
+    RUN_TEST(test_pick_active_only_b_valid);
+    RUN_TEST(test_pick_active_both_invalid_defaults_a);
+    RUN_TEST(test_finalize_yields_parseable_metadata);
+    RUN_TEST(test_finalize_null_is_noop);
     return UNITY_END();
 }

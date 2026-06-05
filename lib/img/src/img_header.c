@@ -81,6 +81,76 @@ img_err_t img_header_parse(const uint8_t *buf, size_t buf_len, img_header_t *out
     return IMG_OK;
 }
 
+/* ------------------------------------------------------------------------
+ * Phase 1.9 anti-rollback helpers — pure functions, no I/O, host-testable.
+ * ------------------------------------------------------------------------ */
+
+int img_header_meets_floor(const img_header_t *header, uint32_t floor)
+{
+    if (header == NULL) {
+        return 0;
+    }
+    return (header->image_version >= floor) ? 1 : 0;
+}
+
+uint32_t img_compute_floor(int a_valid, const img_slot_metadata_t *a,
+                           int b_valid, const img_slot_metadata_t *b)
+{
+    uint32_t floor = 0u;
+    if (a_valid && a != NULL && a->monotonic_counter > floor) {
+        floor = a->monotonic_counter;
+    }
+    if (b_valid && b != NULL && b->monotonic_counter > floor) {
+        floor = b->monotonic_counter;
+    }
+    return floor;
+}
+
+uint32_t img_compute_new_floor(uint32_t current_floor, uint32_t image_version)
+{
+    return (image_version > current_floor) ? image_version : current_floor;
+}
+
+uint32_t img_fail_count_increment(uint32_t current)
+{
+    if (current >= IMG_FAIL_COUNT_MAX) {
+        return IMG_FAIL_COUNT_MAX;
+    }
+    return current + 1u;
+}
+
+int img_fail_count_tripped(uint32_t fc)
+{
+    return (fc >= IMG_FAIL_COUNT_MAX) ? 1 : 0;
+}
+
+void img_slot_metadata_finalize(img_slot_metadata_t *md)
+{
+    if (md == NULL) {
+        return;
+    }
+    md->magic            = IMG_SLOT_METADATA_MAGIC;
+    md->metadata_version = IMG_SLOT_METADATA_VERSION;
+    md->reserved[0]      = 0u;
+    md->reserved[1]      = 0u;
+    md->reserved[2]      = 0u;
+    const size_t crc_offset = sizeof(*md) - sizeof(uint32_t);
+    md->metadata_crc = img_crc32((const uint8_t *)md, crc_offset);
+}
+
+int img_pick_active_slot(int a_valid, const img_slot_metadata_t *a,
+                         int b_valid, const img_slot_metadata_t *b)
+{
+    if (a_valid && b_valid && a != NULL && b != NULL) {
+        if (a->active && !b->active) return 0;
+        if (b->active && !a->active) return 1;
+        return (b->monotonic_counter > a->monotonic_counter) ? 1 : 0;
+    }
+    if (a_valid) return 0;
+    if (b_valid) return 1;
+    return 0;
+}
+
 img_err_t img_slot_metadata_parse(const uint8_t *buf, size_t buf_len,
                                   img_slot_metadata_t *out)
 {
