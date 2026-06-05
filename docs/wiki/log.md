@@ -4,6 +4,67 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-06-04] milestone | Plan 001 Phase 1.9 — anti-rollback floor + fail_count writes (#168)
+
+Closes Phase 1.9 in a single PR.  The bootloader now refuses to boot
+any image whose `image_version` is below the highest version it has
+ever booted, and the OTA receiver enforces the same check after a
+successful verify.  `fail_count` writes (deferred from Phase 1.7)
+land alongside the floor commit so the marginal cost of fail_count
+is one extra write per boot.
+
+New / changed components:
+
+- **Pure helpers** in [lib/img/inc/img_header.h](../../lib/img/inc/img_header.h)
+  — `img_header_meets_floor`, `img_compute_floor`,
+  `img_compute_new_floor`, `img_fail_count_increment`/`tripped`,
+  `img_pick_active_slot`, `img_slot_metadata_finalize`.  All
+  host-testable; 25 new Unity tests in
+  `tests/lib/img/test_img_header.c` cover the floor predicate, max
+  helpers, fail_count clamp, slot-pick decision tree, and the
+  finalize-then-parse round trip.
+- **Bootloader** in
+  [apps/bootloader/loader/main.c](../../apps/bootloader/loader/main.c)
+  — full anti-rollback flow: read both metadata sectors, compute
+  the floor, gate each slot attempt on `fail_count < MAX`, verify,
+  then gate on `image_version >= floor`.  After picking a slot, a
+  single `flash_slot_commit_metadata` writes `active=1`,
+  `fail_count = clamped(prev+1)`, `monotonic_counter = max(image_version,
+  floor, prev counter)` — one erase + program + readback per boot.
+- **`verify_slot()`** now returns the parsed header so the floor
+  check happens in one place without a second flash read.
+- **OTA receiver** in
+  [apps/bootloader/loader/ota.c](../../apps/bootloader/loader/ota.c)
+  — post-verify floor check.  On rejection: bytes are written, but
+  no metadata commit lands, and the previously-active slot stays
+  active.  New `OTA_STATUS_ROLLBACK_REJECTED = 4` is reported on
+  the wire (mirrored in `tools/_framing.py`).
+- **`lib/bl_handshake/`** — new tiny library with one function,
+  `bl_handshake_clear_fail_count()`.  Reads metadata, skips the
+  commit if `fail_count` was already 0 (no flash wear in the
+  steady-state clean-boot loop), otherwise resets it and re-commits.
+  Wired into `apps/bootloader/app_blinky_signed/main.c` and
+  `apps/cli/cli_simple.c` — both resolve the boot slot from
+  `SCB->VTOR` so the same code covers slot-A and slot-B builds.
+- **HIL `scripts/run_anti_rollback_test.py`** — four-pass flow:
+  seed v1 in slot A, clean-upgrade OTA to v2 in slot B, downgrade
+  OTA v1 rejected with `STATUS=rollback_rejected`, force-flashed
+  downgrade rejected at boot with `BL: rollback ver=1 < floor=N`
+  followed by fallback to slot B.  Wired into the standard CI
+  `hil-tests` job after the existing OTA test.
+
+Sector-0 budget after the cuts: **16352 / 16384 bytes** — ~32 bytes
+of headroom.  `pick_active_slot` was lifted into `lib/img` to
+eliminate the duplicated decision tree between `main.c` and
+`ota.c`; that, plus tightening a couple of log strings, kept the
+bootloader inside the cap.
+
+Threat-model note: with Option 1 (floor in slot metadata), the
+floor is wipeable via OpenOCD until Phase 1.10's RDP-1 closes the
+debug-bus attack.  An attacker with debug access can already flash
+arbitrary signed images, so the floor primarily defends the OTA
+path — exactly the threat the per-image signature does not cover.
+
 ## [2026-06-01] milestone | Plan 001 Phase 1.8 (part 2) — bootloader OTA receiver (#162)
 
 Closes Phase 1.8.  Building on the framing layer from part 1

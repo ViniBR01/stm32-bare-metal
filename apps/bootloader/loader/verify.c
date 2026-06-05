@@ -14,7 +14,7 @@ static const char *slot_name(flash_slot_id_t s)
 }
 
 verify_status_t verify_slot(flash_slot_id_t slot, uint32_t *app_base_out,
-                            uint32_t *cycles_out)
+                            uint32_t *cycles_out, img_header_t *header_out)
 {
     const uint32_t slot_base = (slot == FLASH_SLOT_A) ? FLASH_SLOT_A_BASE
                                                        : FLASH_SLOT_B_BASE;
@@ -63,5 +63,8 @@ verify_status_t verify_slot(flash_slot_id_t slot, uint32_t *app_base_out,
 
     *cycles_out = DWT->CYCCNT;
     *app_base_out = slot_base + hdr.payload_offset;
+    if (header_out != NULL) {
+        *header_out = hdr;
+    }
     return VERIFY_OK;
 }

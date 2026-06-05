@@ -42,7 +42,11 @@ CLI_OBJS := $(patsubst %.c,$(LOCAL_BUILD_DIR)/cli_simple/%.o,$(CLI_SRCS))
 # Dependencies for each app
 #==============================================================================
 # Define explicit dependencies for each app
-cli_simple_DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ) $(LOG_C_LIB) $(PRINTF_LIB) $(UTILS_LIB)
+cli_simple_DEPS := $(BL_HANDSHAKE_LIB) $(IMG_LIB) $(FLASH_LIB) $(DRIVERS_LIB) $(STARTUP_OBJ) $(LOG_C_LIB) $(PRINTF_LIB) $(UTILS_LIB)
+
+# Phase 1.9: bl_handshake header lookup needs the lib/ tree on the
+# include path.  Picked up by the per-source compile rule below.
+CLI_LIB_INCS := -I$(LIB_DIR)/bl_handshake/inc -I$(LIB_DIR)/img/inc -I$(LIB_DIR)/flash/inc
 
 # Add Unity library when HIL_TEST is enabled
 ifeq ($(HIL_TEST),1)
@@ -83,7 +87,7 @@ cli_simple: $(LOCAL_BUILD_DIR)/cli_simple/cli_simple.signed.bin
 $(LOCAL_BUILD_DIR)/cli_simple/%.o: %.c
 	$(make-build-dir)
 	@echo "Compiling: $<"
-	$(CC) $(CFLAGS) -I. -o $@ $<
+	$(CC) $(CFLAGS) -I. $(CLI_LIB_INCS) -o $@ $<
 
 # Link all object files together
 $(LOCAL_BUILD_DIR)/cli_simple/cli_simple.elf: $(CLI_OBJS) $(cli_simple_DEPS)

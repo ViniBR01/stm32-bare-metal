@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "flash_slot.h"
+#include "img_header.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,15 +28,19 @@ typedef enum {
  * Parse the header at the start of `slot` and verify the payload's
  * SHA-256 digest + ECDSA-P256 signature against the bootloader-embedded
  * public key. On success, *app_base_out is set to the absolute address
- * of the app vector table and *cycles_out receives the DWT cycle count
- * spent on SHA + verify (zero on failure).
+ * of the app vector table, *cycles_out receives the DWT cycle count
+ * spent on SHA + verify (zero on failure), and *header_out (when
+ * non-NULL) receives the parsed img_header_t — Phase 1.9 callers use
+ * `header_out->image_version` for the rollback-floor check without
+ * re-reading flash.
  *
  * Logs every step over UART with a slot annotation so the HIL test can
  * grep the path.
  */
 verify_status_t verify_slot(flash_slot_id_t slot,
                             uint32_t *app_base_out,
-                            uint32_t *cycles_out);
+                            uint32_t *cycles_out,
+                            img_header_t *header_out);
 
 #ifdef __cplusplus
 }

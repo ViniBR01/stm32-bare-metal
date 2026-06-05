@@ -48,6 +48,7 @@ and `tools/_framing.py`):
 | 1 | `verify_failed` | Bytes landed but the SHA/ECDSA check rejected them. Active slot **untouched**. |
 | 2 | `write_failed` | Flash write or metadata commit returned an error. |
 | 3 | `protocol_error` | OTA_END seen before BEGIN, or some other state-machine violation. |
+| 4 | `rollback_rejected` | Phase 1.9 — image survived SHA+ECDSA but its `image_version` was below the rollback floor.  Bytes landed in the inactive slot; the previously-active slot's metadata is **untouched**, so the next boot still picks the old image.  See [anti-rollback.md](anti-rollback.md). |
 
 Maximum frame payload is 1024 bytes (set by `FRAME_MAX_PAYLOAD`).
 `OTA_CHUNK` reserves the leading 4 bytes for the offset, so the data

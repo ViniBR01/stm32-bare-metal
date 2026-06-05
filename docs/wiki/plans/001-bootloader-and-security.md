@@ -162,12 +162,23 @@ See [001-bootloader/ota.md](001-bootloader/ota.md).
 
 ### Phase 1.9 — Anti-rollback
 
-**Scope:**
-- Monotonic version counter in slot metadata
-- Bootloader refuses to boot a slot whose version < highest-ever-seen (stored in dedicated sector)
-- Counter incremented atomically after successful boot
+**Status:** in progress — [#168](https://github.com/ViniBR01/stm32-bare-metal/issues/168)
 
-**Validation:** HIL: flash older image → bootloader rejects. Flash newer → boots and counter advances. Re-flash old → still rejected.
+**Scope:**
+- Monotonic version counter in slot metadata (Option 1: reuse the slot
+  `monotonic_counter` field; sector 3 stays reserved for a future
+  dedicated-counter promotion once RDP-1 lands)
+- Bootloader refuses to boot a slot whose `image_version` < the floor
+  (max counter across both metadata sectors); falls back to the other slot
+- Floor advanced atomically on every successful boot
+- OTA receiver rejects downgrades after verify with `STATUS=rollback_rejected`
+- `fail_count` writes deferred from Phase 1.7 — bootloader bumps before
+  jump, app clears via `bl_handshake_clear_fail_count()` after init,
+  fallback at `fail_count >= IMG_FAIL_COUNT_MAX`
+
+**Validation:** HIL: flash older image → bootloader rejects. Flash newer → boots and counter advances. Re-flash old → still rejected. OTA-side downgrade reports `STATUS=rollback_rejected` without overwriting the active slot.
+
+See [anti-rollback.md](001-bootloader/anti-rollback.md).
 
 ### Phase 1.10 — Option byte protection (RDP)
 

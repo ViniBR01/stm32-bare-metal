@@ -162,22 +162,16 @@ Two backends: `--backend openocd` (default; live ST-LINK) and
 `--backend file` (offline, against a `dump_image` blob). The latter
 is handy for archiving a specific board state.
 
-## fail_count semantics — deferred
+## fail_count semantics — landed in Phase 1.9
 
-The Phase 1.7 issue (#158) included a "rollback-on-crash" mechanic:
-bootloader increments `fail_count` before jump, app clears it after
-init. Implementing that in the bootloader requires a 16 KB sector
-erase + reprogram on every boot (~hundreds of milliseconds), which
-would more than triple boot time. Combined with the close coupling
-to Phase 1.9's `monotonic_counter` write, it makes more sense to
-land both in one pass.
-
-Phase 1.7 ships with `fail_count` and `monotonic_counter` already in
-the metadata struct and used by the slot-pick algorithm
-(`monotonic_counter` is the tiebreaker today), but neither is written
-by the bootloader yet. The host can pre-populate them via OpenOCD or
-`flash_slot_commit_metadata` on the device side once the OTA path
-exists.
+The Phase 1.7 issue (#158) included a "rollback-on-crash" mechanic
+that was deferred because each metadata commit costs ~80–120 ms.
+Phase 1.9 ([anti-rollback.md](anti-rollback.md)) lands fail_count
+writes on the same metadata commit that already advances the floor,
+so the marginal cost is one extra write per boot regardless of
+whether fail_count is in play.  See `anti-rollback.md` for the
+lifecycle, cost analysis, and the operator-forced recovery path
+when the fail_count storm marks both slots dead.
 
 ## Sector-0 budget
 

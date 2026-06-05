@@ -152,34 +152,24 @@ static uint32_t scan_max_monotonic(void)
 }
 
 /*
- * Determine which slot is currently active. If neither slot has
- * valid metadata we treat slot A as active so the only target left
- * for OTA is slot B — a fresh chip's first OTA always lands in B.
+ * Determine which slot is currently active.  Phase 1.9 routes through
+ * the shared lib/img helper so the bootloader and the OTA receiver
+ * share one decision tree.
  */
 static flash_slot_id_t scan_active_slot(void)
 {
     img_slot_metadata_t a, b;
     int a_ok = read_metadata(FLASH_SLOT_A, &a);
     int b_ok = read_metadata(FLASH_SLOT_B, &b);
-
-    if (a_ok && b_ok) {
-        if (a.active && !b.active) return FLASH_SLOT_A;
-        if (b.active && !a.active) return FLASH_SLOT_B;
-        return (b.monotonic_counter > a.monotonic_counter) ? FLASH_SLOT_B
-                                                            : FLASH_SLOT_A;
-    }
-    if (a_ok && a.active) return FLASH_SLOT_A;
-    if (b_ok && b.active) return FLASH_SLOT_B;
-    return FLASH_SLOT_A;
+    return (flash_slot_id_t)img_pick_active_slot(a_ok, &a, b_ok, &b);
 }
 
-static void compute_metadata_crc(img_slot_metadata_t *md)
+/* Re-export the lib/img helper under the local name so the existing call
+ * sites in this TU don't need to change.  Phase 1.9 lifted this out of
+ * ota.c into lib/img so main.c's floor-bump path can share it. */
+static inline void compute_metadata_crc(img_slot_metadata_t *md)
 {
-    md->magic            = IMG_SLOT_METADATA_MAGIC;
-    md->metadata_version = IMG_SLOT_METADATA_VERSION;
-    md->reserved[0] = md->reserved[1] = md->reserved[2] = 0u;
-    const size_t crc_offset = sizeof(*md) - sizeof(uint32_t);
-    md->metadata_crc = img_crc32((const uint8_t *)md, crc_offset);
+    img_slot_metadata_finalize(md);
 }
 
 /*
@@ -343,7 +333,8 @@ static void handle_ota_end(uint8_t seq)
 
     uint32_t app_base = 0u;
     uint32_t cycles   = 0u;
-    verify_status_t vs = verify_slot(s_sess.target_slot, &app_base, &cycles);
+    img_header_t hdr;
+    verify_status_t vs = verify_slot(s_sess.target_slot, &app_base, &cycles, &hdr);
     if (vs != VERIFY_OK) {
         uart_puts("OTA: verify FAILED\r\n");
         send_status(seq, OTA_STATUS_VERIFY_FAILED);
@@ -351,7 +342,36 @@ static void handle_ota_end(uint8_t seq)
         return;
     }
 
+    /*
+     * Phase 1.9 anti-rollback gate.  The image survived SHA + ECDSA
+     * but its image_version still has to dominate the floor (i.e. the
+     * highest monotonic_counter we've ever seen across either slot).
+     * If it doesn't we leave the previously-active slot's metadata
+     * untouched — the freshly-flashed bytes stay on flash but never
+     * get an active=1 metadata blob, so the next boot still picks the
+     * old slot.  Phase 1.8 OTA already documents the
+     * "device wastes one OTA cycle" tradeoff for this shape.
+     */
+    if (!img_header_meets_floor(&hdr, s_sess.max_seen_counter)) {
+        uart_puts("OTA: rollback rejected: header_ver=");
+        uart_print_dec32(hdr.image_version);
+        uart_puts(" < floor=");
+        uart_print_dec32(s_sess.max_seen_counter);
+        uart_puts("\r\n");
+        send_status(seq, OTA_STATUS_ROLLBACK_REJECTED);
+        s_sess.state = OTA_STATE_HALT;
+        return;
+    }
+
+    /*
+     * The new metadata's monotonic_counter must dominate both the
+     * existing floor AND the new image's image_version, so a future
+     * boot's floor check sees max(image_version, prev floor + 1).
+     */
     uint32_t new_counter = s_sess.max_seen_counter + 1u;
+    if (hdr.image_version > new_counter) {
+        new_counter = hdr.image_version;
+    }
     if (!swap_active_slot(s_sess.target_slot, s_sess.prev_active, new_counter)) {
         uart_puts("OTA: metadata commit failed\r\n");
         send_status(seq, OTA_STATUS_WRITE_FAILED);
