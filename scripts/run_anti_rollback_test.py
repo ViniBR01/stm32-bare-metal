@@ -323,7 +323,8 @@ def pass_clean_upgrade(hla_serial: str, project_root: Path,
     if rc != 0:
         return False, [f"ota_send.py exited with rc={rc} (expected 0)"]
 
-    time.sleep(1.5)
+    # Open the serial port immediately — the bootloader resets within
+    # ~100 ms of ota_send exiting and we need to catch the first lines.
     ser = open_serial(port)
     try:
         def saw_boot_b(lines):
@@ -359,7 +360,21 @@ def pass_downgrade_ota_rejected(hla_serial: str, project_root: Path,
     fails: list[str] = []
     hil.log_info("Forcing OTA mode via RTC backup register magic...")
     OTA_MAGIC = 0x4F544131
-    openocd(hla_serial, f"mww 0x40002850 {OTA_MAGIC:#010x}")
+    # The backup domain is write-protected by default.  We must:
+    #   1. Enable the PWR peripheral clock (RCC_APB1ENR bit 28)
+    #   2. Set the DBP bit in PWR->CR (bit 8)
+    # Only then can we write RTC->BKP0R at 0x40002850.
+    # After `reset halt` the chip is in a fresh state so we set the
+    # exact bits we need (no read-modify-write necessary).
+    RCC_APB1ENR = 0x40023840
+    PWR_CR      = 0x40007000
+    RTC_BKP0R   = 0x40002850
+    PWREN_BIT   = 1 << 28
+    DBP_BIT     = 1 << 8
+    openocd(hla_serial,
+            f"mww {RCC_APB1ENR:#010x} {PWREN_BIT:#010x}",
+            f"mww {PWR_CR:#010x} {DBP_BIT:#010x}",
+            f"mww {RTC_BKP0R:#010x} {OTA_MAGIC:#010x}")
     reset_run(hla_serial)
     time.sleep(1.0)
 
@@ -515,6 +530,43 @@ def main() -> int:
     except Exception as e:
         hil.log_error(f"build failed: {e}")
         return 2
+
+    # --- Ensure the board has the Phase 1.9 bootloader on sector 0 ---
+    # The anti-rollback test requires the floor/fail_count logic that was
+    # added in Phase 1.9.  If the board still has an older bootloader,
+    # flash the freshly-built one now.  Unlike other HIL tests that only
+    # touch slot payloads, this test is meaningless without the matching
+    # bootloader.
+    hil.log_info("Checking bootloader version on sector 0...")
+    try:
+        subprocess.run(
+            ["make", "EXAMPLE=bootloader"],
+            cwd=project_root, check=True, timeout=180,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError as e:
+        hil.log_error(f"bootloader build failed (exit {e.returncode})")
+        return 2
+    loader_elf = (project_root / "build" / "apps" / "bootloader"
+                  / "loader" / "loader.elf")
+    if not loader_elf.exists():
+        hil.log_error(f"bootloader ELF not found at {loader_elf}")
+        return 2
+    # Flash the bootloader — always reflash so the test is self-contained.
+    hil.log_info("Flashing Phase 1.9 bootloader to sector 0...")
+    flash_cmd = ["openocd"]
+    if hla_serial:
+        flash_cmd += ["-c", f"hla_serial {hla_serial}"]
+    flash_cmd += ["-f", "board/st_nucleo_f4.cfg",
+                  "-c", f"program {loader_elf} verify reset exit"]
+    try:
+        subprocess.run(flash_cmd, cwd=project_root, check=True,
+                       capture_output=True, timeout=30)
+    except subprocess.CalledProcessError as e:
+        hil.log_error(f"bootloader flash failed: {e.stderr.decode()[:200] if e.stderr else ''}")
+        return 2
+    hil.log_success("Phase 1.9 bootloader flashed to sector 0")
+    time.sleep(1.0)
 
     results: list[tuple[str, bool, list[str]]] = []
 

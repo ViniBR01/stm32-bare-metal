@@ -259,11 +259,16 @@ def request_ota_via_cli(ser) -> None:
     # Phase 1.8 — surface that as an actionable error rather than a generic
     # timeout, since CI cannot reflash sector 0 itself (see CLAUDE.md +
     # scripts/flash_bootloader.py STM32_BARE_METAL_CI=1 guard).
+    MIN_PHASE = 8  # OTA mode was added in Phase 1.8
+    def _bl_phase(line: str) -> int | None:
+        m = re.search(r"\(Phase 1\.(\d+)\)", line)
+        return int(m.group(1)) if m else None
+
     def saw_ready_or_old_bl(lines):
         for l in lines:
             if OTA_READY_LINE in l:
                 return True
-            if "stm32-bare-metal bootloader" in l and "(Phase 1.8)" not in l:
+            if "stm32-bare-metal bootloader" in l and _bl_phase(l) is None:
                 return True
         return False
     lines, _ = capture_until(ser, saw_ready_or_old_bl, timeout_s=5.0)
@@ -271,12 +276,14 @@ def request_ota_via_cli(ser) -> None:
         hil.log_info("bootloader is in OTA mode")
         return
     stale = next((l for l in lines if "stm32-bare-metal bootloader" in l), None)
-    if stale and "(Phase 1.8)" not in stale:
-        raise RuntimeError(
-            f"sector 0 has a pre-Phase-1.8 bootloader ({stale.strip()}); "
-            "reflash with `make flash-bootloader BOARD=ci` on the Pi runner "
-            "before re-running this test"
-        )
+    if stale:
+        phase = _bl_phase(stale)
+        if phase is None or phase < MIN_PHASE:
+            raise RuntimeError(
+                f"sector 0 has a pre-Phase-1.8 bootloader ({stale.strip()}); "
+                "reflash with `make flash-bootloader BOARD=ci` on the Pi runner "
+                "before re-running this test"
+            )
     raise RuntimeError("bootloader never advertised 'OTA: ready'")
 
 
