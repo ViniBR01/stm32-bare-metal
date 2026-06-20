@@ -7,7 +7,7 @@ Detailed multi-phase plans live in [plans/](plans/index.md).
 | # | Track | Status |
 |---|---|---|
 | 000 | [Repository refactor](plans/000-repo-refactor.md) — `examples/` → `apps/`, add `lib/` and `tools/`, per-app linker scripts | landed (#136) |
-| 001 | [Bootloader & embedded security](plans/001-bootloader-and-security.md) — custom bootloader, ECDSA-signed images, OTA, A/B slots, anti-rollback, RDP | proposed |
+| 001 | [Bootloader & embedded security](plans/001-bootloader-and-security.md) — custom bootloader, ECDSA-signed images, OTA, A/B slots, anti-rollback, RDP | **completed** |
 | 002 | [Inter-board comms + DSP baseband](plans/002-comms-and-dsp-baseband.md) — UART/SPI/I²C link benchmarks + BPSK modem over wired analog link | proposed |
 
 ## Open Issues by Priority

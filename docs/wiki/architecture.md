@@ -12,6 +12,7 @@
 - **No dynamic allocation.** All state is statically allocated.
 - **Layered drivers.** Low-level drivers (GPIO, DMA) are reused by higher-level drivers (UART, SPI). Applications use drivers only, never registers directly.
 - **ISR-safe architecture.** Interrupt handlers are kept minimal; work is deferred to the main loop where possible (e.g. CLI character input vs command execution).
+- **Secure boot chain (Plan 001).** ECDSA-P256 signed images, A/B slots with atomic fallback, anti-rollback floor, OTA over UART. See [threat model](plans/001-bootloader/threat-model.md) for what is and isn't defended, and [production gaps](plans/001-bootloader/production-gap.md) for what a real product would add.
 
 ## Directory Layout
 

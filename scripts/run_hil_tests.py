@@ -146,6 +146,39 @@ def build_firmware(project_root: Path) -> Path:
         log_error("Build timed out after 120 seconds")
         return None
 
+def openocd_run(hla_serial: str, *commands: str, timeout: int = 30,
+                retries: int = 3) -> None:
+    """Run OpenOCD commands with automatic retry on transient USB failures.
+
+    The ST-LINK USB connection on the Pi occasionally drops (bulk transfer
+    timeout, probe NACK).  These are transient — a 1-second pause and retry
+    almost always succeeds.  This function retries up to `retries` times
+    before raising.
+    """
+    cmd = ["openocd"]
+    if hla_serial:
+        cmd += ["-c", f"hla_serial {hla_serial}"]
+    cmd += ["-f", "board/st_nucleo_f4.cfg",
+            "-c", "init", "-c", "reset halt"]
+    for c in commands:
+        cmd += ["-c", c]
+    cmd += ["-c", "exit"]
+
+    last_err = None
+    for attempt in range(retries):
+        try:
+            subprocess.run(cmd, check=True, capture_output=True,
+                           timeout=timeout)
+            return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            last_err = e
+            if attempt < retries - 1:
+                import time
+                time.sleep(1.0)
+    raise RuntimeError(
+        f"OpenOCD failed after {retries} attempts: {last_err}")
+
+
 def flash_firmware(image_path: Path, hla_serial: str = '',
                    slot_base: int = 0x08010000) -> bool:
     """
@@ -170,40 +203,38 @@ def flash_firmware(image_path: Path, hla_serial: str = '',
     """
     log_info(f"Flashing {image_path.name} at {slot_base:#010x} via OpenOCD...")
 
-    cmd = ['openocd']
-
     if hla_serial:
-        cmd += ['-c', f'hla_serial {hla_serial}']
         log_info(f"Targeting ST-LINK serial: {hla_serial}")
 
-    # Raw .bin requires an explicit base address.  `verify` confirms the
-    # post-program flash contents match; `reset` re-runs the bootloader so
-    # the new slot-A image is the first thing it sees.
+    cmd = ['openocd']
+    if hla_serial:
+        cmd += ['-c', f'hla_serial {hla_serial}']
     cmd += [
         '-f', 'board/st_nucleo_f4.cfg',
         '-c', f'program {image_path} {slot_base:#010x} verify reset exit',
     ]
 
-    try:
-        subprocess.run(
-            cmd,
-            cwd=get_project_root(),
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=30,
-        )
+    last_err = None
+    for attempt in range(3):
+        try:
+            subprocess.run(cmd, cwd=get_project_root(),
+                           capture_output=True, text=True,
+                           check=True, timeout=30)
+            log_success("Flash complete")
+            return True
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            last_err = e
+            if attempt < 2:
+                import time
+                log_warning(f"Flash attempt {attempt+1} failed, retrying...")
+                time.sleep(1.0)
 
-        log_success("Flash complete")
-        return True
-
-    except subprocess.CalledProcessError as e:
-        log_error(f"Flash failed with exit code {e.returncode}")
-        print(e.stderr)
-        return False
-    except subprocess.TimeoutExpired:
+    if isinstance(last_err, subprocess.CalledProcessError):
+        log_error(f"Flash failed with exit code {last_err.returncode}")
+        print(last_err.stderr or "")
+    else:
         log_error("Flash timed out after 30 seconds")
-        return False
+    return False
 
 def find_serial_port(hla_serial: str = '') -> Optional[str]:
     """
@@ -671,16 +702,9 @@ def main():
             # Erase metadata so floor=0 — prevents stale counters from a
             # prior run rejecting this IMAGE_VERSION=1 image.
             log_info("Erasing metadata sectors for clean boot...")
-            erase_cmd = ["openocd"]
-            if hla_serial:
-                erase_cmd += ["-c", f"hla_serial {hla_serial}"]
-            erase_cmd += ["-f", "board/st_nucleo_f4.cfg",
-                          "-c", "init", "-c", "reset halt",
-                          "-c", "flash erase_sector 0 1 1",
-                          "-c", "flash erase_sector 0 2 2",
-                          "-c", "exit"]
-            subprocess.run(erase_cmd, check=True, capture_output=True,
-                           timeout=30)
+            openocd_run(hla_serial,
+                        "flash erase_sector 0 1 1",
+                        "flash erase_sector 0 2 2")
 
             if not flash_firmware(image_path, hla_serial=hla_serial):
                 return 2

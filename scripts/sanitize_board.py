@@ -37,21 +37,12 @@ def main() -> int:
                   else args.hla_serial)
 
     hil.log_info("Erasing metadata sectors 1-2 (slot A + slot B metadata)...")
-    cmd = ["openocd"]
-    if hla_serial:
-        cmd += ["-c", f"hla_serial {hla_serial}"]
-    cmd += ["-f", "board/st_nucleo_f4.cfg",
-            "-c", "init", "-c", "reset halt",
-            "-c", "flash erase_sector 0 1 1",
-            "-c", "flash erase_sector 0 2 2",
-            "-c", "exit"]
     try:
-        subprocess.run(cmd, check=True, capture_output=True, timeout=30)
-    except subprocess.CalledProcessError as e:
-        hil.log_error(f"OpenOCD erase failed: {e.stderr.decode()[:200] if e.stderr else ''}")
-        return 1
-    except subprocess.TimeoutExpired:
-        hil.log_error("OpenOCD timed out")
+        hil.openocd_run(hla_serial,
+                        "flash erase_sector 0 1 1",
+                        "flash erase_sector 0 2 2")
+    except RuntimeError as e:
+        hil.log_error(str(e))
         return 1
 
     hil.log_success("Metadata sectors erased — board ready for clean boot")
