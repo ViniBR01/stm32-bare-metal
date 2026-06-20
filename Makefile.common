@@ -84,35 +84,79 @@ endif
 CFLAGS := $(CFLAGS_BASE) $(COMMON_INCLUDES) -DLOG_LEVEL=$(LOG_LEVEL) $(HIL_TEST_CFLAGS)
 
 #==============================================================================
-# Linker configuration
+# Target profiles — memory map + signing selector
 #==============================================================================
-# Default linker script — slot A (0x08010000) since Plan 001 Phase 1.5.
-# Apps land at SLOT_BASE + sizeof(img_header_t); tools/sign_image.py prepends
-# the 140-byte header and produces a .signed.bin that the bootloader can
-# parse + jump into.  The bootloader app overrides LDSCRIPT to point at
-# linker/bootloader_ls.ld so it lives in sector 0 instead.
+# A "profile" bundles the four things that pin an app to a memory map:
+#   - LDSCRIPT       which linker script (where the app lands in flash)
+#   - SLOT_BASE      the FLASH ORIGIN defsym fed to a slot-aware script
+#   - PROFILE_SUFFIX appended to every output path so variants don't clobber
+#                    (_a for slot A, _b for slot B, _standalone for the
+#                    no-bootloader map)
+#   - SIGN_IMAGE     whether tools/sign_image.py wraps the .bin in an
+#                    img_header_t (the bootloader only accepts signed images)
 #
-# Override on a per-app basis by setting LDSCRIPT := ... in the app's
-# Makefile AFTER `include ../../Makefile.common`.  LDFLAGS uses recursive
-# expansion so a later override of LDSCRIPT takes effect at link time.
-LDSCRIPT ?= $(LINKER_DIR)/app_ls.ld
+# Select with PROFILE= on the command line.  Apps stay profile-agnostic: they
+# thread $(PROFILE_SUFFIX) through their paths and gate the signing step on
+# $(SIGN_IMAGE), but never name a linker script or base address themselves.
+#
+#   make EXAMPLE=cli_simple                       # bootloader, slot A (default)
+#   make EXAMPLE=cli_simple SLOT=B                # bootloader, slot B
+#   make EXAMPLE=blink_simple PROFILE=standalone  # legacy 0x08000000, unsigned
+#
+# Profiles:
+#   bootloader (default) — Plan 001 map.  app_ls.ld at SLOT_BASE
+#                          (slot A 0x08010000 / slot B 0x08040000), signed.
+#   standalone           — pre-bootloader map.  stm32_ls.ld at 0x08000000
+#                          full-flash, raw unsigned .bin/.elf flashable
+#                          directly with a debugger.
+#
+# A new memory map (e.g. a future bootloader_v2) drops in as one more branch
+# here with no per-app changes.
+#==============================================================================
+PROFILE ?= bootloader
 
-# Slot selector + base address.  Set SLOT=B to build for slot B; default is A.
-# The value is forwarded to the linker as a --defsym so app_ls.ld can compute
-# FLASH ORIGIN, and embedded into output paths so A and B builds don't
-# clobber each other.
-SLOT      ?= A
-ifeq ($(SLOT),A)
-  SLOT_BASE   ?= 0x08010000
-  SLOT_SUFFIX :=
-else ifeq ($(SLOT),B)
-  SLOT_BASE   ?= 0x08040000
-  SLOT_SUFFIX := _b
+# SLOT selector is meaningful only for slot-aware (bootloader-family)
+# profiles.  Default A; validated inside the bootloader branch below.
+SLOT ?= A
+
+ifeq ($(PROFILE),bootloader)
+  # Default linker script — slot A/B since Plan 001 Phase 1.5.  Apps land at
+  # SLOT_BASE + sizeof(img_header_t); tools/sign_image.py prepends the 140-byte
+  # header and produces a .signed.bin the bootloader can parse + jump into.
+  # The bootloader loader app overrides LDSCRIPT to bootloader_ls.ld so it lives
+  # in sector 0 instead.  Override per-app by setting LDSCRIPT := ... AFTER the
+  # `include`; LDFLAGS expands recursively so a later override still takes hold.
+  LDSCRIPT ?= $(LINKER_DIR)/app_ls.ld
+  SIGN_IMAGE := 1
+  # Slot selector + base address forwarded to the linker as a --defsym so
+  # app_ls.ld can compute FLASH ORIGIN, and embedded into output paths so A
+  # and B builds don't clobber each other.
+  ifeq ($(SLOT),A)
+    SLOT_BASE     ?= 0x08010000
+    PROFILE_SUFFIX := _a
+  else ifeq ($(SLOT),B)
+    SLOT_BASE     ?= 0x08040000
+    PROFILE_SUFFIX := _b
+  else
+    $(error SLOT must be A or B, got '$(SLOT)')
+  endif
+else ifeq ($(PROFILE),standalone)
+  # Pre-bootloader memory map: full 512 KB flash based at 0x08000000, no
+  # img_header, no signing.  Flashable directly to sector 0 with a debugger.
+  LDSCRIPT      ?= $(LINKER_DIR)/stm32_ls.ld
+  SIGN_IMAGE     := 0
+  SLOT_BASE     ?= 0x08000000
+  PROFILE_SUFFIX := _standalone
 else
-  $(error SLOT must be A or B, got '$(SLOT)')
+  $(error PROFILE must be 'bootloader' or 'standalone', got '$(PROFILE)')
 endif
 
-# Linker flags
+# Backward-compatible alias.  Older app Makefiles referenced SLOT_SUFFIX; it is
+# now an alias for PROFILE_SUFFIX so any straggler keeps working.
+SLOT_SUFFIX := $(PROFILE_SUFFIX)
+
+# Linker flags.  SLOT_BASE is always forwarded; slot-unaware scripts
+# (stm32_ls.ld) simply ignore the unreferenced defsym.
 LDFLAGS = $(MCU_FLAGS) -flto -T $(LDSCRIPT) -Wl,--gc-sections \
           -Wl,--defsym=SLOT_BASE=$(SLOT_BASE) --specs=nosys.specs
 
@@ -198,3 +242,4 @@ export ROOT_DIR BUILD_DIR HIL_TEST LIB_DIR
 export DRIVERS_LIB STARTUP_OBJ PRINTF_LIB LOG_C_LIB UTILS_LIB UNITY_ARM_LIB IMG_LIB CRYPTO_LIB FLASH_LIB FRAMING_LIB BL_HANDSHAKE_LIB
 export KEYS_DIR KEY_SEED DEV_PRIV BL_PUBKEY_C
 export SLOT SLOT_BASE SLOT_SUFFIX
+export PROFILE PROFILE_SUFFIX SIGN_IMAGE

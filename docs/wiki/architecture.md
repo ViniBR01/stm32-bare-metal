@@ -20,9 +20,9 @@
 stm32-bare-metal/
 ├── chip_headers/          CMSIS + STM32F4xx device register definitions (read-only reference)
 ├── linker/                Linker scripts:
-│                            - app_ls.ld         slot-A apps (default since Phase 1.5)
+│                            - app_ls.ld         slot-aware apps (PROFILE=bootloader, default)
 │                            - bootloader_ls.ld  sector-0 bootloader (16 KB)
-│                            - stm32_ls.ld       legacy 0x08000000-base (unused)
+│                            - stm32_ls.ld       full-flash 0x08000000 (PROFILE=standalone)
 ├── startup/               Vector table and startup code (stm32f411_startup.c)
 ├── drivers/               Peripheral drivers (see Drivers section below)
 │   ├── inc/               Public headers + test_output.h (HIL machine-parseable output macros)
@@ -76,7 +76,12 @@ stm32-bare-metal/
 - **Optimisation:** `-O2 -flto -ffunction-sections -fdata-sections` (dead-code elimination via `--gc-sections`)
 - **Linker:** `--specs=nosys.specs` for syscall stubs; `-lc -lm -lgcc` for libc/math/compiler-rt
 - **Hierarchical Makefiles:** Each subdirectory compiles to a static library (`.a`); the top-level Makefile links them.
-- **Per-app linker script:** Default is `linker/app_ls.ld` — slot-A aware (`SLOT_BASE = 0x08010000`). The bootloader app overrides it to `linker/bootloader_ls.ld` (sector 0, 16 KB). Override on a per-app basis by setting `LDSCRIPT := $(LINKER_DIR)/<app>_ls.ld` in the app's Makefile after `include ../../Makefile.common`. The pre-Phase-1.5 default `linker/stm32_ls.ld` is retained for reference but no longer used by the build.
+- **Target profiles:** A single `PROFILE=` knob in `Makefile.common` selects the memory map an app builds for, bundling four things — linker script, base address (`SLOT_BASE`), output-path suffix (`PROFILE_SUFFIX`), and whether to sign (`SIGN_IMAGE`). Apps stay profile-agnostic: they thread `$(PROFILE_SUFFIX)` through output paths and gate signing on `$(SIGN_IMAGE)`, never naming a script or address. Two profiles ship:
+  - `bootloader` (default) — `linker/app_ls.ld` at `SLOT_BASE` (slot A `0x08010000` / slot B `0x08040000` via `SLOT=A|B`), signed `.signed.bin`. This is the Plan 001 map.
+  - `standalone` — `linker/stm32_ls.ld` at `0x08000000` full-flash, unsigned raw `.bin`/`.elf` flashable directly with a debugger. This is the pre-bootloader map.
+
+  A new map (e.g. a future `bootloader_v2`) drops in as one more branch in the resolver with no per-app changes. Examples: `make EXAMPLE=cli_simple` (slot A), `make EXAMPLE=cli_simple SLOT=B`, `make EXAMPLE=blink_simple PROFILE=standalone`. **Bootloader-profile images are position-dependent — a slot-A image will not run at slot B and vice versa** (linker ORIGIN and the vector table bake the base address in); the build produces a separately-linked `_b` artifact per slot. See [ADR 003](decisions/003-app-target-profiles.md).
+- **Per-app linker override:** The bootloader loader app overrides `LDSCRIPT := $(LINKER_DIR)/bootloader_ls.ld` (sector 0, 16 KB) in its own Makefile after `include ../../Makefile.common`.
 - **Image signing:** Every app linked with `app_ls.ld` is post-processed by `tools/sign_image.py` into a `.signed.bin` carrying a 140-byte `img_header_t`. The bootloader parses that header before jumping. The dev keypair is regenerated from a fixed seed at the start of every build via `make keys` (outputs land under `build/keys/`, gitignored).
 - **Host tests:** Compiled with native `gcc` (no ARM toolchain needed). Unity framework from `3rd_party/unity/`.
 - **HIL tests:** `HIL_TEST=1` flag adds `-DHIL_TEST_MODE`, links `libunity_arm.a`, includes `test_harness.c`. Always `make clean` when switching.
@@ -192,3 +197,8 @@ tests/
 - SRAM: 0x20000000, 128 KB
 - Stack: top of SRAM, grows downward; overflow detection via stack canary section
 - Heap: between BSS end and stack limit (currently unused — no dynamic allocation)
+
+The exact in-flash layout depends on the build **profile** (see Build System above):
+
+- `PROFILE=bootloader` (default): bootloader in sector 0, app at slot A (`0x08010000`) or slot B (`0x08040000`) behind a 140-byte signed header. See [bootloader-skeleton.md](plans/001-bootloader/bootloader-skeleton.md) and [ab-slots.md](plans/001-bootloader/ab-slots.md) for the full partition map.
+- `PROFILE=standalone`: a single unsigned image owning the full 512 KB from `0x08000000` (`linker/stm32_ls.ld`), no bootloader.

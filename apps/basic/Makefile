@@ -75,31 +75,39 @@ all: $(APPS)
 # as apps change; Phase 1.9 will tie this into the anti-rollback counter.
 IMAGE_VERSION ?= 1
 
-# Pattern rule for building apps.  Final target is the .signed.bin produced
-# by tools/sign_image.py — that is what flashes at slot A and what the
-# bootloader parses.  The unsigned .bin is kept as a debug aid.
+# Pattern rule for building apps.  Output paths carry $(PROFILE_SUFFIX) so
+# slot-A / slot-B / standalone builds of the same app never clobber each
+# other.  The final artifact is the .signed.bin for bootloader profiles
+# (SIGN_IMAGE=1) or the raw .bin for the standalone profile (SIGN_IMAGE=0).
+#
+# $(1) = app name.  $(2) is precomputed by the caller as the suffixed stem
+# ($(1)$(PROFILE_SUFFIX)) so the directory and file names stay in lock-step.
 define build-app
-$(1): $(LOCAL_BUILD_DIR)/$(1)/$(1).signed.bin
+ifeq ($(SIGN_IMAGE),1)
+$(1): $(LOCAL_BUILD_DIR)/$(2)/$(2).signed.bin
+else
+$(1): $(LOCAL_BUILD_DIR)/$(2)/$(2).bin
+endif
 	@echo "App $(1) built successfully!"
 
-$(LOCAL_BUILD_DIR)/$(1)/$(1).o: $(1).c
+$(LOCAL_BUILD_DIR)/$(2)/$(2).o: $(1).c
 	$$(make-build-dir)
 	@echo "Compiling app: $(1).c"
 	$$(CC) $$(CFLAGS) -o $$@ $$<
 
-$(LOCAL_BUILD_DIR)/$(1)/$(1).elf: $(LOCAL_BUILD_DIR)/$(1)/$(1).o $$($(1)_DEPS)
+$(LOCAL_BUILD_DIR)/$(2)/$(2).elf: $(LOCAL_BUILD_DIR)/$(2)/$(2).o $$($(1)_DEPS)
 	$$(make-build-dir)
-	@echo "Linking $(1)..."
-	$$(CC) $$(LDFLAGS) -Wl,-Map=$(LOCAL_BUILD_DIR)/$(1)/$(1).map,--cref -o $$@ $(LOCAL_BUILD_DIR)/$(1)/$(1).o -Wl,--start-group $$($(1)_DEPS) -Wl,--end-group
+	@echo "Linking $(2)..."
+	$$(CC) $$(LDFLAGS) -Wl,-Map=$(LOCAL_BUILD_DIR)/$(2)/$(2).map,--cref -o $$@ $(LOCAL_BUILD_DIR)/$(2)/$(2).o -Wl,--start-group $$($(1)_DEPS) -Wl,--end-group
 	@echo "Linking complete."
 
-$(LOCAL_BUILD_DIR)/$(1)/$(1).bin: $(LOCAL_BUILD_DIR)/$(1)/$(1).elf
+$(LOCAL_BUILD_DIR)/$(2)/$(2).bin: $(LOCAL_BUILD_DIR)/$(2)/$(2).elf
 	$$(CP) -O binary $$< $$@
-	@echo "Created $(1).bin"
+	@echo "Created $(2).bin"
 	@$$(SZ) $$<
 
-$(LOCAL_BUILD_DIR)/$(1)/$(1).signed.bin: $(LOCAL_BUILD_DIR)/$(1)/$(1).bin $$(DEV_PRIV)
-	@echo "Signing $(1).bin..."
+$(LOCAL_BUILD_DIR)/$(2)/$(2).signed.bin: $(LOCAL_BUILD_DIR)/$(2)/$(2).bin $$(DEV_PRIV)
+	@echo "Signing $(2).bin..."
 	python3 $$(ROOT_DIR)/tools/sign_image.py \
 		--priv-in $$(DEV_PRIV) \
 		--in $$< \
@@ -108,8 +116,8 @@ $(LOCAL_BUILD_DIR)/$(1)/$(1).signed.bin: $(LOCAL_BUILD_DIR)/$(1)/$(1).bin $$(DEV
 		--image-version $(IMAGE_VERSION)
 endef
 
-# Generate build rules for each app
-$(foreach app,$(APPS),$(eval $(call build-app,$(app))))
+# Generate build rules for each app.  Second arg is the profile-suffixed stem.
+$(foreach app,$(APPS),$(eval $(call build-app,$(app),$(app)$(PROFILE_SUFFIX))))
 
 # Clean all build artifacts
 clean:

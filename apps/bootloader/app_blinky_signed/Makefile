@@ -18,17 +18,18 @@ endif
 include ../../../Makefile.common
 
 #==============================================================================
-# Slot-A linker script
+# Slot-aware app linker script.  This app is bootloader-profile only; it pins
+# app_ls.ld explicitly.  SLOT_BASE / SLOT_SUFFIX come from Makefile.common's
+# profile resolver (SLOT=A|B), and LDFLAGS there already forwards the defsym.
 #==============================================================================
 LDSCRIPT := $(LINKER_DIR)/app_ls.ld
-LDFLAGS  += -Wl,--defsym=SLOT_BASE=$(SLOT_BASE)
 
-LOCAL_BUILD_DIR := $(BUILD_DIR)/apps/bootloader/app_blinky_signed$(SLOT_SUFFIX)
+LOCAL_BUILD_DIR := $(BUILD_DIR)/apps/bootloader/app_blinky_signed$(PROFILE_SUFFIX)
 
 OBJ  := $(LOCAL_BUILD_DIR)/main.o
-ELF  := $(LOCAL_BUILD_DIR)/app_blinky_signed$(SLOT_SUFFIX).elf
-BIN  := $(LOCAL_BUILD_DIR)/app_blinky_signed$(SLOT_SUFFIX).bin
-SBIN := $(LOCAL_BUILD_DIR)/app_blinky_signed$(SLOT_SUFFIX).signed.bin
+ELF  := $(LOCAL_BUILD_DIR)/app_blinky_signed$(PROFILE_SUFFIX).elf
+BIN  := $(LOCAL_BUILD_DIR)/app_blinky_signed$(PROFILE_SUFFIX).bin
+SBIN := $(LOCAL_BUILD_DIR)/app_blinky_signed$(PROFILE_SUFFIX).signed.bin
 
 DEPS := $(BL_HANDSHAKE_LIB) $(IMG_LIB) $(FLASH_LIB) $(DRIVERS_LIB) $(STARTUP_OBJ)
 
@@ -58,7 +59,7 @@ $(OBJ): main.c
 $(ELF): $(OBJ) $(DEPS)
 	$(make-build-dir)
 	@echo "Linking app_blinky_signed.elf..."
-	$(CC) $(LDFLAGS) -Wl,-Map=$(LOCAL_BUILD_DIR)/app_blinky_signed.map,--cref \
+	$(CC) $(LDFLAGS) -Wl,-Map=$(LOCAL_BUILD_DIR)/app_blinky_signed$(PROFILE_SUFFIX).map,--cref \
 		-o $@ $(OBJ) -Wl,--start-group $(DEPS) -Wl,--end-group -lc -lm -lgcc
 	@echo "Linking complete."
 

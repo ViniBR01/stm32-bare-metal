@@ -72,7 +72,7 @@ def build_app_for_slot(project_root: Path, slot: str) -> Path:
         ["make", "EXAMPLE=app_blinky_signed", f"SLOT={slot}"],
         cwd=project_root, check=True, timeout=120,
     )
-    suffix = "" if slot == "A" else "_b"
+    suffix = "_a" if slot == "A" else "_b"
     signed = (project_root / "build" / "apps" / "bootloader"
               / f"app_blinky_signed{suffix}"
               / f"app_blinky_signed{suffix}.signed.bin")

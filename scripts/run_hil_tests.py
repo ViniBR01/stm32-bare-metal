@@ -92,7 +92,7 @@ def build_firmware(project_root: Path) -> Path:
     via `make flash-bootloader` and is never touched by CI.
 
     Returns:
-        Path to the cli_simple.signed.bin file, or None on error.
+        Path to the cli_simple_a.signed.bin file, or None on error.
     """
     log_info("Building firmware with HIL_TEST=1...")
 
@@ -114,8 +114,8 @@ def build_firmware(project_root: Path) -> Path:
             timeout=120
         )
 
-        elf_path = project_root / 'build' / 'apps' / 'cli' / 'cli_simple' / 'cli_simple.elf'
-        signed_path = project_root / 'build' / 'apps' / 'cli' / 'cli_simple' / 'cli_simple.signed.bin'
+        elf_path = project_root / 'build' / 'apps' / 'cli' / 'cli_simple_a' / 'cli_simple_a.elf'
+        signed_path = project_root / 'build' / 'apps' / 'cli' / 'cli_simple_a' / 'cli_simple_a.signed.bin'
 
         if not signed_path.exists():
             log_error("Build completed but signed binary not found")
@@ -685,8 +685,8 @@ def main():
                 return 2
         else:
             log_warning("Skipping build (--skip-build)")
-            image_path = (project_root / 'build' / 'apps' / 'cli' / 'cli_simple'
-                          / 'cli_simple.signed.bin')
+            image_path = (project_root / 'build' / 'apps' / 'cli' / 'cli_simple_a'
+                          / 'cli_simple_a.signed.bin')
             if not image_path.exists():
                 log_error("No existing signed image found - build required")
                 return 2

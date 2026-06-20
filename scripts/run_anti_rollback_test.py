@@ -79,7 +79,7 @@ def build_cli_simple(project_root: Path, image_version: int) -> Path:
     # IMAGE_VERSION as a make variable, but the .bin itself is content-
     # only — make won't re-sign unless the .bin changes).  Touch the bin.
     bin_path = (project_root / "build" / "apps" / "cli"
-                / "cli_simple" / "cli_simple.bin")
+                / "cli_simple_a" / "cli_simple_a.bin")
     if bin_path.exists():
         bin_path.touch()
     subprocess.run(
@@ -87,12 +87,12 @@ def build_cli_simple(project_root: Path, image_version: int) -> Path:
         cwd=project_root, check=True, timeout=180,
     )
     signed = (project_root / "build" / "apps" / "cli"
-              / "cli_simple" / "cli_simple.signed.bin")
+              / "cli_simple_a" / "cli_simple_a.signed.bin")
     if not signed.exists():
         raise RuntimeError(f"expected {signed} after build")
     # Stash a copy so subsequent rebuilds with a different version don't
     # clobber it.  Caller renames the returned path freely.
-    out = signed.with_name(f"cli_simple.v{image_version}.signed.bin")
+    out = signed.with_name(f"cli_simple_a.v{image_version}.signed.bin")
     out.write_bytes(signed.read_bytes())
     return out
 
@@ -121,7 +121,7 @@ def build_blinky_a(project_root: Path, image_version: int) -> Path:
     """Build a slot-A app_blinky_signed for the force-flash downgrade pass."""
     hil.log_info(f"Building app_blinky_signed (slot A, IMAGE_VERSION={image_version})...")
     bin_path = (project_root / "build" / "apps" / "bootloader"
-                / "app_blinky_signed" / "app_blinky_signed.bin")
+                / "app_blinky_signed_a" / "app_blinky_signed_a.bin")
     if bin_path.exists():
         bin_path.touch()
     subprocess.run(
@@ -130,7 +130,7 @@ def build_blinky_a(project_root: Path, image_version: int) -> Path:
         cwd=project_root, check=True, timeout=180,
     )
     signed = (project_root / "build" / "apps" / "bootloader"
-              / "app_blinky_signed" / "app_blinky_signed.signed.bin")
+              / "app_blinky_signed_a" / "app_blinky_signed_a.signed.bin")
     if not signed.exists():
         raise RuntimeError(f"expected {signed} after build")
     out = signed.with_name(f"app_blinky_signed_a.v{image_version}.signed.bin")

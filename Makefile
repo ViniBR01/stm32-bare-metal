@@ -135,8 +135,8 @@ flash: $(EXAMPLE)
 		echo "and is the only path documented in bootloader-skeleton.md."; \
 		exit 1; \
 	fi
-	@echo "Flashing $(EXAMPLE).elf to target using OpenOCD..."
-	openocd -f board/st_nucleo_f4.cfg -c "program $(shell find $(BUILD_DIR)/apps -name $(EXAMPLE).elf) verify reset exit"
+	@echo "Flashing $(EXAMPLE)$(PROFILE_SUFFIX).elf to target using OpenOCD..."
+	openocd -f board/st_nucleo_f4.cfg -c "program $(shell find $(BUILD_DIR)/apps -name $(EXAMPLE)$(PROFILE_SUFFIX).elf) verify reset exit"
 
 #==============================================================================
 # flash-bootloader — explicit, manual-only sector-0 programming.
@@ -167,7 +167,7 @@ flash-bootloader: bootloader
 # Debug target
 #==============================================================================
 debug: $(EXAMPLE)
-	./debug.sh $(shell find $(BUILD_DIR)/apps -name $(EXAMPLE).elf)
+	./debug.sh $(shell find $(BUILD_DIR)/apps -name $(EXAMPLE)$(PROFILE_SUFFIX).elf)
 
 #==============================================================================
 # OpenOCD target

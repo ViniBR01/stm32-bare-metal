@@ -151,10 +151,29 @@ Other useful targets:
 ```sh
 make all                              # build every app
 make EXAMPLE=blink_pwm                # build a specific app
+make EXAMPLE=cli_simple SLOT=B        # build for slot B (0x08040000)
+make EXAMPLE=blink_pwm PROFILE=standalone  # legacy map, unsigned, at 0x08000000
 make flash EXAMPLE=iwdg_basic         # flash a specific app to slot A
 make debug EXAMPLE=cli_simple         # OpenOCD + GDB attached
 make help                             # full target list
 ```
+
+#### Build profiles
+
+A single `PROFILE=` knob selects the memory map an app builds for:
+
+- **`PROFILE=bootloader`** (default) — links at an A/B slot (`SLOT=A` →
+  `0x08010000`, `SLOT=B` → `0x08040000`) and signs the image so the
+  bootloader will verify and boot it. This is the Plan 001 map.
+- **`PROFILE=standalone`** — links the full 512 KB flash at `0x08000000`,
+  unsigned, for flashing directly with a debugger (no bootloader). The
+  pre-bootloader map, kept as a first-class build path.
+
+Apps stay profile-agnostic, so any app builds under any profile. Note that
+bootloader-profile images are **position-dependent**: a slot-A image will not
+run at slot B (the linker bakes the base address into the code and vector
+table), so the build produces a separate `_b` artifact per slot. See
+[docs/wiki/decisions/003-app-target-profiles.md](docs/wiki/decisions/003-app-target-profiles.md).
 
 ### Hardware-in-the-loop
 

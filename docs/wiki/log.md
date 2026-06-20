@@ -4,6 +4,31 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-06-20] infra | App target profiles — `PROFILE=` memory-map selector (#167)
+
+Centralized the memory-map / signing choice into a single `PROFILE=` knob in
+`Makefile.common`. A profile bundles linker script, `SLOT_BASE`,
+`PROFILE_SUFFIX`, and `SIGN_IMAGE`. Two profiles ship: `bootloader` (default —
+slot A/B, signed, `app_ls.ld`) and `standalone` (full-flash `0x08000000`,
+unsigned, `stm32_ls.ld`). Apps stay profile-agnostic — they thread
+`$(PROFILE_SUFFIX)` through output paths and gate signing on `$(SIGN_IMAGE)`.
+
+- Closes #167: `apps/cli` and `apps/basic` are now slot-aware (previously
+  `SLOT=B` silently clobbered the slot-A artifact). All app Makefiles
+  (`cli`, `basic`, `app_blinky_signed`) build distinct A/B/standalone outputs.
+- `make flash` / `make debug` are now `PROFILE`-aware (search
+  `<app>$(PROFILE_SUFFIX).elf`).
+- Every bootloader-profile slot now carries a descriptive suffix (`_a` / `_b`),
+  so the slot-A path moved (`build/apps/cli/cli_simple_a/...`). The HIL /
+  boot-smoke / OTA / verify / RDP / anti-rollback scripts that hard-coded the
+  old no-suffix slot-A path were updated to the `_a` path in the same change.
+- New **ADR 003 (`decisions/003-app-target-profiles.md`)** records the profile
+  model, the per-slot position-dependence of bootloader images, and the
+  deferred options (PIC / fixed exec region) for slot-agnostic images.
+- `stm32_ls.ld` documented as the `standalone` profile script; updated
+  `architecture.md`, `bootloader-skeleton.md`, `ab-slots.md`, `README.md`,
+  `CLAUDE.md`, and `index.md`.
+
 ## [2026-06-20] milestone | Plan 001 complete — Phase 1.11 threat model + production gaps + ADR (#170)
 
 Closes Plan 001.  Phases 1.5–1.10 shipped the bootloader, signing, OTA,

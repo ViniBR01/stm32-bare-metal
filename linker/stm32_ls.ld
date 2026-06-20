@@ -1,4 +1,24 @@
 /* 1. Entry Point */
+/*
+ * Standalone profile linker script — STM32F411RE.
+ *
+ * This is the `PROFILE=standalone` script (Makefile.common): the pre-bootloader
+ * memory map.  The image occupies the full 512 KB flash based at 0x08000000
+ * (sector 0), carries no img_header_t, and is NOT signed — it is flashed
+ * directly with a debugger and runs from the chip's reset vector base.
+ *
+ * Because the vector table sits at 0x08000000 (the reset default for VTOR),
+ * this script deliberately does NOT export _app_vector_base.  The shared
+ * startup (startup/stm32f411_startup.c) declares that symbol weak and skips
+ * the SCB->VTOR write when it resolves to 0, leaving VTOR at the correct
+ * default.  This mirrors the bootloader_ls.ld behaviour.
+ *
+ * SLOT_BASE is forwarded by Makefile.common's LDFLAGS as an unused --defsym;
+ * this script ignores it (it is only meaningful for the slot-aware app_ls.ld).
+ *
+ * For the bootloader memory map (signed apps in A/B slots) use the default
+ * PROFILE=bootloader, which selects linker/app_ls.ld instead.
+ */
 ENTRY(Reset_Handler)
 
 /* 2. Memory definitions */

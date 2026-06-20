@@ -18,10 +18,11 @@ Drives the bootloader OTA receiver end-to-end on a real NUCLEO-F411RE.
             ota_send.py reports STATUS=verify_failed and that the next
             reset still boots slot A (cli_simple).
 
-The two slots run different apps on purpose: cli_simple's Makefile
-isn't yet SLOT-aware (a separate hygiene fix), and using two different
-apps end-to-end actually proves the OTA path more thoroughly than
-cycling the same image between slots.
+The two slots run different apps on purpose: using two different
+apps end-to-end proves the OTA path more thoroughly than cycling the
+same image between slots.  (As of #167 cli_simple's Makefile is also
+SLOT-aware, so a same-app A↔B cycle is possible too, but the
+two-app design is kept as the more demanding test.)
 
 This is the first HIL exercise of `flash_slot_commit_metadata` and
 `flash_slot_erase` running on real hardware — Phase 1.7 only validated
@@ -65,15 +66,15 @@ BLINKY_ALIVE     = "APP: blinky alive"
 
 # -------------------- Build helpers --------------------
 #
-# Slot A always carries cli_simple (slot-A only because cli_simple's Makefile
-# isn't yet SLOT-aware; that's a separate hygiene fix).  We need cli_simple
-# for the `ota_request` CLI command that triggers the bootloader OTA flow.
+# Slot A carries cli_simple: we need its `ota_request` CLI command to trigger
+# the bootloader OTA flow.  (Since #167 cli_simple is SLOT-aware too, but it
+# stays on slot A here because only it provides ota_request.)
 #
-# Slot B is the OTA target.  Any signed image that the bootloader will
-# verify works — we use app_blinky_signed because its Makefile already
-# threads $(SLOT_SUFFIX) through every output path, so `make EXAMPLE=
-# app_blinky_signed SLOT=B` produces a clean app_blinky_signed_b.signed.bin
-# without colliding with the slot-A artifact.
+# Slot B is the OTA target.  Any signed image the bootloader will verify works;
+# we use app_blinky_signed because `make EXAMPLE=app_blinky_signed SLOT=B`
+# produces a clean app_blinky_signed_b.signed.bin (every app Makefile now
+# threads $(PROFILE_SUFFIX) through its output paths) without colliding with
+# the slot-A artifact.
 
 def build_cli_simple(project_root: Path) -> Path:
     hil.log_info("Building cli_simple (slot A app — provides ota_request)...")
@@ -82,7 +83,7 @@ def build_cli_simple(project_root: Path) -> Path:
         cwd=project_root, check=True, timeout=180,
     )
     signed = (project_root / "build" / "apps" / "cli"
-              / "cli_simple" / "cli_simple.signed.bin")
+              / "cli_simple_a" / "cli_simple_a.signed.bin")
     if not signed.exists():
         raise RuntimeError(f"expected {signed} after build")
     return signed
@@ -439,7 +440,10 @@ def write_junit(
 
 # -------------------- Main --------------------
 
-BOARDS = {"ci": "066BFF554869774867234426", "dev": "066AFF504951857267161331"}
+# Reuse the canonical board→serial map from run_hil_tests so the dev/ci
+# serials never drift out of sync (a divergent local copy previously pinned
+# the wrong dev serial).
+BOARDS = hil.BOARD_REGISTRY
 
 
 def main() -> int:
