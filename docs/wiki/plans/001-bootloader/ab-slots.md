@@ -87,7 +87,8 @@ fallback scenarios on hardware.
 
 ## SLOT=A / SLOT=B build knob
 
-Every app linked with `linker/app_ls.ld` accepts a slot selector:
+Every app built with the default `PROFILE=bootloader` (linked with
+`linker/app_ls.ld`) accepts a slot selector:
 
 ```
 make EXAMPLE=app_blinky_signed              # SLOT=A → 0x08010000
@@ -95,17 +96,31 @@ make EXAMPLE=app_blinky_signed SLOT=B       # SLOT=B → 0x08040000
 make EXAMPLE=cli_simple SLOT=B              # any app, slot B
 ```
 
-Slot-B output paths carry a `_b` suffix so they cannot clobber the
-slot-A artefacts:
+As of #167 every app Makefile (`apps/cli`, `apps/basic`, and
+`apps/bootloader/app_blinky_signed`) is slot-aware, so the slot-A and slot-B
+builds of the same app coexist without clobbering each other. Slot-B output
+paths carry a `_b` suffix:
 
 ```
-build/apps/bootloader/app_blinky_signed/app_blinky_signed.signed.bin       (SLOT=A)
+build/apps/bootloader/app_blinky_signed_a/app_blinky_signed_a.signed.bin   (SLOT=A)
 build/apps/bootloader/app_blinky_signed_b/app_blinky_signed_b.signed.bin   (SLOT=B)
+build/apps/cli/cli_simple_a/cli_simple_a.signed.bin                        (SLOT=A)
+build/apps/cli/cli_simple_b/cli_simple_b.signed.bin                        (SLOT=B)
 ```
 
-`SLOT_BASE`, `SLOT_SUFFIX`, and `SLOT` are exported from
-`Makefile.common` for sub-make consumption. Default behaviour
-(`SLOT=A`) is bit-identical to pre-Phase-1.7 builds.
+The suffix is `PROFILE_SUFFIX` (`SLOT_SUFFIX` is kept as a backward-compatible
+alias), exported from `Makefile.common` for sub-make consumption along with
+`SLOT`, `SLOT_BASE`, `PROFILE`, and `SIGN_IMAGE`. Default behaviour (`SLOT=A`)
+is bit-identical to pre-#167 builds. See
+[ADR 003](../../decisions/003-app-target-profiles.md) for the full profile
+model.
+
+**Images are position-dependent per slot.** A slot-A image will not run at
+slot B and vice versa — `app_ls.ld` sets `FLASH ORIGIN = SLOT_BASE + 0x200`, so
+all absolute addresses and the vector table are baked in for one base. This is
+why a distinct `_b` artifact is built rather than reusing the slot-A binary;
+OTA ships the binary built for the destination slot. ADR 003 records the
+(deferred) options for making a single image slot-agnostic.
 
 ## `lib/flash` middleware
 

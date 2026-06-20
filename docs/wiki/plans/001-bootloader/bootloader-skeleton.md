@@ -76,7 +76,14 @@ directly with a debugger for development).
 | Script | Region | Used by |
 |---|---|---|
 | [linker/bootloader_ls.ld](../../../../linker/bootloader_ls.ld) | sector 0, 16 KB | `apps/bootloader/loader` only |
-| [linker/app_ls.ld](../../../../linker/app_ls.ld) | slot at SLOT_BASE+0x8C | every other app |
+| [linker/app_ls.ld](../../../../linker/app_ls.ld) | slot at SLOT_BASE+0x8C | every other app (`PROFILE=bootloader`, default) |
+| [linker/stm32_ls.ld](../../../../linker/stm32_ls.ld) | full flash at 0x08000000 | any app built with `PROFILE=standalone` (no bootloader) |
+
+The linker script is selected by the build **profile** (`PROFILE=`, resolved in
+[Makefile.common](../../../../Makefile.common)); see
+[ADR 003](../../decisions/003-app-target-profiles.md). The default
+`PROFILE=bootloader` uses `app_ls.ld`; `PROFILE=standalone` uses `stm32_ls.ld`
+and skips signing.
 
 `app_ls.ld` accepts `SLOT_BASE` via `--defsym` (default `0x08010000`).
 [Makefile.common](../../../../Makefile.common) injects the default; an app
@@ -97,10 +104,14 @@ the symbol weak and skips the VTOR write when it resolves to 0.
 | `cli_simple` | `app_ls.ld` | `.signed.bin` | HIL test target |
 | every other app | `app_ls.ld` | `.signed.bin` | Standalone demos |
 
-`make EXAMPLE=bootloader` builds the loader.  Every other app produces a
-`<name>.signed.bin` whose first 140 bytes are the `img_header_t` written by
-[tools/sign_image.py](../../../../tools/sign_image.py); the bootloader
-parses that header before jumping.
+`make EXAMPLE=bootloader` builds the loader.  Every other app, built with the
+default `PROFILE=bootloader`, produces a `<name>.signed.bin` whose first 140
+bytes are the `img_header_t` written by
+[tools/sign_image.py](../../../../tools/sign_image.py); the bootloader parses
+that header before jumping.  Building any app with `PROFILE=standalone`
+instead produces a raw unsigned `<name>_standalone.bin` linked at
+`0x08000000` for direct-to-debugger flashing without a bootloader (see
+[ADR 003](../../decisions/003-app-target-profiles.md)).
 
 ## Dev keypair
 
@@ -217,11 +228,17 @@ lines.  CI runs it after the cli_simple HIL job.
 ## Footguns
 
 - **Two kinds of binaries.**  `loader.bin` lives at sector 0; every other
-  `.bin` is linked at slot A.  Mixing them up (e.g. flashing the
+  bootloader-profile `.bin` is linked at a slot.  Mixing them up (e.g. flashing the
   bootloader to slot A, or vice versa) bricks the chain.  The dispatcher
   in `apps/Makefile` plus the `flash`/`flash-bootloader` split makes the
   intended path obvious; double-check by running `arm-none-eabi-objdump
   -h <name>.elf | head -5` and looking at the LMA of `.isr_vector_tbl`.
+- **Wrong profile / slot is position-dependent.**  A bootloader-profile image
+  only runs at the slot it was linked for — a slot-A image will not run at
+  slot B, and a `PROFILE=standalone` image (`0x08000000`) will not run from a
+  slot.  Re-build for the target (`SLOT=B` or `PROFILE=...`) rather than
+  re-flashing the wrong artifact.  See
+  [ADR 003](../../decisions/003-app-target-profiles.md).
 - **Stale `.signed.bin`.**  Touching `tools/sign_image.py` does not by
   default re-trigger every app's signing step.  When changing the signer
   or the on-flash format, run `make clean && make all`.

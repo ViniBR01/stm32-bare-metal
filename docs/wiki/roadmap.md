@@ -73,3 +73,4 @@ See [log.md](log.md) for the full history. Key milestones:
 - ✅ HIL Tier 4: SysTick hardware tests — `get_ms`, `elapsed_since`, `delay_ms` accuracy on real board (#62)
 - ✅ JUnit XML reporting for HIL tests in CI — every PR shows a HIL Tests tab in GitHub Test Summary (#123)
 - ✅ Plan 000 — Repository refactor: renamed `examples/` → `apps/`, added `lib/` (middleware) and `tools/` (host utilities), per-app linker script override (#136)
+- ✅ App target profiles: single `PROFILE=` knob (bootloader slot A/B vs standalone `0x08000000`), all app Makefiles slot-aware, ADR 003 (#167)

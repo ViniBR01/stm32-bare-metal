@@ -15,7 +15,7 @@ Flow:
 Usage:
   python3 tools/ota_send.py \\
       --port /dev/ttyACM0 \\
-      --image build/apps/cli/cli_simple/cli_simple.signed.bin \\
+      --image build/apps/cli/cli_simple_b/cli_simple_b.signed.bin \\
       --slot B \\
       --baud 115200
 

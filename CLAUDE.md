@@ -72,6 +72,8 @@ See `docs/wiki/agents.md` for parallelism rules, HIL constraints, and troublesho
 make test                       # Run host unit tests (Unity) — required before any PR
 make                            # Build default firmware app (cli_simple)
 make EXAMPLE=<name>             # Build a specific app
+make EXAMPLE=<name> SLOT=B      # Build for slot B (bootloader profile, 0x08040000)
+make EXAMPLE=<name> PROFILE=standalone  # Legacy no-bootloader map (raw, unsigned, 0x08000000)
 make all                        # Build all firmware apps
 make clean                      # Remove all build artifacts
 make flash EXAMPLE=<name>       # Flash signed app to slot A (0x08010000)

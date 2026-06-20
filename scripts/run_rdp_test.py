@@ -273,7 +273,7 @@ def step_recovery_reflash(hla_serial: str) -> tuple[Step, bool]:
     bootloader_elf = (project_root() / "build" / "apps" / "bootloader"
                       / "loader" / "loader.elf")
     app_signed = (project_root() / "build" / "apps" / "bootloader"
-                  / "app_blinky_signed" / "app_blinky_signed.signed.bin")
+                  / "app_blinky_signed_a" / "app_blinky_signed_a.signed.bin")
 
     if not bootloader_elf.exists() or not app_signed.exists():
         s.fail(

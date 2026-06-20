@@ -54,6 +54,7 @@ Multi-phase project plans. Each plan's phases are sized as individual GitHub iss
 |---|---|
 | [decisions/001-ci-pipeline.md](decisions/001-ci-pipeline.md) | Why GitHub Actions with hosted runners; HIL architecture plan |
 | [decisions/002-image-format.md](decisions/002-image-format.md) | Image header format, slot metadata format, partition layout, signing algorithm — frozen for STM32F411RE |
+| [decisions/003-app-target-profiles.md](decisions/003-app-target-profiles.md) | `PROFILE=` knob selecting the memory map (bootloader slot A/B vs standalone 0x08000000); per-slot position-dependence and future PIC options |
 
 ## Log
 

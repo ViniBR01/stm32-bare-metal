@@ -42,7 +42,7 @@ def build_smoke_app(project_root: Path) -> Path:
         timeout=120,
     )
     signed = (project_root / "build" / "apps" / "bootloader"
-              / "app_blinky_signed" / "app_blinky_signed.signed.bin")
+              / "app_blinky_signed_a" / "app_blinky_signed_a.signed.bin")
     if not signed.exists():
         hil.log_error(f"Expected {signed} after build")
         return None
@@ -116,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.skip_build:
         signed = (project_root / "build" / "apps" / "bootloader"
-                  / "app_blinky_signed" / "app_blinky_signed.signed.bin")
+                  / "app_blinky_signed_a" / "app_blinky_signed_a.signed.bin")
         if not signed.exists():
             hil.log_error("No existing signed image found - build required")
             return 2

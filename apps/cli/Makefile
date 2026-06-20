@@ -17,8 +17,12 @@ include ../../Makefile.common
 
 #==============================================================================
 # Local directories
+#
+# PROFILE_SUFFIX (_a for slot A, _b for slot B, _standalone for the
+# no-bootloader map) is threaded through every output path so different
+# profile/slot builds of the same app never clobber each other.
 #==============================================================================
-LOCAL_BUILD_DIR := $(BUILD_DIR)/apps/cli
+LOCAL_BUILD_DIR := $(BUILD_DIR)/apps/cli/cli_simple$(PROFILE_SUFFIX)
 
 #==============================================================================
 # All apps in this directory
@@ -36,7 +40,22 @@ else
   CLI_SRCS := $(filter-out test_harness.c, $(wildcard *.c))
 endif
 
-CLI_OBJS := $(patsubst %.c,$(LOCAL_BUILD_DIR)/cli_simple/%.o,$(CLI_SRCS))
+CLI_OBJS := $(patsubst %.c,$(LOCAL_BUILD_DIR)/%.o,$(CLI_SRCS))
+
+#==============================================================================
+# Output artifacts (profile-suffixed)
+#==============================================================================
+ELF  := $(LOCAL_BUILD_DIR)/cli_simple$(PROFILE_SUFFIX).elf
+BIN  := $(LOCAL_BUILD_DIR)/cli_simple$(PROFILE_SUFFIX).bin
+SBIN := $(LOCAL_BUILD_DIR)/cli_simple$(PROFILE_SUFFIX).signed.bin
+
+# Final artifact depends on the profile: bootloader profiles sign the image,
+# standalone profiles stop at the raw .bin.
+ifeq ($(SIGN_IMAGE),1)
+  FINAL := $(SBIN)
+else
+  FINAL := $(BIN)
+endif
 
 #==============================================================================
 # Dependencies for each app
@@ -78,33 +97,33 @@ IMAGE_VERSION ?= 1
 # Build all apps
 all: $(APPS)
 
-# Pattern rule for building the cli_simple app (multi-file).  Final target
-# is the signed binary; the unsigned .bin is kept as a debug aid.
-cli_simple: $(LOCAL_BUILD_DIR)/cli_simple/cli_simple.signed.bin
-	@echo "App cli_simple built successfully!"
+# cli_simple builds to its profile-appropriate final artifact (signed bin for
+# bootloader profiles, raw bin for standalone).
+cli_simple: $(FINAL)
+	@echo "App cli_simple built successfully! ($(FINAL))"
 
 # Compile each .c file in this directory into an object file
-$(LOCAL_BUILD_DIR)/cli_simple/%.o: %.c
+$(LOCAL_BUILD_DIR)/%.o: %.c
 	$(make-build-dir)
 	@echo "Compiling: $<"
 	$(CC) $(CFLAGS) -I. $(CLI_LIB_INCS) -o $@ $<
 
 # Link all object files together
-$(LOCAL_BUILD_DIR)/cli_simple/cli_simple.elf: $(CLI_OBJS) $(cli_simple_DEPS)
+$(ELF): $(CLI_OBJS) $(cli_simple_DEPS)
 	$(make-build-dir)
 	@echo "Linking cli_simple..."
-	$(CC) $(LDFLAGS) -Wl,-Map=$(LOCAL_BUILD_DIR)/cli_simple/cli_simple.map,--cref -o $@ $(CLI_OBJS) -Wl,--start-group $(cli_simple_DEPS) -Wl,--end-group -lc -lm -lgcc
+	$(CC) $(LDFLAGS) -Wl,-Map=$(LOCAL_BUILD_DIR)/cli_simple$(PROFILE_SUFFIX).map,--cref -o $@ $(CLI_OBJS) -Wl,--start-group $(cli_simple_DEPS) -Wl,--end-group -lc -lm -lgcc
 	@echo "Linking complete."
 
 # Create binary from ELF
-$(LOCAL_BUILD_DIR)/cli_simple/cli_simple.bin: $(LOCAL_BUILD_DIR)/cli_simple/cli_simple.elf
+$(BIN): $(ELF)
 	$(CP) -O binary $< $@
-	@echo "Created cli_simple.bin"
+	@echo "Created $(notdir $(BIN))"
 	@$(SZ) $<
 
-# Sign the bin so the bootloader will accept it at slot A.
-$(LOCAL_BUILD_DIR)/cli_simple/cli_simple.signed.bin: $(LOCAL_BUILD_DIR)/cli_simple/cli_simple.bin $(DEV_PRIV)
-	@echo "Signing cli_simple.bin..."
+# Sign the bin so the bootloader will accept it (bootloader profiles only).
+$(SBIN): $(BIN) $(DEV_PRIV)
+	@echo "Signing $(notdir $(BIN))..."
 	python3 $(ROOT_DIR)/tools/sign_image.py \
 		--priv-in $(DEV_PRIV) \
 		--in $< \
@@ -115,4 +134,4 @@ $(LOCAL_BUILD_DIR)/cli_simple/cli_simple.signed.bin: $(LOCAL_BUILD_DIR)/cli_simp
 # Clean all build artifacts
 clean:
 	@echo "Cleaning cli apps..."
-	@rm -rf $(LOCAL_BUILD_DIR)
+	@rm -rf $(BUILD_DIR)/apps/cli
