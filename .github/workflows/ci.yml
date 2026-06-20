@@ -104,6 +104,9 @@ jobs:
       - name: Verify Python signing dependencies
         run: python3 -c "import cryptography; import serial; print('deps OK')"
 
+      - name: Sanitize board metadata
+        run: python3 scripts/sanitize_board.py --board ci
+
       - name: Run HIL tests
         run: python3 scripts/run_hil_tests.py --board ci --timeout 240 --baseline tests/baselines/performance.json --junit-xml hil-test-results.xml
 

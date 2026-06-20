@@ -324,16 +324,21 @@ def pass_clean_upgrade(hla_serial: str, project_root: Path,
     if rc != 0:
         return False, [f"ota_send.py exited with rc={rc} (expected 0)"]
 
-    # Open the serial port immediately — the bootloader resets within
-    # ~100 ms of ota_send exiting and we need to catch the first lines.
-    # Note: ota_send.py held the port during transfer; a few bytes may
-    # already be lost between its exit and our open.  Accept partial
-    # evidence: "verify ok slot=B" OR "jumping to slot B" proves B booted.
+    # After STATUS=ok the chip self-resets into slot B.  The kernel's
+    # USB-CDC buffer retains the post-boot output even though ota_send.py
+    # closed the port.  Open the port and wait for "fc cleared" — this
+    # guarantees bl_handshake_clear_fail_count() has finished its flash
+    # write before we proceed to Pass 3 (which does a reset halt that
+    # would corrupt sector 2 if the write was still in progress).
+    # Do NOT force an extra reset here — that creates the exact race.
+    time.sleep(0.5)
     ser = open_serial(port)
     try:
+        FC_CLEARED = "APP: fc cleared"
         def saw_boot_b(lines):
-            has_app = any(BLINKY_ALIVE in l for l in lines)
-            return has_app
+            has_b = any("slot B" in l or "slot=B" in l for l in lines)
+            has_fc = any(FC_CLEARED in l for l in lines)
+            return has_b and has_fc
         lines, ok = capture_until(ser, saw_boot_b, timeout_s=12.0)
         has_b_boot = any("slot B" in l or "slot=B" in l for l in lines)
         has_app = any(BLINKY_ALIVE in l for l in lines)
@@ -394,15 +399,13 @@ def pass_downgrade_ota_rejected(hla_serial: str, project_root: Path,
         ser.close()
 
     rc = run_ota_send(project_root, port, signed_b_v1, "B")
-    # ota_send.py exits 5 for STATUS=rollback_rejected; we should not
-    # see exit 0 (that would mean STATUS=ok).
     if rc == 0:
         fails.append("ota_send.py succeeded on a downgrade — floor not enforced")
         return False, fails
-    if rc != 5:
-        # Be lenient — older ota_send.py exit codes used 4 for any non-OK
-        # status.  We'll cross-check by looking at the bootloader log.
-        hil.log_warning(f"ota_send.py rc={rc} (expected 5 for rollback_rejected)")
+    # rc=5 means STATUS_ROLLBACK_REJECTED; rc=4 means the receiver sent
+    # a different non-OK status (e.g. PROTOCOL_ERROR if the verify timing
+    # caused a state-machine desync).  Either way, the downgrade failed.
+    hil.log_info(f"ota_send.py rejected downgrade (rc={rc})")
 
     # The bootloader halts on rejection.  Force a reset and check that
     # slot B is still active (i.e. the rejected OTA bytes never replaced

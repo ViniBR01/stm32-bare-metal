@@ -380,6 +380,18 @@ def main(argv: list[str] | None = None) -> int:
                                   "Failed to build app_blinky_signed")
             return 2
 
+    # Erase metadata so floor=0 regardless of prior board state.
+    hil.log_info("Erasing metadata for clean-slate verify test...")
+    erase_cmd = ["openocd"]
+    if hla_serial:
+        erase_cmd += ["-c", f"hla_serial {hla_serial}"]
+    erase_cmd += ["-f", "board/st_nucleo_f4.cfg",
+                  "-c", "init", "-c", "reset halt",
+                  "-c", "flash erase_sector 0 1 1",
+                  "-c", "flash erase_sector 0 2 2",
+                  "-c", "exit"]
+    subprocess.run(erase_cmd, check=True, capture_output=True, timeout=30)
+
     # ----- Pass A: clean image -----
     hil.log_info("=== Pass A: clean signed image ===")
     clean_lines = run_pass(clean, hla_serial, args.timeout, stop_on_fail=False)

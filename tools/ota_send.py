@@ -254,6 +254,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"OTA failed: {e}", file=sys.stderr)
             return 3
 
+        if status == fr.STATUS_ROLLBACK_REJECTED:
+            return 5
         if status != fr.STATUS_OK:
             return 4
         print("OTA OK — bootloader is resetting into the new image.")

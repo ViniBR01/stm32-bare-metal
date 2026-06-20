@@ -126,6 +126,18 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     if not args.skip_flash:
+        # Erase metadata so floor=0 — prevents stale counters from a prior
+        # run rejecting this IMAGE_VERSION=1 image.
+        erase_cmd = ["openocd"]
+        if hla_serial:
+            erase_cmd += ["-c", f"hla_serial {hla_serial}"]
+        erase_cmd += ["-f", "board/st_nucleo_f4.cfg",
+                      "-c", "init", "-c", "reset halt",
+                      "-c", "flash erase_sector 0 1 1",
+                      "-c", "flash erase_sector 0 2 2",
+                      "-c", "exit"]
+        subprocess.run(erase_cmd, check=True, capture_output=True, timeout=30)
+
         if not hil.flash_firmware(signed, hla_serial=hla_serial):
             return 2
 
