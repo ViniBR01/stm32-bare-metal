@@ -90,8 +90,11 @@ def build_cli_simple(project_root: Path) -> Path:
 
 def build_blinky_for_slot_b(project_root: Path) -> Path:
     hil.log_info("Building app_blinky_signed for slot B (OTA target)...")
+    # IMAGE_VERSION=2: the Phase 1.9 OTA receiver advances the monotonic
+    # counter to max_seen+1 (at least 2 when slot A has mc=1).  The post-
+    # OTA boot checks image_version >= floor, so the image must be >= 2.
     subprocess.run(
-        ["make", "EXAMPLE=app_blinky_signed", "SLOT=B"],
+        ["make", "EXAMPLE=app_blinky_signed", "SLOT=B", "IMAGE_VERSION=2"],
         cwd=project_root, check=True, timeout=180,
     )
     signed = (project_root / "build" / "apps" / "bootloader"
