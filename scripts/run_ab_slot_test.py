@@ -110,15 +110,7 @@ def metadata_to_file(blob: bytes) -> Path:
 
 def openocd(hla_serial: str, *commands: str, timeout: int = 30) -> None:
     """Run OpenOCD with -c init/reset halt/<commands>/exit."""
-    cmd = ["openocd"]
-    if hla_serial:
-        cmd += ["-c", f"hla_serial {hla_serial}"]
-    cmd += ["-f", "board/st_nucleo_f4.cfg",
-            "-c", "init", "-c", "reset halt"]
-    for c in commands:
-        cmd += ["-c", c]
-    cmd += ["-c", "exit"]
-    subprocess.run(cmd, check=True, capture_output=True, timeout=timeout)
+    hil.openocd_run(hla_serial, *commands, timeout=timeout)
 
 
 def erase_metadata_sector(hla_serial: str, slot: str) -> None:
