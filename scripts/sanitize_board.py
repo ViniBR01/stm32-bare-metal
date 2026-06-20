@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Erase metadata sectors on the NUCLEO board for a clean-slate boot.
+
+The Phase 1.9 bootloader computes a rollback floor from the highest
+monotonic_counter across both slot-metadata sectors.  If a prior test
+run left elevated counters (e.g. anti-rollback test crashed mid-run),
+subsequent tests that flash IMAGE_VERSION=1 images will be rejected.
+
+This script erases sectors 1 and 2 (slot A and slot B metadata) so the
+bootloader sees floor=0 on the next boot.  It is called at the start
+of the CI HIL job and can be used manually before any dev-board session.
+
+Exit codes:
+    0  metadata erased successfully
+    1  OpenOCD failed
+"""
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import run_hil_tests as hil  # noqa: E402
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--board", choices=list(hil.BOARD_REGISTRY.keys()),
+                   help='Board role: "ci" or "dev".')
+    p.add_argument("--hla-serial", default=hil.DEFAULT_HLA_SERIAL,
+                   help="Explicit ST-LINK serial (overrides --board).")
+    args = p.parse_args()
+
+    hla_serial = (hil.BOARD_REGISTRY[args.board] if args.board
+                  else args.hla_serial)
+
+    hil.log_info("Erasing metadata sectors 1-2 (slot A + slot B metadata)...")
+    cmd = ["openocd"]
+    if hla_serial:
+        cmd += ["-c", f"hla_serial {hla_serial}"]
+    cmd += ["-f", "board/st_nucleo_f4.cfg",
+            "-c", "init", "-c", "reset halt",
+            "-c", "flash erase_sector 0 1 1",
+            "-c", "flash erase_sector 0 2 2",
+            "-c", "exit"]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, timeout=30)
+    except subprocess.CalledProcessError as e:
+        hil.log_error(f"OpenOCD erase failed: {e.stderr.decode()[:200] if e.stderr else ''}")
+        return 1
+    except subprocess.TimeoutExpired:
+        hil.log_error("OpenOCD timed out")
+        return 1
+
+    hil.log_success("Metadata sectors erased — board ready for clean boot")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

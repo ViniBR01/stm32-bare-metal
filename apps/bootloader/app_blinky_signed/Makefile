@@ -30,7 +30,9 @@ ELF  := $(LOCAL_BUILD_DIR)/app_blinky_signed$(SLOT_SUFFIX).elf
 BIN  := $(LOCAL_BUILD_DIR)/app_blinky_signed$(SLOT_SUFFIX).bin
 SBIN := $(LOCAL_BUILD_DIR)/app_blinky_signed$(SLOT_SUFFIX).signed.bin
 
-DEPS := $(DRIVERS_LIB) $(STARTUP_OBJ)
+DEPS := $(BL_HANDSHAKE_LIB) $(IMG_LIB) $(FLASH_LIB) $(DRIVERS_LIB) $(STARTUP_OBJ)
+
+APP_CFLAGS := -I$(LIB_DIR)/bl_handshake/inc -I$(LIB_DIR)/img/inc -I$(LIB_DIR)/flash/inc
 
 #==============================================================================
 # Image-version field baked into the signed header.  Bumped manually as the
@@ -51,7 +53,7 @@ app_blinky_signed: $(SBIN)
 $(OBJ): main.c
 	$(make-build-dir)
 	@echo "Compiling: $<"
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) $(APP_CFLAGS) -o $@ $<
 
 $(ELF): $(OBJ) $(DEPS)
 	$(make-build-dir)

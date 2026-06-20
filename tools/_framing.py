@@ -52,12 +52,14 @@ STATUS_OK = 0
 STATUS_VERIFY_FAILED = 1
 STATUS_WRITE_FAILED = 2
 STATUS_PROTOCOL_ERROR = 3
+STATUS_ROLLBACK_REJECTED = 4  # Phase 1.9 anti-rollback floor failure
 
 STATUS_NAMES = {
     STATUS_OK: "ok",
     STATUS_VERIFY_FAILED: "verify_failed",
     STATUS_WRITE_FAILED: "write_failed",
     STATUS_PROTOCOL_ERROR: "protocol_error",
+    STATUS_ROLLBACK_REJECTED: "rollback_rejected",
 }
 
 

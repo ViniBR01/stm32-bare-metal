@@ -104,6 +104,9 @@ jobs:
       - name: Verify Python signing dependencies
         run: python3 -c "import cryptography; import serial; print('deps OK')"
 
+      - name: Sanitize board metadata
+        run: python3 scripts/sanitize_board.py --board ci
+
       - name: Run HIL tests
         run: python3 scripts/run_hil_tests.py --board ci --timeout 240 --baseline tests/baselines/performance.json --junit-xml hil-test-results.xml
 
@@ -179,5 +182,22 @@ jobs:
         with:
           name: OTA Test
           path: ota-results.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      # Plan 001 Phase 1.9 — anti-rollback floor test.  Seeds slot A
+      # with image v1, clean-upgrades over OTA to v2 in slot B, then
+      # asserts that both an OTA downgrade (STATUS=rollback_rejected)
+      # and a force-flashed OpenOCD downgrade (bootloader-side floor
+      # check + fallback) are rejected.
+      - name: Run anti-rollback test
+        run: python3 scripts/run_anti_rollback_test.py --board ci --junit-xml anti-rollback-results.xml
+
+      - name: Publish anti-rollback test results
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: Anti-Rollback Test
+          path: anti-rollback-results.xml
           reporter: java-junit
           fail-on-error: false

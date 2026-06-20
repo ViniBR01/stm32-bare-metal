@@ -1,8 +1,12 @@
 #include <stddef.h>
 
+#include "stm32f4xx.h"
+
+#include "bl_handshake.h"
 #include "cli.h"
 #include "cli_commands.h"
 #include "fault_handler.h"
+#include "flash_slot.h"
 #include "led2.h"
 #include "printf.h"
 #include "printf_dma.h"
@@ -73,7 +77,19 @@ int main(void) {
     
     // Initialize printf DMA buffering
     printf_dma_init();
-    
+
+    /*
+     * Phase 1.9 — tell the bootloader "we made it past init".  The
+     * bootloader bumped fail_count before jumping; clearing it now
+     * means a clean boot ride doesn't accumulate toward the
+     * IMG_FAIL_COUNT_MAX cap.  Resolve the slot from SCB->VTOR (the
+     * value the bootloader programmed before jumping); same code
+     * works for slot-A and slot-B builds.
+     */
+    flash_slot_id_t boot_slot = ((SCB->VTOR & ~0x1FFu) >= FLASH_SLOT_B_BASE)
+                                  ? FLASH_SLOT_B : FLASH_SLOT_A;
+    (void)bl_handshake_clear_fail_count(boot_slot);
+
     // Register UART callbacks
     uart_register_rx_callback(on_char_received);
     uart_register_tx_complete_callback(printf_dma_tx_complete_callback);
