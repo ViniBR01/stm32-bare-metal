@@ -440,7 +440,10 @@ def write_junit(
 
 # -------------------- Main --------------------
 
-BOARDS = {"ci": "066BFF554869774867234426", "dev": "066AFF504951857267161331"}
+# Reuse the canonical board→serial map from run_hil_tests so the dev/ci
+# serials never drift out of sync (a divergent local copy previously pinned
+# the wrong dev serial).
+BOARDS = hil.BOARD_REGISTRY
 
 
 def main() -> int:
