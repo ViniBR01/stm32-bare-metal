@@ -4,6 +4,27 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-06-20] milestone | Plan 001 complete — Phase 1.11 threat model + production gaps + ADR (#170)
+
+Closes Plan 001.  Phases 1.5–1.10 shipped the bootloader, signing, OTA,
+A/B slots, anti-rollback, and RDP-1.  This final phase documents what the
+project defends against, what it doesn't, and what production would require.
+
+New documentation:
+
+- **`threat-model.md`** — four attacker classes (network, physical pre/post
+  RDP, local user), seven defense mechanisms with source citations, six
+  explicit non-goals, a summary table, and five trust assumptions.
+- **`production-gap.md`** — eight gaps ordered by effort: signing-key
+  custody, secure boot ROM (the biggest gap), TrustZone-M, anti-glitch,
+  encrypted images, side-channel resistance, provisioning, audit trail.
+- **ADR 002 (`decisions/002-image-format.md`)** — pins the `img_header_t`
+  (140 B), `img_slot_metadata_t` (36 B), 512-byte payload alignment, flash
+  sector layout, and ECDSA-P256 raw R||S signing format as frozen for the
+  STM32F411RE deliverable.
+
+Plan 001 row in roadmap.md flipped to "completed".
+
 ## [2026-06-04] milestone | Plan 001 Phase 1.9 — anti-rollback floor + fail_count writes (#168)
 
 Closes Phase 1.9 in a single PR.  The bootloader now refuses to boot

@@ -44,6 +44,8 @@ Multi-phase project plans. Each plan's phases are sized as individual GitHub iss
 | [plans/001-bootloader/ota.md](plans/001-bootloader/ota.md) | Plan 001 Phase 1.8 — OTA over UART, RTC backup-register entry, framing receiver, atomic active-slot swap, ota_send.py |
 | [plans/001-bootloader/anti-rollback.md](plans/001-bootloader/anti-rollback.md) | Plan 001 Phase 1.9 — anti-rollback floor, fail_count rollback-on-crash, bl_handshake helper, OTA STATUS=rollback_rejected |
 | [plans/001-bootloader/rdp.md](plans/001-bootloader/rdp.md) | Plan 001 Phase 1.10 — readout protection (RDP) levels, option-byte mechanics, threat model, set_rdp.py + HIL test |
+| [plans/001-bootloader/threat-model.md](plans/001-bootloader/threat-model.md) | Plan 001 Phase 1.11 — threat model: attacker classes, defenses, explicit non-goals, trust assumptions |
+| [plans/001-bootloader/production-gap.md](plans/001-bootloader/production-gap.md) | Plan 001 Phase 1.11 — production gaps: 8 changes needed to ship (key custody, secure ROM, TrustZone, etc.) |
 | [plans/002-comms-and-dsp-baseband.md](plans/002-comms-and-dsp-baseband.md) | Two-board comms (UART/SPI/I²C) + software BPSK modem with FEC |
 
 ## Decisions
@@ -51,6 +53,7 @@ Multi-phase project plans. Each plan's phases are sized as individual GitHub iss
 | Page | Summary |
 |---|---|
 | [decisions/001-ci-pipeline.md](decisions/001-ci-pipeline.md) | Why GitHub Actions with hosted runners; HIL architecture plan |
+| [decisions/002-image-format.md](decisions/002-image-format.md) | Image header format, slot metadata format, partition layout, signing algorithm — frozen for STM32F411RE |
 
 ## Log
 

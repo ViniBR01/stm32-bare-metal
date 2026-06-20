@@ -1,6 +1,6 @@
 # Plan 001 — Bootloader & Embedded Security Track
 
-**Status:** in progress
+**Status:** complete
 **Tracking issue:** [#137](https://github.com/ViniBR01/stm32-bare-metal/issues/137)
 **Depends on:** [Plan 000 — Repository Refactor](000-repo-refactor.md)
 
@@ -196,10 +196,12 @@ See [rdp.md](001-bootloader/rdp.md).
 
 ### Phase 1.11 — Threat model & docs
 
-**Scope:**
-- `docs/wiki/plans/001-bootloader/threat-model.md`: attacker capabilities, what's protected, what isn't (no anti-glitch, no secure element, software-only key storage)
-- `docs/wiki/plans/001-bootloader/production-gap.md`: what would change for production (HSM-backed signing keys, secure-boot ROM, TrustZone-M on M33 parts, anti-tamper, fault injection countermeasures)
-- ADR for the chosen image format and partition layout
+**Status:** done — [#170](https://github.com/ViniBR01/stm32-bare-metal/issues/170)
+
+**Deliverables:**
+- [`threat-model.md`](001-bootloader/threat-model.md): four attacker classes, defense inventory, explicit non-goals, summary table
+- [`production-gap.md`](001-bootloader/production-gap.md): eight gaps for production (key custody → audit trail)
+- [ADR 002](../decisions/002-image-format.md): image format + partition layout frozen for F411
 
 **Validation:** Doc review; cross-reference from architecture wiki page.
 
