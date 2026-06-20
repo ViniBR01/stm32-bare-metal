@@ -1,0 +1,74 @@
+name: RDP HIL Test (manual)
+
+# Plan 001 Phase 1.10 — manually triggered HIL test that cycles the dev
+# board through RDP L0 → L1 → L0.  Not wired into the standard hil-tests
+# job because the L1 → L0 transition mass-erases the chip, which would
+# block every other HIL test that follows it on the same board.
+#
+# Runs only on demand via the Actions tab.  The workflow targets the
+# `dev` board; run_rdp_test.py refuses to operate against the CI board
+# even if a serial number override is passed in.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: >-
+          Type "i-understand-this-mass-erases" to acknowledge that this
+          run will mass-erase the dev board's user flash and reflash
+          the bootloader + slot-A app from build artifacts.
+        required: true
+        default: ""
+
+jobs:
+  rdp-test:
+    name: RDP-1 cycle (dev board)
+    runs-on: [self-hosted, pi-hil]
+    permissions:
+      checks: write
+
+    steps:
+      - name: Validate confirmation input
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "i-understand-this-mass-erases" ]; then
+            echo "Confirmation string did not match.  Refusing to run."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Print toolchain version
+        run: arm-none-eabi-gcc --version
+
+      - name: Verify Python deps
+        run: python3 -c "import cryptography; import serial; print('deps OK')"
+
+      # Build the artifacts the post-mass-erase recovery step needs.
+      # We don't pass HIL_TEST=1 — the recovery just needs the bootloader
+      # and a known-good slot-A app to leave the rig in a usable state.
+      - name: Build bootloader + slot-A smoke app
+        run: |
+          make EXAMPLE=bootloader
+          make EXAMPLE=app_blinky_signed
+
+      # The CI guard env var is unset here on purpose: this workflow is
+      # the explicit opt-in to writing option bytes from CI infrastructure.
+      # run_rdp_test.py refuses to touch the CI board's ST-LINK serial.
+      - name: Run RDP HIL test
+        run: |
+          python3 scripts/run_rdp_test.py \
+            --board dev \
+            --timeout 15 \
+            --junit-xml rdp-test-results.xml
+
+      - name: Publish RDP test results
+        if: always()
+        uses: dorny/test-reporter@v3
+        with:
+          name: RDP HIL Test
+          path: rdp-test-results.xml
+          reporter: java-junit
+          fail-on-error: false

@@ -177,6 +177,27 @@ If the ST-LINK itself can't connect, hold the BOOT0 pin high during reset
 and try again — the chip will then run from the system memory bootloader
 (ROM), allowing OpenOCD to attach for the mass erase.
 
+### Recovery under RDP-1
+
+If the chip is running under RDP Level 1 (Phase 1.10 — see
+[rdp.md](rdp.md)), the OpenOCD `flash erase_sector` and `program`
+commands above are **blocked**.  The chip rejects user-flash writes
+from the debug interface as long as RDP-1 is engaged.
+
+The path back is to regress to L0, which by design mass-erases all
+of user flash (sectors 0..7 — bootloader, both metadata sectors,
+both slots) before clearing the protection bit:
+
+```sh
+python3 scripts/set_rdp.py --level 0 --confirm   # mass-erases user flash
+make flash-bootloader                             # reflash sector 0
+make flash EXAMPLE=app_blinky_signed              # reflash slot A
+```
+
+The mass-erase is the side-channel: an attacker can wipe a chip but
+cannot leak it.  See [rdp.md §Threat model fit](rdp.md#threat-model-fit)
+for the full picture.
+
 ## HIL integration
 
 Existing HIL behaviour is preserved.  The HIL runner now:
