@@ -613,6 +613,15 @@ def main() -> int:
     else:
         hil.log_error(f"Pass 4 FAILED: {'; '.join(fails)}")
 
+    # Clean up: erase metadata sectors so the next CI run starts with a
+    # blank slate.  Without this, the elevated floor from Pass 2/4 would
+    # cause the boot smoke test (which uses image_version=1) to fail on
+    # the subsequent CI run.
+    hil.log_info("Cleaning up: erasing metadata sectors...")
+    openocd(hla_serial,
+            "flash erase_sector 0 1 1",
+            "flash erase_sector 0 2 2")
+
     write_junit(args.junit_xml, results)
     return 0 if all(ok for _, ok, _ in results) else 1
 

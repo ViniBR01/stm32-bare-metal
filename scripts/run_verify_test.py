@@ -408,6 +408,21 @@ def main(argv: list[str] | None = None) -> int:
                               f"Could not build tampered image: {e}")
         return 2
 
+    # Erase slot B payload and metadata so the bootloader has no valid
+    # fallback target — otherwise A/B fallback (Phase 1.7+) would boot
+    # whatever valid image is left in slot B, making the tamper check
+    # appear to succeed.
+    hil.log_info("Erasing slot B so bootloader cannot fall back...")
+    erase_cmd = ["openocd"]
+    if hla_serial:
+        erase_cmd += ["-c", f"hla_serial {hla_serial}"]
+    erase_cmd += ["-f", "board/st_nucleo_f4.cfg",
+                  "-c", "init", "-c", "reset halt",
+                  "-c", "flash erase_sector 0 2 2",
+                  "-c", "flash erase_sector 0 6 6",
+                  "-c", "exit"]
+    subprocess.run(erase_cmd, check=True, capture_output=True, timeout=30)
+
     tamper_lines = run_pass(tampered, hla_serial, args.timeout, stop_on_fail=True)
     try:
         tampered.unlink()
