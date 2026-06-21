@@ -16,6 +16,25 @@ EXAMPLE ?= cli_simple
 .DEFAULT_GOAL := $(EXAMPLE)
 
 #==============================================================================
+# Board / probe selection (shared by flash, flash-bootloader, serial, debug)
+#==============================================================================
+# BOARD names a registered role from scripts/boards.json ('dev' or 'ci').
+# Manual commands default to the development board so they never disturb the
+# CI board (reserved for the HIL runner — see CLAUDE.md).  Override per-command:
+#
+#   make flash BOARD=ci          # target the CI board explicitly
+#   make flash HLA_SERIAL=066...  # pin a raw ST-LINK serial (wins over BOARD)
+#
+# HLA_SERIAL, when non-empty, overrides BOARD.  STLINK_SERIAL is the resolved
+# value handed to OpenOCD (hla_serial / adapter serial) and to the serial-port
+# finder.  Resolution defers to scripts/boards.py so the Makefile, the Python
+# scripts, and the wiki all read one source of truth.
+BOARD      ?= dev
+HLA_SERIAL ?=
+STLINK_SERIAL := $(if $(HLA_SERIAL),$(HLA_SERIAL),$(shell python3 -c \
+  "import sys; sys.path.insert(0, 'scripts'); import boards; print(boards.BOARD_REGISTRY.get('$(BOARD)', ''))"))
+
+#==============================================================================
 # Subdirectories with makefiles
 #==============================================================================
 SUBDIRS := startup utils drivers 3rd_party lib apps
@@ -128,11 +147,34 @@ clean:
 #==============================================================================
 # Flash target (delegates to apps)
 #
-# WARNING: this programs the .elf at its linked address.  For apps linked
-# with linker/app_ls.ld that means slot A (0x08010000) — safe.  For the
-# bootloader build (linker/bootloader_ls.ld) it overwrites sector 0; use
-# `make flash-bootloader` instead so the intent is explicit.
+# Programs the selected app's final image at its slot base address via OpenOCD,
+# pinned to the chosen board's ST-LINK probe.
+#
+#   - For bootloader profiles (the default) the final artifact is the
+#     .signed.bin and SLOT_BASE is slot A (0x08010000) or slot B (0x08040000).
+#     The signed image is loaded *through* the slot the bootloader jumps into.
+#   - For PROFILE=standalone the final artifact is the raw .bin and SLOT_BASE
+#     is 0x08000000.
+#
+# Probe selection follows BOARD / HLA_SERIAL (resolved to STLINK_SERIAL at the
+# top of this file); defaults to the dev board.  Examples:
+#
+#   make flash                          # cli_simple, dev board, slot A
+#   make flash SLOT=B                   # slot B image at 0x08040000
+#   make flash EXAMPLE=iwdg_basic       # a different app, slot A
+#   make flash BOARD=ci                 # target the CI board
+#   make flash EXAMPLE=blink_pwm PROFILE=standalone  # raw image at 0x08000000
+#
+# Refuses the bootloader app — use `make flash-bootloader` for sector 0.
 #==============================================================================
+# Final artifact extension is profile-dependent: bootloader profiles sign the
+# image; standalone stops at the raw bin.
+ifeq ($(SIGN_IMAGE),1)
+  FLASH_EXT := signed.bin
+else
+  FLASH_EXT := bin
+endif
+
 flash: $(EXAMPLE)
 	@if [ "$(EXAMPLE)" = "bootloader" ]; then \
 		echo "Refusing to flash the bootloader via 'make flash'."; \
@@ -140,8 +182,15 @@ flash: $(EXAMPLE)
 		echo "and is the only path documented in bootloader-skeleton.md."; \
 		exit 1; \
 	fi
-	@echo "Flashing $(EXAMPLE)$(PROFILE_SUFFIX).elf to target using OpenOCD..."
-	openocd -f board/st_nucleo_f4.cfg -c "program $(shell find $(BUILD_DIR)/apps -name $(EXAMPLE)$(PROFILE_SUFFIX).elf) verify reset exit"
+	@IMG=$$(find $(BUILD_DIR)/apps -name $(EXAMPLE)$(PROFILE_SUFFIX).$(FLASH_EXT) | head -1); \
+	if [ -z "$$IMG" ]; then \
+		echo "Error: no $(EXAMPLE)$(PROFILE_SUFFIX).$(FLASH_EXT) found under $(BUILD_DIR)/apps"; \
+		exit 1; \
+	fi; \
+	echo "Flashing $$IMG at $(SLOT_BASE) on board '$(BOARD)' (ST-LINK $(STLINK_SERIAL))..."; \
+	openocd -f board/st_nucleo_f4.cfg \
+		$(if $(STLINK_SERIAL),-c "hla_serial $(STLINK_SERIAL)") \
+		-c "program $$IMG $(SLOT_BASE) verify reset exit"
 
 #==============================================================================
 # flash-bootloader — explicit, manual-only sector-0 programming.
@@ -157,8 +206,9 @@ flash: $(EXAMPLE)
 # via `BOARD=ci|dev` or `HLA_SERIAL=...` for free.  Pass extra args with
 # `BOOTLOADER_FLASH_ARGS="--skip-build"` etc.
 #==============================================================================
-BOARD ?=
-HLA_SERIAL ?=
+# BOARD / HLA_SERIAL are defined once at the top of this Makefile and shared
+# by every probe-driving target.  flash-bootloader forwards them to the Python
+# flasher unchanged.
 BOOTLOADER_FLASH_ARGS ?=
 
 flash-bootloader: bootloader
@@ -170,9 +220,12 @@ flash-bootloader: bootloader
 		$(BOOTLOADER_FLASH_ARGS)
 #==============================================================================
 # Debug target
+#
+# Flashes nothing; attaches GDB to the running target via OpenOCD, pinned to
+# the selected board's ST-LINK probe (BOARD / HLA_SERIAL -> STLINK_SERIAL).
 #==============================================================================
 debug: $(EXAMPLE)
-	./debug.sh $(shell find $(BUILD_DIR)/apps -name $(EXAMPLE)$(PROFILE_SUFFIX).elf)
+	./debug.sh $(shell find $(BUILD_DIR)/apps -name $(EXAMPLE)$(PROFILE_SUFFIX).elf) $(STLINK_SERIAL)
 
 #==============================================================================
 # OpenOCD target
@@ -183,12 +236,24 @@ openocd:
 
 #==============================================================================
 # Serial connection target
+#
+# Resolves the serial port for the selected board (BOARD / HLA_SERIAL ->
+# STLINK_SERIAL) by reusing run_hil_tests.find_serial_port, which prefers the
+# stable /dev/serial/by-id symlink for the chosen ST-LINK and falls back to a
+# /dev/cu.usbmodem* / /dev/ttyACM* glob on dev hosts without the symlink
+# (e.g. macOS).  Override the board with `make serial BOARD=ci`.
 #==============================================================================
 BAUD_RATE ?= 115200
 
 serial:
-	@echo "Connecting to serial port at $(BAUD_RATE) baud..."
-	@SERIAL_PORT=$$(ls /dev/cu.usbmodem* /dev/ttyACM* 2>/dev/null | head -1); \
+	@echo "Connecting to board '$(BOARD)' serial port at $(BAUD_RATE) baud..."
+	@SERIAL_PORT=$$(python3 -c "import sys, os, contextlib; sys.path.insert(0, 'scripts'); \
+import run_hil_tests as h; \
+f = open(os.devnull, 'w'); \
+ctx = contextlib.redirect_stdout(f); ctx.__enter__(); \
+p = h.find_serial_port(hla_serial='$(STLINK_SERIAL)'); \
+ctx.__exit__(None, None, None); \
+print(p or '')" 2>/dev/null); \
 	if [ -z "$$SERIAL_PORT" ]; then \
 		echo "Error: No serial device found. Is the board connected?"; \
 		exit 1; \
@@ -209,11 +274,25 @@ help:
 	@echo "  make all                - Build all apps"
 	@echo "  make clean              - Clean all build artifacts"
 	@echo "  make test               - Run host unit tests (no board needed)"
-	@echo "  make flash              - Flash current app to target"
+	@echo "  make flash              - Flash current app to its slot via OpenOCD"
 	@echo "  make debug              - Debug current app"
 	@echo "  make openocd            - Start OpenOCD server"
 	@echo "  make serial             - Connect to serial port (115200 baud)"
 	@echo "  make serial BAUD_RATE=9600 - Connect with custom baud rate"
+	@echo ""
+	@echo "Board / slot / profile knobs (flash, serial, debug):"
+	@echo "  BOARD=dev|ci            - Target a registered board (default: dev)"
+	@echo "                            Roles + serials live in scripts/boards.json"
+	@echo "  HLA_SERIAL=<serial>     - Pin a raw ST-LINK serial (overrides BOARD)"
+	@echo "  SLOT=A|B                - Slot for bootloader profile (default: A)"
+	@echo "  PROFILE=bootloader|standalone - Memory map (default: bootloader)"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make flash                          # cli_simple, dev board, slot A"
+	@echo "  make flash SLOT=B                   # slot B image at 0x08040000"
+	@echo "  make flash BOARD=ci                 # target the CI board"
+	@echo "  make flash EXAMPLE=blink_pwm PROFILE=standalone  # raw image at 0x08000000"
+	@echo "  make serial BOARD=dev               # console on the dev board"
 	@echo ""
 	@echo "Available apps:"
 	@for app in $(ALL_APPS); do \

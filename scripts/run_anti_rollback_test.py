@@ -51,6 +51,7 @@ from xml.etree.ElementTree import Element, SubElement, ElementTree, indent
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run_hil_tests as hil  # noqa: E402
+import boards  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import _img_format as fmt  # noqa: E402
@@ -507,9 +508,9 @@ def write_junit(path: Path,
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--board", choices=list(hil.BOARD_REGISTRY.keys()),
+    p.add_argument("--board", choices=list(boards.BOARD_REGISTRY.keys()),
                    help='Board role: "ci" or "dev".')
-    p.add_argument("--hla-serial", default=hil.DEFAULT_HLA_SERIAL,
+    p.add_argument("--hla-serial", default=boards.DEFAULT_HLA_SERIAL,
                    help="Explicit ST-LINK serial (overrides --board).")
     p.add_argument("--junit-xml", type=Path,
                    default=Path("anti-rollback-results.xml"))
@@ -520,7 +521,7 @@ def main() -> int:
     except Exception:
         pass
 
-    hla_serial = (hil.BOARD_REGISTRY[args.board] if args.board
+    hla_serial = (boards.BOARD_REGISTRY[args.board] if args.board
                   else args.hla_serial)
     project_root = hil.get_project_root()
     os.chdir(project_root)

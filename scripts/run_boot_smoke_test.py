@@ -25,6 +25,7 @@ from xml.etree.ElementTree import Element, SubElement, ElementTree, indent
 # Re-use the board registry from run_hil_tests.py.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run_hil_tests as hil  # noqa: E402
+import boards  # noqa: E402
 
 EXPECTED_LINES = [
     "BL: jumping to slot A",
@@ -100,9 +101,9 @@ def write_junit_xml(path: str, lines: list[str], success: bool) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--board", choices=list(hil.BOARD_REGISTRY.keys()),
+    parser.add_argument("--board", choices=list(boards.BOARD_REGISTRY.keys()),
                         help='Board role: "ci" or "dev".')
-    parser.add_argument("--hla-serial", default=hil.DEFAULT_HLA_SERIAL,
+    parser.add_argument("--hla-serial", default=boards.DEFAULT_HLA_SERIAL,
                         help="ST-LINK serial number (overridden by --board).")
     parser.add_argument("--timeout", type=int, default=10,
                         help="Seconds to wait for both expected lines.")
@@ -112,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     project_root = hil.get_project_root()
-    hla_serial = hil.BOARD_REGISTRY[args.board] if args.board else args.hla_serial
+    hla_serial = boards.BOARD_REGISTRY[args.board] if args.board else args.hla_serial
 
     if args.skip_build:
         signed = (project_root / "build" / "apps" / "bootloader"

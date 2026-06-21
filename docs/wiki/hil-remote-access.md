@@ -215,8 +215,11 @@ No custom udev rules are needed.
 
 ### Replacing a board
 
-If a board is physically replaced, update its serial number in the `BOARD_REGISTRY` dict
-at the top of `scripts/run_hil_tests.py`. The new serial can be found with:
+If a board is physically replaced, update its serial number in
+[scripts/boards.json](../../scripts/boards.json) — the single source of truth
+for board roles and ST-LINK serials, read by the Makefile and every HIL script
+(`scripts/boards.py` loads it; `run_hil_tests.py` re-exports `BOARD_REGISTRY`
+for backward compatibility). The new serial can be found with:
 
 ```sh
 ls /dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_*

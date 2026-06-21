@@ -140,6 +140,21 @@ make flash                   # flash signed image to slot A via OpenOCD
 make serial                  # open the serial console at 115200 baud
 ```
 
+By default these target the **dev board** (`BOARD=dev`) so manual commands
+never disturb the CI board. With multiple ST-LINKs attached, pick the board
+explicitly — the same `BOARD=`/`HLA_SERIAL=` knobs now work on `flash`,
+`serial`, and `debug`, not just `flash-bootloader`:
+
+```sh
+make flash BOARD=ci          # flash the CI board instead
+make flash HLA_SERIAL=066... # pin a raw ST-LINK serial (overrides BOARD)
+make serial BOARD=dev        # console pinned to the dev board's port
+```
+
+Board roles and their ST-LINK serials live in one place —
+[scripts/boards.json](scripts/boards.json) — read by the Makefile and every
+HIL script. To register or swap a board, edit that file only.
+
 You should see the bootloader's `BL: jumping to slot A @ 0x08010200` line
 followed by the app's banner.  Type `help` in the CLI prompt to list
 commands (LED control, SPI throughput sweep with DWT-cycle-counter timing,
@@ -154,7 +169,8 @@ make EXAMPLE=blink_pwm                # build a specific app
 make EXAMPLE=cli_simple SLOT=B        # build for slot B (0x08040000)
 make EXAMPLE=blink_pwm PROFILE=standalone  # legacy map, unsigned, at 0x08000000
 make flash EXAMPLE=iwdg_basic         # flash a specific app to slot A
-make debug EXAMPLE=cli_simple         # OpenOCD + GDB attached
+make flash SLOT=B                     # flash the slot-B image at 0x08040000
+make debug EXAMPLE=cli_simple         # OpenOCD + GDB attached (pinned to BOARD)
 make help                             # full target list
 ```
 

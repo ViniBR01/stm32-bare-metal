@@ -4,6 +4,29 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-06-20] infra | Board registry extracted; flash/serial/debug slot- and board-aware (#177)
+
+Extracted the board registry out of `scripts/run_hil_tests.py` into a standalone
+source of truth — `scripts/boards.json` (data) + `scripts/boards.py` (a tiny
+stdlib-only loader exposing `BOARD_REGISTRY`, `DEFAULT_HLA_SERIAL`, `roles()`,
+`resolve_serial()`). All HIL scripts now read the registry from `boards`;
+`run_hil_tests.py` re-exports `BOARD_REGISTRY`/`DEFAULT_HLA_SERIAL` for
+backward compatibility. Serials are unchanged, so the RDP/CI-serial safety
+guards keep working.
+
+- The root `Makefile` gained shared `BOARD` (default `dev`), `HLA_SERIAL`,
+  resolving to `STLINK_SERIAL` via `boards.py`. `make flash`, `make serial`,
+  and `make debug` now honor them (previously only `flash-bootloader` did).
+- `make flash` flashes the profile's final image (`.signed.bin` for bootloader
+  profiles, raw `.bin` for standalone) at `SLOT_BASE` and pins the ST-LINK
+  probe — fixing the prior behavior of programming the `.elf` with no probe
+  pinning.
+- `make serial` resolves the board's `/dev/serial/by-id` port via
+  `run_hil_tests.find_serial_port` (glob fallback preserved for macOS).
+  `make debug` / `debug.sh` forward the probe serial (`adapter serial`).
+- To register or swap a board, edit `scripts/boards.json` only. Updated
+  `README.md`, `make help`, and `hil-remote-access.md`.
+
 ## [2026-06-20] infra | App target profiles — `PROFILE=` memory-map selector (#167)
 
 Centralized the memory-map / signing choice into a single `PROFILE=` knob in

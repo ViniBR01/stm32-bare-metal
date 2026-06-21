@@ -22,18 +22,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run_hil_tests as hil  # noqa: E402
+import boards  # noqa: E402
 
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--board", choices=list(hil.BOARD_REGISTRY.keys()),
+    p.add_argument("--board", choices=list(boards.BOARD_REGISTRY.keys()),
                    help='Board role: "ci" or "dev".')
-    p.add_argument("--hla-serial", default=hil.DEFAULT_HLA_SERIAL,
+    p.add_argument("--hla-serial", default=boards.DEFAULT_HLA_SERIAL,
                    help="Explicit ST-LINK serial (overrides --board).")
     args = p.parse_args()
 
-    hla_serial = (hil.BOARD_REGISTRY[args.board] if args.board
+    hla_serial = (boards.BOARD_REGISTRY[args.board] if args.board
                   else args.hla_serial)
 
     hil.log_info("Erasing metadata sectors 1-2 (slot A + slot B metadata)...")
