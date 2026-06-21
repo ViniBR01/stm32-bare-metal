@@ -174,6 +174,31 @@ make debug EXAMPLE=cli_simple         # OpenOCD + GDB attached (pinned to BOARD)
 make help                             # full target list
 ```
 
+#### Recovering from a rejected image (rollback floor)
+
+If the board boots only to the bootloader and logs something like:
+
+```
+BL: rollback ver=1 < floor=2
+BL: both slots failed verify
+```
+
+the board is not bricked — the **anti-rollback floor** is rejecting your image.
+The Phase 1.9 bootloader derives a floor from the highest `monotonic_counter`
+ever committed, and an anti-rollback or OTA HIL run leaves that floor elevated.
+A plain `make flash` signs images at the default `IMAGE_VERSION=1`, which is
+then below the floor. Reset the floor by erasing the slot metadata, then
+re-flash:
+
+```sh
+make sanitize-board        # erase metadata sectors (floor -> 0) on the dev board
+make flash
+make serial
+```
+
+(`make sanitize-board` honors `BOARD=`/`HLA_SERIAL=` like the other targets and
+is the same step CI runs at the start of every HIL job.)
+
 #### Build profiles
 
 A single `PROFILE=` knob selects the memory map an app builds for:
