@@ -66,7 +66,7 @@ APP_TARGETS := $(ALL_APPS) $(filter-out $(ALL_APPS),$(EXAMPLE))
 #==============================================================================
 # Phony targets
 #==============================================================================
-.PHONY: all clean test keys flash-bootloader $(SUBDIRS) flash debug openocd serial help $(APP_TARGETS)
+.PHONY: all clean test keys flash-bootloader sanitize-board $(SUBDIRS) flash debug openocd serial help $(APP_TARGETS)
 
 #==============================================================================
 # Build all apps
@@ -218,6 +218,25 @@ flash-bootloader: bootloader
 		$(if $(BOARD),--board $(BOARD)) \
 		$(if $(HLA_SERIAL),--hla-serial $(HLA_SERIAL)) \
 		$(BOOTLOADER_FLASH_ARGS)
+
+#==============================================================================
+# sanitize-board — erase the slot metadata sectors to reset the rollback floor.
+#
+# The Phase 1.9 bootloader derives a rollback floor from the highest
+# monotonic_counter committed across both metadata sectors.  After an
+# anti-rollback or OTA HIL run the floor is left elevated (e.g. 2), so a plain
+# `make flash` (which signs at the default IMAGE_VERSION=1) is then rejected on
+# every slot — the board logs `rollback ver=1 < floor=N` and stops at
+# `both slots failed verify`.  Erasing the metadata sectors resets floor=0 so
+# the next boot accepts a freshly flashed image.
+#
+# Delegates to scripts/sanitize_board.py (the same step CI runs at the start of
+# each HIL job); honors the shared BOARD / HLA_SERIAL knobs.
+#==============================================================================
+sanitize-board:
+	@python3 scripts/sanitize_board.py \
+		$(if $(BOARD),--board $(BOARD)) \
+		$(if $(HLA_SERIAL),--hla-serial $(HLA_SERIAL))
 #==============================================================================
 # Debug target
 #
@@ -279,6 +298,7 @@ help:
 	@echo "  make openocd            - Start OpenOCD server"
 	@echo "  make serial             - Connect to serial port (115200 baud)"
 	@echo "  make serial BAUD_RATE=9600 - Connect with custom baud rate"
+	@echo "  make sanitize-board     - Erase slot metadata (reset rollback floor)"
 	@echo ""
 	@echo "Board / slot / profile knobs (flash, serial, debug):"
 	@echo "  BOARD=dev|ci            - Target a registered board (default: dev)"
