@@ -370,25 +370,34 @@ def pass_downgrade_ota_rejected(hla_serial: str, project_root: Path,
     RTC_BKP0R   = 0x40002850
     PWREN_BIT   = 1 << 28
     DBP_BIT     = 1 << 8
-    openocd(hla_serial,
-            f"mww {RCC_APB1ENR:#010x} {PWREN_BIT:#010x}",
-            f"mww {PWR_CR:#010x} {DBP_BIT:#010x}",
-            f"mww {RTC_BKP0R:#010x} {OTA_MAGIC:#010x}")
-    reset_run(hla_serial)
-    time.sleep(1.0)
 
+    # The bootloader prints "OTA: ready" exactly once, within a few hundred
+    # ms of reset.  If we reset first and only then open the serial port, that
+    # one-shot line races the port-open and is frequently missed on the Pi
+    # runner — the original cause of this test's flakiness.  Open the port
+    # *before* the reset so the listener is already attached when the line is
+    # emitted.  (Same deterministic-capture trick run_ota_test.py uses.)
     port = hil.find_serial_port(hla_serial=hla_serial)
     if not port:
         return False, ["serial port not found"]
 
     ser = open_serial(port)
     try:
+        drain_serial(ser, settle_s=0.3)
+        openocd(hla_serial,
+                f"mww {RCC_APB1ENR:#010x} {PWREN_BIT:#010x}",
+                f"mww {PWR_CR:#010x} {DBP_BIT:#010x}",
+                f"mww {RTC_BKP0R:#010x} {OTA_MAGIC:#010x}")
+        reset_run(hla_serial)
+
         def saw_ready(lines):
             return any(OTA_READY_LINE in l for l in lines)
-        _, ok = capture_until(ser, saw_ready, timeout_s=5.0)
+        # Generous window: covers reset + bootloader verify before OTA mode.
+        _, ok = capture_until(ser, saw_ready, timeout_s=10.0)
         if not ok:
             return False, ["bootloader never reached OTA: ready"]
     finally:
+        # ota_send.py needs exclusive access to the port.
         ser.close()
 
     rc = run_ota_send(project_root, port, signed_b_v1, "B")
