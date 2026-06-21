@@ -462,13 +462,20 @@ static int cmd_stop_mode(const char *args)
 
     enter_stop_mode();
 
-    /* Woke up — HSI is now the clock source. Restore PLL to 100 MHz. */
+    /* Woke up — HSI is now the clock source and the USART/DMA are still
+     * configured for the pre-sleep 100 MHz clock.  Tear the UART down first
+     * (uart_deinit disarms the TX/RX DMA streams and stops the USART) so the
+     * re-init below starts from a known-clean state; otherwise a stale DMA
+     * stream config races the reconfigured UART and the first bytes of the
+     * wake message come out garbled. */
+    uart_deinit();
     rcc_init(RCC_CLK_SRC_HSI, 100000000U);
     uart_init();
     systick_init();
     printf_dma_init();
 
     printf("Woke from Stop mode — clock restored to 100 MHz\n");
+    printf_dma_flush();
     return 0;
 }
 
