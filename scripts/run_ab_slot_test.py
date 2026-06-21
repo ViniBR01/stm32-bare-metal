@@ -150,14 +150,58 @@ def erase_slot_payload(hla_serial: str, slot: str) -> None:
 
 # -------------------- Serial capture --------------------
 
+def _read_until(ser, timeout: int) -> list[str]:
+    """Read lines from an already-open serial port until a terminal marker
+    (APP_ALIVE or BOTH_FAIL) or *timeout* seconds elapse.
+
+    The caller owns the port lifecycle and must NOT flush the input buffer
+    immediately before calling this — the bootloader banner is emitted within
+    a few hundred ms of reset and must already be buffered/captured.
+    """
+    lines: list[str] = []
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if ser.in_waiting:
+            line = ser.readline().decode("utf-8", errors="ignore").rstrip()
+            if line:
+                lines.append(line)
+                print(f"  {line}")
+                if APP_ALIVE in line:
+                    # Read a tiny tail to capture anything else queued.
+                    time.sleep(0.5)
+                    while ser.in_waiting:
+                        l2 = ser.readline().decode("utf-8", errors="ignore").rstrip()
+                        if l2:
+                            lines.append(l2)
+                            print(f"  {l2}")
+                    break
+                if BOTH_FAIL in line:
+                    time.sleep(2.0)
+                    while ser.in_waiting:
+                        l2 = ser.readline().decode("utf-8", errors="ignore").rstrip()
+                        if l2:
+                            lines.append(l2)
+                            print(f"  {l2}")
+                    break
+        else:
+            time.sleep(0.05)
+    return lines
+
+
 def capture_lines(port: str, timeout: int) -> list[str]:
+    """Open *port*, flush, and read until a terminal marker / timeout.
+
+    Standalone helper that opens its own handle.  Note this flushes after
+    opening, so it must only be used when no reset race is involved; the
+    reset path uses reset_and_capture() which keeps the port open across the
+    reset instead.
+    """
     try:
         import serial
     except ImportError:
         hil.log_error("pyserial not installed. Run: pip3 install pyserial")
         return []
 
-    lines: list[str] = []
     ser = None
     last_err = None
     for _ in range(3):
@@ -174,43 +218,23 @@ def capture_lines(port: str, timeout: int) -> list[str]:
     try:
         ser.reset_input_buffer()
         time.sleep(0.5)
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            if ser.in_waiting:
-                line = ser.readline().decode("utf-8", errors="ignore").rstrip()
-                if line:
-                    lines.append(line)
-                    print(f"  {line}")
-                    if APP_ALIVE in line:
-                        # Read a tiny tail to capture anything else queued.
-                        time.sleep(0.5)
-                        while ser.in_waiting:
-                            l2 = ser.readline().decode("utf-8", errors="ignore").rstrip()
-                            if l2:
-                                lines.append(l2)
-                                print(f"  {l2}")
-                        break
-                    if BOTH_FAIL in line:
-                        time.sleep(2.0)
-                        while ser.in_waiting:
-                            l2 = ser.readline().decode("utf-8", errors="ignore").rstrip()
-                            if l2:
-                                lines.append(l2)
-                                print(f"  {l2}")
-                        break
-            else:
-                time.sleep(0.05)
+        return _read_until(ser, timeout)
     finally:
         try: ser.close()
         except Exception: pass
-    return lines
 
 
 def reset_and_capture(hla_serial: str, timeout: int) -> list[str]:
-    """Open the serial port first to drain any prior-boot output, THEN
-    issue a reset.  Programming the slot already booted the chip once
-    (OpenOCD's `program ... reset exit`); without this ordering we'd
-    capture a mix of the prior boot and the new one."""
+    """Reset the board and capture the boot output deterministically.
+
+    Programming the slot already booted the chip once (OpenOCD's
+    `program ... reset exit`).  We must capture a *fresh* boot, and the
+    bootloader banner ("BL: trying slot A", verify, jump) is emitted within a
+    few hundred ms of reset.  Keep a single serial handle open across the
+    reset so that one-shot banner can't race a port open/flush — closing the
+    port before the reset (the previous behavior) regularly dropped the first
+    lines and produced spurious "missing 'BL: trying slot A'" failures (#187).
+    """
     port = hil.find_serial_port(hla_serial=hla_serial)
     if not port:
         hil.log_error("Serial port not found")
@@ -221,12 +245,11 @@ def reset_and_capture(hla_serial: str, timeout: int) -> list[str]:
         hil.log_error("pyserial not installed")
         return []
 
-    # Open + drain.
     ser = None
     last_err = None
     for _ in range(3):
         try:
-            ser = serial.Serial(port, 115200, timeout=0.2)
+            ser = serial.Serial(port, 115200, timeout=2)
             break
         except Exception as e:
             last_err = e
@@ -234,9 +257,11 @@ def reset_and_capture(hla_serial: str, timeout: int) -> list[str]:
     if ser is None:
         hil.log_error(f"Serial open failed: {last_err}")
         return []
+
     try:
+        # Drain any in-flight bytes from the previous post-flash boot so we
+        # don't mix it with the boot we're about to trigger.
         ser.reset_input_buffer()
-        # Drain any in-flight bytes from the previous post-flash boot.
         deadline = time.time() + 1.5
         while time.time() < deadline:
             if ser.in_waiting:
@@ -245,14 +270,14 @@ def reset_and_capture(hla_serial: str, timeout: int) -> list[str]:
             else:
                 time.sleep(0.05)
         ser.reset_input_buffer()
+
+        # Reset with the port STILL OPEN, then read directly — no close/reopen
+        # and no post-reset flush, so the bootloader banner is captured.
+        openocd(hla_serial, "reset run")
+        return _read_until(ser, timeout)
     finally:
         try: ser.close()
         except Exception: pass
-
-    # Now reset and recapture.
-    openocd(hla_serial, "reset run")
-    time.sleep(0.5)
-    return capture_lines(port, timeout)
 
 
 # -------------------- Pass-level setup helpers --------------------
