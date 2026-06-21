@@ -1,7 +1,26 @@
 #!/bin/sh
 set -e
 
-openocd -f board/st_nucleo_f4.cfg > build/openocd.log 2>&1 &
+# Usage: debug.sh <elf-file> [stlink-serial]
+#
+# The optional second argument pins OpenOCD to a specific ST-LINK probe
+# (adapter serial), so `make debug` can target the chosen board even when
+# multiple ST-LINKs are connected.  When omitted, OpenOCD auto-selects a probe
+# (the original behavior).
+ELF="$1"
+STLINK_SERIAL="$2"
+
+if [ -z "$ELF" ]; then
+    echo "Usage: $0 <elf-file> [stlink-serial]"
+    exit 1
+fi
+
+OCD_ARGS="-f board/st_nucleo_f4.cfg"
+if [ -n "$STLINK_SERIAL" ]; then
+    OCD_ARGS="-c \"adapter serial $STLINK_SERIAL\" $OCD_ARGS"
+fi
+
+eval "openocd $OCD_ARGS" > build/openocd.log 2>&1 &
 OCD_PID=$!
 
 cleanup() {
@@ -13,10 +32,4 @@ trap cleanup EXIT INT TERM
 
 sleep 2
 
-if [ -z "$1" ]; then
-    echo "Usage: $0 <elf-file>"
-    cleanup
-    exit 1
-fi
-
-arm-none-eabi-gdb -q -ex "target remote localhost:3333" -ex "monitor reset init" "$1"
+arm-none-eabi-gdb -q -ex "target remote localhost:3333" -ex "monitor reset init" "$ELF"

@@ -48,6 +48,7 @@ from xml.etree.ElementTree import Element, SubElement, ElementTree, indent
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run_hil_tests as hil  # noqa: E402
+import boards  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import _img_format as fmt  # noqa: E402
@@ -443,7 +444,7 @@ def write_junit(
 # Reuse the canonical board→serial map from run_hil_tests so the dev/ci
 # serials never drift out of sync (a divergent local copy previously pinned
 # the wrong dev serial).
-BOARDS = hil.BOARD_REGISTRY
+BOARDS = boards.BOARD_REGISTRY
 
 
 def main() -> int:

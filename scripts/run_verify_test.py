@@ -39,6 +39,7 @@ from xml.etree.ElementTree import Element, SubElement, ElementTree, indent
 # main HIL runner so the two scripts agree on board topology.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run_hil_tests as hil  # noqa: E402
+import boards  # noqa: E402
 
 # tools/_img_format.py knows the on-flash header layout — same module the
 # signer and the C parser are validated against.
@@ -347,9 +348,9 @@ def main(argv: list[str] | None = None) -> int:
         pass
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--board", choices=list(hil.BOARD_REGISTRY.keys()),
+    parser.add_argument("--board", choices=list(boards.BOARD_REGISTRY.keys()),
                         help='Board role: "ci" or "dev".')
-    parser.add_argument("--hla-serial", default=hil.DEFAULT_HLA_SERIAL,
+    parser.add_argument("--hla-serial", default=boards.DEFAULT_HLA_SERIAL,
                         help="ST-LINK serial number (overridden by --board).")
     parser.add_argument("--timeout", type=int, default=20,
                         help="Per-pass serial-capture timeout, seconds.")
@@ -361,7 +362,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     project_root = hil.get_project_root()
-    hla_serial = hil.BOARD_REGISTRY[args.board] if args.board else args.hla_serial
+    hla_serial = boards.BOARD_REGISTRY[args.board] if args.board else args.hla_serial
 
     if args.skip_build:
         clean = (project_root / "build" / "apps" / "bootloader"

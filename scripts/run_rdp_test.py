@@ -40,6 +40,7 @@ from xml.etree.ElementTree import Element, SubElement, ElementTree, indent
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run_hil_tests as hil  # noqa: E402
+import boards  # noqa: E402
 
 OPENOCD_CFG = "board/st_nucleo_f4.cfg"
 SECTOR_0_BASE = 0x08000000
@@ -338,7 +339,7 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--board", choices=list(hil.BOARD_REGISTRY.keys()),
+    parser.add_argument("--board", choices=list(boards.BOARD_REGISTRY.keys()),
         default="dev", help='Board role.  Defaults to "dev".  "ci" is rejected.')
     parser.add_argument("--hla-serial", default="",
         help="ST-LINK serial number (overrides --board).")
@@ -356,10 +357,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     hla_serial = (
-        hil.BOARD_REGISTRY[args.board] if args.board else args.hla_serial
+        boards.BOARD_REGISTRY[args.board] if args.board else args.hla_serial
     )
 
-    if hla_serial == hil.BOARD_REGISTRY.get("ci") and not args.allow_ci_serial:
+    if hla_serial == boards.BOARD_REGISTRY.get("ci") and not args.allow_ci_serial:
         hil.log_error(
             f"Refusing to run the RDP test against the CI board "
             f"(ST-LINK serial {hla_serial}).  Pass --board dev or use a "

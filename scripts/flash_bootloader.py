@@ -40,6 +40,7 @@ from pathlib import Path
 # of truth for which ST-LINK serial belongs to which role.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run_hil_tests as hil  # noqa: E402
+import boards  # noqa: E402
 
 OPENOCD_CFG = "board/st_nucleo_f4.cfg"
 BOOTLOADER_BASE = 0x08000000
@@ -178,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--board", choices=list(hil.BOARD_REGISTRY.keys()),
+    parser.add_argument("--board", choices=list(boards.BOARD_REGISTRY.keys()),
         help="Pin to a registered board role (resolves to its ST-LINK serial).")
     parser.add_argument("--hla-serial", default="",
         help=("ST-LINK serial number to target. Pass an empty string (the "
@@ -191,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     hla_serial = (
-        hil.BOARD_REGISTRY[args.board] if args.board else args.hla_serial
+        boards.BOARD_REGISTRY[args.board] if args.board else args.hla_serial
     )
 
     if args.skip_build:

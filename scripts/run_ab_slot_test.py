@@ -47,6 +47,7 @@ from xml.etree.ElementTree import Element, SubElement, ElementTree, indent
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run_hil_tests as hil  # noqa: E402
+import boards  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import _img_format as fmt  # noqa: E402
@@ -368,15 +369,15 @@ def main(argv: list[str] | None = None) -> int:
         pass
 
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--board", choices=list(hil.BOARD_REGISTRY.keys()))
-    p.add_argument("--hla-serial", default=hil.DEFAULT_HLA_SERIAL)
+    p.add_argument("--board", choices=list(boards.BOARD_REGISTRY.keys()))
+    p.add_argument("--hla-serial", default=boards.DEFAULT_HLA_SERIAL)
     p.add_argument("--timeout", type=int, default=20,
                    help="Per-pass serial-capture timeout (seconds).")
     p.add_argument("--junit-xml", default="ab-slot-results.xml")
     args = p.parse_args(argv)
 
     project_root = hil.get_project_root()
-    hla = hil.BOARD_REGISTRY[args.board] if args.board else args.hla_serial
+    hla = boards.BOARD_REGISTRY[args.board] if args.board else args.hla_serial
 
     try:
         signed_a = build_app_for_slot(project_root, "A")

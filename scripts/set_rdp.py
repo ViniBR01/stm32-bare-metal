@@ -43,6 +43,7 @@ from pathlib import Path
 # serial belongs to which role.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run_hil_tests as hil  # noqa: E402
+import boards  # noqa: E402
 
 OPENOCD_CFG = "board/st_nucleo_f4.cfg"
 
@@ -255,7 +256,7 @@ def write_rdp(hla_serial: str, level: int) -> bool:
 
 
 def is_ci_serial(hla_serial: str) -> bool:
-    return hla_serial == hil.BOARD_REGISTRY.get("ci")
+    return hla_serial == boards.BOARD_REGISTRY.get("ci")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -268,7 +269,7 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--board", choices=list(hil.BOARD_REGISTRY.keys()),
+    parser.add_argument("--board", choices=list(boards.BOARD_REGISTRY.keys()),
         help='Board role: "ci" or "dev".  Resolves to the matching '
              'ST-LINK serial.  Refuses to write to the CI board.')
     parser.add_argument("--hla-serial", default="",
@@ -284,7 +285,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     hla_serial = (
-        hil.BOARD_REGISTRY[args.board] if args.board else args.hla_serial
+        boards.BOARD_REGISTRY[args.board] if args.board else args.hla_serial
     )
 
     # Default action with no flags is --status.

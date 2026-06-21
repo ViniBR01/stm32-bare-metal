@@ -37,13 +37,12 @@ from xml.etree.ElementTree import Element, SubElement, ElementTree, indent
 # Board registry: maps role names to ST-LINK serial numbers.
 # The serial number is used both for OpenOCD probe selection (hla_serial) and
 # to derive the stable /dev/serial/by-id/ symlink for the serial port.
-BOARD_REGISTRY = {
-    "ci": "066BFF554869774867234426",
-    "dev": "066CFF3833554B3043154235",
-}
-
-# Default ST-LINK serial (used when --board is not specified).
-DEFAULT_HLA_SERIAL = BOARD_REGISTRY["ci"]
+#
+# The registry now lives in boards.json + boards.py (the single source of
+# truth, also readable from the Makefile/shell).  These names are re-exported
+# here for backward compatibility — older code and external callers that do
+# `import run_hil_tests as hil; hil.BOARD_REGISTRY` keep working.
+from boards import BOARD_REGISTRY, DEFAULT_HLA_SERIAL  # noqa: F401,E402
 
 # Color codes for terminal output
 class Colors:
