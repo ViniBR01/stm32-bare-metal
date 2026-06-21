@@ -4,6 +4,22 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-06-20] infra | Max-clock SPI-DMA integrity made advisory (non-gating) (#185)
+
+The `spi*_dma_psc2_256B` HIL smoke tests (SPI DMA at the fastest prescaler)
+flake on a single corrupted byte because they run over a bench loopback jumper
+that is electrically marginal at that clock. Cross-board measurement showed the
+same firmware giving `integrity 5/5` on the CI board and `0/5` on the dev board,
+flipping over time — a wiring artifact, not a regression (polled mode and all
+lower prescalers stay clean).
+
+`scripts/run_hil_tests.py` now treats integrity for `spi\d+_dma_psc2_*` as
+**advisory**: logged loudly and emitted as a `skipped` JUnit case, but it no
+longer fails the run or aborts the remaining HIL suites. Cycles/throughput for
+those tests stay gated, and integrity for polled mode + prescalers >= 4 remains
+a hard gate. Verified on hardware: the dev board (integrity 0/5) now exits 0;
+the CI board (5/5) is unaffected. The hardware fix stays tracked in #185.
+
 ## [2026-06-20] infra | Board registry extracted; flash/serial/debug slot- and board-aware (#177)
 
 Extracted the board registry out of `scripts/run_hil_tests.py` into a standalone

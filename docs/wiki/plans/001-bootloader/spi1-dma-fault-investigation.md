@@ -524,3 +524,25 @@ interior byte, both out-of-range edges, and the null-out arg.
   slot-A app's welcome banner — the symptom that used to happen here
   ("bootloader slow-blink halt on next reset") is gone.
 
+## Addendum (2026-06-20) — max-clock SPI-DMA integrity is now advisory (#185)
+
+The `spi*_dma_psc2_256B` smoke tests (SPI DMA at prescaler 2 — the fastest
+SCK the part supports) are gated against a **bench loopback jumper**, and at
+that rate the MOSI->MISO link is electrically marginal. Cross-board
+measurements (`run_hil_tests.py` on both the dev and CI NUCLEOs) showed the
+same firmware producing `integrity 5/5` on one board and `0/5` on the other,
+flipping over time and between boards — i.e. a wiring/signal-integrity artifact,
+not a firmware regression. Polled mode and every prescaler >= 4 stay clean.
+
+To stop a flaky jumper from blocking unrelated development, `run_hil_tests.py`
+now classifies integrity for `spi\d+_dma_psc2_*` as **advisory**: corruption is
+logged loudly and emitted in the JUnit report as a `skipped` case, but it does
+**not** fail the HIL run. The cycles/throughput metrics for those same tests
+are still gated normally, and integrity for polled mode and all lower
+prescalers remains a hard gate. See `is_advisory_integrity_test()` in
+`scripts/run_hil_tests.py`.
+
+The proper hardware fix (shorter/soldered SPI1 loopback, or a fixture) remains
+tracked in issue #185; until then the advisory keeps the signal visible without
+gating CI.
+
