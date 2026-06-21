@@ -514,6 +514,28 @@ static int cmd_ota_request(const char *args)
     return 0;
 }
 
+/*
+ * Software system reset.  Drains pending UART output, then triggers
+ * NVIC_SystemReset() so the chip reboots through the bootloader chain.
+ * Unlike ota_request it writes no RTC magic, so the bootloader performs a
+ * normal slot selection rather than entering OTA mode.
+ */
+static int cmd_reset(const char *args)
+{
+    (void)args;
+    printf("Resetting...\n");
+    printf_dma_flush();
+
+    /* Tiny dwell so the final UART byte makes it onto the wire before
+     * the reset clears the TX shift register. */
+    for (volatile uint32_t i = 0; i < 100000u; ++i) {
+        __asm volatile ("nop");
+    }
+    NVIC_SystemReset();
+    /* unreachable */
+    return 0;
+}
+
 // Command table (help command is automatically added by CLI library)
 static const cli_command_t commands[] = {
     {"uptime",        "Print uptime (hh:mm:ss.mmm)", cmd_uptime},
@@ -529,6 +551,7 @@ static const cli_command_t commands[] = {
     {"stop_mode",     "Enter Stop mode (wake on interrupt)",      cmd_stop_mode},
     {"standby_mode",  "Enter Standby mode (full reset on wake)",  cmd_standby_mode},
     {"ota_request",   "Reboot into bootloader OTA mode",          cmd_ota_request},
+    {"reset",         "Software system reset (reboot)",           cmd_reset},
     {"fault_test",    "Trigger a fault (nullptr|divzero|illegal)", cmd_fault_test},
 #ifdef ENABLE_HW_FPU
     {"fpu_test",      "Validate HW FPU is working", cmd_fpu_test},
