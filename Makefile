@@ -35,10 +35,19 @@ ALL_APPS := \
 	serial_simple \
 	cli_simple
 
+# Per-app build rule target list.  A single rule (below) covers every app in
+# $(ALL_APPS) plus the default goal $(EXAMPLE).  We deliberately do NOT add a
+# separate $(EXAMPLE): rule — when EXAMPLE names an app already in $(ALL_APPS)
+# (e.g. the default cli_simple) that would define two recipes for the same
+# target and make would emit an "overriding recipe" warning.  $(EXAMPLE) is
+# appended only when it is not already in the list, so custom EXAMPLE values
+# still build.
+APP_TARGETS := $(ALL_APPS) $(filter-out $(ALL_APPS),$(EXAMPLE))
+
 #==============================================================================
 # Phony targets
 #==============================================================================
-.PHONY: all clean test keys flash-bootloader $(SUBDIRS) flash debug openocd serial help $(EXAMPLE) $(ALL_APPS)
+.PHONY: all clean test keys flash-bootloader $(SUBDIRS) flash debug openocd serial help $(APP_TARGETS)
 
 #==============================================================================
 # Build all apps
@@ -57,12 +66,7 @@ all:
 #==============================================================================
 # Build specific app
 #==============================================================================
-$(EXAMPLE): startup utils drivers 3rd_party lib keys
-	@echo "Building app: $(EXAMPLE)"
-	$(MAKE) -C apps EXAMPLE=$(EXAMPLE)
-
-# Individual app targets
-$(ALL_APPS): startup utils drivers 3rd_party lib keys
+$(APP_TARGETS): startup utils drivers 3rd_party lib keys
 	@echo "Building app: $@"
 	$(MAKE) -C apps EXAMPLE=$@
 
@@ -118,6 +122,7 @@ test:
 clean:
 	@echo "Cleaning all build artifacts..."
 	@rm -rf $(BUILD_DIR)
+	@$(MAKE) -C tests clean
 	@echo "Clean complete."
 
 #==============================================================================
