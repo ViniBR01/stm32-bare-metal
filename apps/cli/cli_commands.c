@@ -474,6 +474,11 @@ static int cmd_stop_mode(const char *args)
     systick_init();
     printf_dma_init();
 
+    /* uart_deinit() cleared the driver's callback pointers; uart_init() does
+     * not restore them.  Re-attach the app's RX / TX-complete callbacks here
+     * or the CLI silently stops receiving input after wake (see #190). */
+    cli_app_attach_uart_callbacks();
+
     printf("Woke from Stop mode — clock restored to 100 MHz\n");
     printf_dma_flush();
     return 0;

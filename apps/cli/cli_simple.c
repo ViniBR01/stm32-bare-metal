@@ -59,6 +59,15 @@ static void process_pending_command(void) {
     }
 }
 
+// (Re)register UART callbacks.  Kept in one place so every UART (re)init
+// path — main() at boot and the stop_mode wake sequence — wires the same
+// callbacks and they can never drift apart.  uart_deinit() clears these, so
+// any teardown/re-init must call this again.
+void cli_app_attach_uart_callbacks(void) {
+    uart_register_rx_callback(on_char_received);
+    uart_register_tx_complete_callback(printf_dma_tx_complete_callback);
+}
+
 int main(void) {
     // Initialize hardware
     led2_init();
@@ -91,8 +100,7 @@ int main(void) {
     (void)bl_handshake_clear_fail_count(boot_slot);
 
     // Register UART callbacks
-    uart_register_rx_callback(on_char_received);
-    uart_register_tx_complete_callback(printf_dma_tx_complete_callback);
+    cli_app_attach_uart_callbacks();
     
     // Initialize CLI with application commands
     size_t num_commands;

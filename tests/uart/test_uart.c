@@ -509,6 +509,68 @@ void test_null_rx_callback_does_not_crash(void)
 }
 
 /* ======================================================================== */
+/* Callback lifecycle across deinit/init (regression for #190)              */
+/*                                                                          */
+/* The stop_mode wake path tears the UART down (uart_deinit) and re-inits   */
+/* it (uart_init).  uart_deinit() must clear the driver callbacks, and      */
+/* uart_init() must NOT silently resurrect them — the application owns      */
+/* re-registration.  These tests pin that contract so a future re-init      */
+/* path that forgets to re-register is caught at `make test` time.          */
+/* ======================================================================== */
+
+void test_uart_deinit_clears_rx_callback(void)
+{
+    uart_init();
+    uart_register_rx_callback(test_rx_cb);
+
+    uart_deinit();
+
+    /* After deinit the callback must be gone: an RXNE interrupt must not
+     * dispatch to the previously-registered callback. */
+    fake_USART2.SR = SR_RXNE;
+    fake_USART2.DR = 'Z';
+    USART2_IRQHandler();
+    TEST_ASSERT_EQUAL(0, rx_cb_count);
+}
+
+void test_uart_init_does_not_restore_rx_callback_after_deinit(void)
+{
+    /* Simulate the stop_mode wake sequence at the driver level:
+     * register -> deinit -> re-init.  The driver must NOT auto-restore the
+     * old callback; the app is responsible for re-registering.  If a future
+     * change made uart_init() resurrect a stale pointer this test would
+     * fail and force a deliberate decision. */
+    uart_init();
+    uart_register_rx_callback(test_rx_cb);
+    uart_deinit();
+    uart_init();
+
+    fake_USART2.SR = SR_RXNE;
+    fake_USART2.DR = 'W';
+    USART2_IRQHandler();
+    TEST_ASSERT_EQUAL(0, rx_cb_count);
+}
+
+void test_uart_rx_callback_works_after_deinit_init_reregister(void)
+{
+    /* The full, correct wake sequence: register -> deinit -> re-init ->
+     * RE-REGISTER.  After re-registering, RX dispatch must work again.
+     * This is exactly what cli_app_attach_uart_callbacks() restores in the
+     * stop_mode wake path. */
+    uart_init();
+    uart_register_rx_callback(test_rx_cb);
+    uart_deinit();
+    uart_init();
+    uart_register_rx_callback(test_rx_cb);  /* app re-registers after wake */
+
+    fake_USART2.SR = SR_RXNE;
+    fake_USART2.DR = 'K';
+    USART2_IRQHandler();
+    TEST_ASSERT_EQUAL(1, rx_cb_count);
+    TEST_ASSERT_EQUAL('K', rx_cb_char);
+}
+
+/* ======================================================================== */
 /* Critical section                                                           */
 /* ======================================================================== */
 
@@ -826,6 +888,11 @@ int main(void)
     RUN_TEST(test_rx_callback_not_called_when_dma_rx_active);
     RUN_TEST(test_rx_callback_receives_correct_character);
     RUN_TEST(test_null_rx_callback_does_not_crash);
+
+    /* Callback lifecycle across deinit/init (regression for #190) */
+    RUN_TEST(test_uart_deinit_clears_rx_callback);
+    RUN_TEST(test_uart_init_does_not_restore_rx_callback_after_deinit);
+    RUN_TEST(test_uart_rx_callback_works_after_deinit_init_reregister);
 
     /* Critical section */
     RUN_TEST(test_critical_section_enter_sets_basepri);
