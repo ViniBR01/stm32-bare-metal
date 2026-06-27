@@ -67,9 +67,13 @@ cli_simple_DEPS := $(BL_HANDSHAKE_LIB) $(IMG_LIB) $(FLASH_LIB) $(DRIVERS_LIB) $(
 # include path.  Picked up by the per-source compile rule below.
 CLI_LIB_INCS := -I$(LIB_DIR)/bl_handshake/inc -I$(LIB_DIR)/img/inc -I$(LIB_DIR)/flash/inc
 
-# Add Unity library when HIL_TEST is enabled
+# Add Unity library when HIL_TEST is enabled.  The Tier 9 software-modem BER
+# test (test_harness.c) links the Plan 002 B0 modem libs; they are pulled in
+# only under HIL_TEST so the production cli_simple image stays free of the
+# libm-heavy float path.
 ifeq ($(HIL_TEST),1)
-  cli_simple_DEPS += $(UNITY_ARM_LIB)
+  cli_simple_DEPS += $(UNITY_ARM_LIB) $(PRBS_LIB) $(MODEM_LIB) $(CHANNEL_LIB)
+  CLI_LIB_INCS += -I$(LIB_DIR)/prbs/inc -I$(LIB_DIR)/modem/inc -I$(LIB_DIR)/channel/inc -I$(LIB_DIR)/dsp/inc
 endif
 
 #==============================================================================

@@ -4,6 +4,28 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-06-26] milestone | Software BPSK modem on hardware: modem_sim CLI app + HIL Tier 9 (#195)
+
+Plan 002 sub-track B0.3 — wired the merged software modem libs (`lib/prbs`,
+`lib/modem`, `lib/channel`, `lib/dsp`) into firmware, the first time the q15
+BPSK-over-AWGN chain runs on the Cortex-M4F.
+
+- New interactive app `apps/dsp/modem_sim` (new `apps/dsp/` subdir): `modem run
+  [--mod bpsk] [--snr <dB>] [--bits <N>]` prints measured BER vs closed-form
+  theory and DWT cycles/bit; `modem sweep --snr <lo>:<hi>:<step>` prints an
+  ASCII BER-vs-Eb/N0 table. Decimal SNR supported via a local `parse_float`
+  (no `atof` in this codebase). Built/signed at slot A like `cli_simple`.
+- New HIL **Tier 9** in `apps/cli/test_harness.c` (`test_modem_bpsk_ber_awgn`):
+  PRBS9, seed 1, 6 dB, 100000 bits. Emits `TEST:modem_bpsk_ber_snr6:...:ber_ppm`.
+  On-device gate = BER within a factor of two of theory AND cyc/bit under
+  budget. Modem libs link into `cli_simple` only under `HIL_TEST=1`, keeping
+  the production image free of the libm-heavy float path.
+- `tests/baselines/performance.json` gained a `modem_bpsk_ber_snr6` entry with
+  `null` cycles/ber_ppm — the runner reports the measured values without gating
+  until populated from the first CI HIL run.
+- Build plumbing: `PRBS_LIB`/`MODEM_LIB`/`CHANNEL_LIB` in `Makefile.common`,
+  `dsp` added to `apps/Makefile` SUBDIRS, `modem_sim` to root `ALL_APPS`.
+
 ## [2026-06-20] infra | Max-clock SPI-DMA integrity made advisory (non-gating) (#185)
 
 The `spi*_dma_psc2_256B` HIL smoke tests (SPI DMA at the fastest prescaler)

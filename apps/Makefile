@@ -14,7 +14,7 @@ include ../Makefile.common
 #==============================================================================
 # Subdirectories
 #==============================================================================
-SUBDIRS := basic cli bootloader
+SUBDIRS := basic cli bootloader dsp
 
 #==============================================================================
 # App to build (passed from root makefile via the EXAMPLE variable, kept for

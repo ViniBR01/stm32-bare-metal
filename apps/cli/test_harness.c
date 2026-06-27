@@ -46,6 +46,12 @@
 #include "sleep_mode.h"
 #include "stm32f4xx.h"  /* DWT / CoreDebug for cycle counting */
 
+/* Plan 002 B0.3 — software BPSK modem (Tier 9). */
+#include "prbs.h"
+#include "bpsk.h"
+#include "awgn.h"
+#include "fixed.h"
+
 /* ====================================================================
  * UART loopback test helpers
  *
@@ -966,6 +972,82 @@ void test_stop_mode_enter_and_wake(void)
 }
 
 /* ====================================================================
+ * Software BPSK modem — Tier 9 (Plan 002 B0.3)
+ *
+ * Runs the self-contained PRBS -> BPSK -> AWGN -> slice -> BER chain on the
+ * Cortex-M4F and reports two metrics: the measured bit-error rate (in parts
+ * per million) and the DWT cycle count for the run (from which cycles/bit is
+ * derived).  No external wiring — the channel is software AWGN.
+ *
+ * Correctness gate (computed on-device): the measured BER must land within a
+ * factor of two of the closed-form BPSK theory, AND cycles/bit must be under a
+ * generous budget.  The factor-of-two band is deliberately loose: with a fixed
+ * seed the run is deterministic, but the band stays robust to toolchain/libm
+ * drift while still catching a broken chain (BER ~0 or ~0.5).  The tight
+ * performance gate is the baseline JSON (cycles +/- tolerance).
+ * ==================================================================== */
+
+#define MODEM_BER_SEED            1u
+#define MODEM_BER_SNR_DB          6.0f
+/*
+ * 100000 bits at theory BER ~2.4e-3 gives ~239 expected errors, enough
+ * statistical margin for the factor-of-two band below; shrinking this would
+ * make the band flaky.  cyc/bit is dominated by the AWGN Box-Muller (libm
+ * sqrtf/logf/sinf/cosf), not the BPSK map/slice — hence the loose budget.
+ */
+#define MODEM_BER_NBITS           100000u
+#define MODEM_CYC_PER_BIT_BUDGET  400u   /* generous firmware-side guard */
+
+void test_modem_bpsk_ber_awgn(void)
+{
+    prbs_t       tx;
+    prbs_check_t chk;
+    awgn_prng_t  rng;
+
+    prbs_init(&tx, PRBS9, MODEM_BER_SEED);
+    prbs_check_init(&chk, PRBS9, MODEM_BER_SEED);
+    awgn_prng_seed(&rng, MODEM_BER_SEED);
+
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+    for (uint32_t i = 0; i < MODEM_BER_NBITS; i++) {
+        uint8_t bit = prbs_next_bit(&tx);
+        q15_t   sym = bpsk_map(bit);
+        channel_awgn_apply(&sym, 1, MODEM_BER_SNR_DB, &rng);
+        prbs_check_bit(&chk, bpsk_slice(sym));
+    }
+
+    uint32_t cycles      = DWT->CYCCNT;
+    uint64_t total       = chk.total;
+    uint64_t errors      = chk.errors;
+    uint32_t ber_ppm     = (total > 0u)
+                             ? (uint32_t)((errors * 1000000ull) / total) : 0u;
+    double   theory      = channel_awgn_theory_ber(MODEM_BER_SNR_DB);
+    uint32_t theory_ppm  = (uint32_t)(theory * 1.0e6 + 0.5);
+    uint32_t cyc_per_bit = (total > 0u) ? (uint32_t)(cycles / total) : 0u;
+
+    /* Factor-of-two correctness band around theory. */
+    int ber_ok = (theory_ppm > 0u) &&
+                 (ber_ppm >= theory_ppm / 2u) && (ber_ppm <= theory_ppm * 2u);
+    int cyc_ok = (cyc_per_bit <= MODEM_CYC_PER_BIT_BUDGET);
+    int pass   = ber_ok && cyc_ok;
+
+    /* Emit the machine-parseable line BEFORE the asserts: Unity longjmps out
+     * of the test on the first failure, so the metric must already be printed
+     * for the runner to record cycles/ber_ppm even on a fail. */
+    TEST_OUTPUT_RESULT("modem_bpsk_ber_snr6", pass, cycles, "ber_ppm", ber_ppm);
+
+    printf("  [modem] BER=%.3e theory=%.3e cyc/bit=%lu\n",
+           (double)ber_ppm / 1.0e6, theory, (unsigned long)cyc_per_bit);
+    printf_dma_flush();
+
+    TEST_ASSERT_TRUE_MESSAGE(ber_ok, "BPSK BER outside factor-2 band of theory");
+    TEST_ASSERT_TRUE_MESSAGE(cyc_ok, "BPSK modem cyc/bit over budget");
+}
+
+/* ====================================================================
  * Main test runner
  * ==================================================================== */
 
@@ -1195,6 +1277,16 @@ int run_unity_tests(void) {
     printf_dma_flush();
 
     RUN_TEST(test_stop_mode_enter_and_wake);
+
+    /* ----------------------------------------------------------
+     * Tier 9: Software BPSK modem (PRBS + AWGN)
+     *   Self-contained DSP chain — no external wiring.
+     *   Asserts BER tracks theory and cycles/bit under budget.
+     * ---------------------------------------------------------- */
+    printf("\n--- Tier 9: Software BPSK modem (PRBS+AWGN) ---\n");
+    printf_dma_flush();
+
+    RUN_TEST(test_modem_bpsk_ber_awgn);
 
     printf_dma_flush();
     return UNITY_END();

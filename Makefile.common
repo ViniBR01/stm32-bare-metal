@@ -174,6 +174,10 @@ CRYPTO_LIB := $(BUILD_DIR)/lib/crypto/libcrypto.a
 FLASH_LIB := $(BUILD_DIR)/lib/flash/libflash.a
 FRAMING_LIB := $(BUILD_DIR)/lib/framing/libframing.a
 BL_HANDSHAKE_LIB := $(BUILD_DIR)/lib/bl_handshake/libbl_handshake.a
+# Plan 002 sub-track B0 — software BPSK modem (q15)
+PRBS_LIB := $(BUILD_DIR)/lib/prbs/libprbs.a
+MODEM_LIB := $(BUILD_DIR)/lib/modem/libmodem.a
+CHANNEL_LIB := $(BUILD_DIR)/lib/channel/libchannel.a
 
 #==============================================================================
 # Plan 001 signing artifacts
@@ -239,7 +243,7 @@ clean-module:
 export CC CP OD SZ AR
 export MCU_FLAGS CFLAGS LDFLAGS LDSCRIPT
 export ROOT_DIR BUILD_DIR HIL_TEST LIB_DIR
-export DRIVERS_LIB STARTUP_OBJ PRINTF_LIB LOG_C_LIB UTILS_LIB UNITY_ARM_LIB IMG_LIB CRYPTO_LIB FLASH_LIB FRAMING_LIB BL_HANDSHAKE_LIB
+export DRIVERS_LIB STARTUP_OBJ PRINTF_LIB LOG_C_LIB UTILS_LIB UNITY_ARM_LIB IMG_LIB CRYPTO_LIB FLASH_LIB FRAMING_LIB BL_HANDSHAKE_LIB PRBS_LIB MODEM_LIB CHANNEL_LIB
 export KEYS_DIR KEY_SEED DEV_PRIV BL_PUBKEY_C
 export SLOT SLOT_BASE SLOT_SUFFIX
 export PROFILE PROFILE_SUFFIX SIGN_IMAGE
