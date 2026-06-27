@@ -52,7 +52,8 @@ ALL_APPS := \
 	crc_basic \
 	iwdg_basic \
 	serial_simple \
-	cli_simple
+	cli_simple \
+	modem_sim
 
 # Per-app build rule target list.  A single rule (below) covers every app in
 # $(ALL_APPS) plus the default goal $(EXAMPLE).  We deliberately do NOT add a

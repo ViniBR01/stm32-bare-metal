@@ -56,5 +56,8 @@
   "spi1_dma_psc2_1B":       { "throughput_kbps": 297,   "cycles": 336,     "tolerance_percent": 20, "last_updated": "2026-04-19", "notes": "SPI1 APB2, DMA, 1-byte (DMA setup overhead dominates)" },
   "spi1_dma_psc2_4B":       { "throughput_kbps": 1049,  "cycles": 381,     "tolerance_percent": 15, "last_updated": "2026-04-19", "notes": "SPI1 APB2, DMA, 4-byte" },
   "spi1_dma_psc2_16B":      { "throughput_kbps": 2792,  "cycles": 573,     "tolerance_percent": 10, "last_updated": "2026-04-19", "notes": "SPI1 APB2, DMA, 16-byte" },
-  "spi1_dma_psc2_64B":      { "throughput_kbps": 4772,  "cycles": 1341,    "tolerance_percent": 10, "last_updated": "2026-04-19", "notes": "SPI1 APB2, DMA, 64-byte" }
+  "spi1_dma_psc2_64B":      { "throughput_kbps": 4772,  "cycles": 1341,    "tolerance_percent": 10, "last_updated": "2026-04-19", "notes": "SPI1 APB2, DMA, 64-byte" },
+
+  "_comment_modem": "Plan 002 B0.3 software BPSK modem over software AWGN. Measured on the CI board (PR #201): ~1039 cyc/bit, BER 2360 ppm vs theory 2388. ber_ppm uses a wide 25% band (statistical + the factor-2 firmware gate is the real correctness check); cycles is the tight perf gate. Box-Muller (sqrtf/logf/sinf/cosf per noise sample) dominates the cycle cost.",
+  "modem_bpsk_ber_snr6": { "ber_ppm": 2360, "cycles": 103960745, "tolerance_percent": 15, "last_updated": "2026-06-27", "notes": "Software BPSK over AWGN, PRBS9 seed=1, snr=6dB, 100000 bits. cycles=total run (~1039 cyc/bit); 15% tolerance covers cycles; ber_ppm band [2006,2714] holds theory 2388." }
 }
