@@ -47,6 +47,7 @@ Multi-phase project plans. Each plan's phases are sized as individual GitHub iss
 | [plans/001-bootloader/threat-model.md](plans/001-bootloader/threat-model.md) | Plan 001 Phase 1.11 — threat model: attacker classes, defenses, explicit non-goals, trust assumptions |
 | [plans/001-bootloader/production-gap.md](plans/001-bootloader/production-gap.md) | Plan 001 Phase 1.11 — production gaps: 8 changes needed to ship (key custody, secure ROM, TrustZone, etc.) |
 | [plans/002-comms-and-dsp-baseband.md](plans/002-comms-and-dsp-baseband.md) | Two-board comms (UART/SPI/I²C) + software BPSK modem with FEC |
+| [plans/002-dsp-baseband/software-modem.md](plans/002-dsp-baseband/software-modem.md) | Plan 002 Sub-track B0 — self-contained software BPSK modem (q15), software-emulated AWGN channel, BER-vs-SNR vs theory |
 
 ## Decisions
 

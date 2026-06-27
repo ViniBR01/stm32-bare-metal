@@ -5,6 +5,13 @@
 **Depends on:** [Plan 000 — Repository Refactor](000-repo-refactor.md)
 **Optional dependency:** [Plan 001](001-bootloader-and-security.md) — `lib/framing/` is shared; whichever track lands first defines it.
 
+> **Sub-track B reordered (2026-06):** DSP baseband now starts with a **self-contained software
+> modem** — the channel is emulated in software so the full TX→channel→RX chain runs on a single
+> board with no analog fixture or second board. The physical analog-link (PWM-DAC→RC→ADC) and
+> two-board fixtures from Phases 2.1/2.8 become later optional channel backends behind the same
+> seam. See **[Self-Contained Software BPSK Modem (q15)](002-dsp-baseband/software-modem.md)**
+> (issues #193–#198), which supersedes the old Phase 2.7–2.14 ordering for getting started.
+
 ## Why
 
 This track turns the pair of NUCLEO-F411RE boards into a wired comms+DSP testbed. It exercises three competencies:
