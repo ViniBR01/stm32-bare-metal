@@ -996,7 +996,13 @@ void test_stop_mode_enter_and_wake(void)
  * sqrtf/logf/sinf/cosf), not the BPSK map/slice — hence the loose budget.
  */
 #define MODEM_BER_NBITS           100000u
-#define MODEM_CYC_PER_BIT_BUDGET  400u   /* generous firmware-side guard */
+/*
+ * Measured ~1039 cyc/bit on the F411 @ 100 MHz (Box-Muller sqrtf/logf/sinf/
+ * cosf per noise sample dominates).  1500 leaves ~45% headroom as a coarse
+ * "did something blow up" guard; the tight performance gate is the baseline
+ * JSON cycles +/- tolerance, not this number.
+ */
+#define MODEM_CYC_PER_BIT_BUDGET  1500u
 
 void test_modem_bpsk_ber_awgn(void)
 {
