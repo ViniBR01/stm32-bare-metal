@@ -168,23 +168,31 @@ typedef struct {
     uint64_t bits;
     uint64_t errors;
     double   theory;
+    uint32_t gen_cycles;      /* PRBS bit-stream generation               */
     uint32_t mod_cycles;      /* bit -> symbol (BPSK map)                 */
     uint32_t channel_cycles;  /* symbol -> noisy symbol (AWGN)            */
-    uint32_t demod_cycles;    /* noisy symbol -> bit + BER (slice+check)  */
+    uint32_t demod_cycles;    /* noisy symbol -> rx bit (slice)           */
+    uint32_t check_cycles;    /* rx bit vs tx bit -> error count          */
 } modem_result_t;
 
 /*
  * Storing every symbol for a 100k-bit run would need ~200 KB (> 128 KB SRAM),
- * so the chain runs block-by-block: each block fills a buffer (mod), adds noise
- * over the whole buffer (channel), then slices+checks it (demod).  The three
- * stages are timed separately and accumulated across blocks, so the reported
- * mod/channel/demod cycles isolate each component instead of one end-to-end
- * number.  Block processing also matches how channel_awgn_apply() is meant to
- * be used (one sigma/powf per block, not per bit).
+ * so the chain runs block-by-block.  Each block walks five separately-timed
+ * stages — gen (PRBS), mod (BPSK map), channel (AWGN), demod (slice), check
+ * (compare rx vs tx) — and the per-stage cycle deltas are accumulated across
+ * blocks, isolating each component instead of one end-to-end number.  Block
+ * processing also matches how channel_awgn_apply() is meant to be used (one
+ * sigma/powf per block, not per bit).
+ *
+ * Errors are counted by comparing the sliced rx bits against the generated tx
+ * bits directly (g_tx_block), so the check stage measures a true comparison
+ * cost rather than a hidden second PRBS regeneration.
  */
 #define MODEM_BLOCK 1024u
 
-static q15_t g_sym_block[MODEM_BLOCK];
+static uint8_t g_tx_block[MODEM_BLOCK];   /* generated tx bits (0/1)      */
+static q15_t   g_sym_block[MODEM_BLOCK];  /* BPSK symbols (then noisy)    */
+static uint8_t g_rx_block[MODEM_BLOCK];   /* sliced rx bits (0/1)         */
 
 /* Read the DWT cycle counter (enabled once in modem_run_chain). */
 static inline uint32_t dwt_now(void) {
@@ -192,19 +200,15 @@ static inline uint32_t dwt_now(void) {
 }
 
 /*
- * Run the PRBS -> BPSK -> AWGN -> slice -> BER chain for nbits, timing the
- * modulation, channel, and demodulation stages separately.  Transmitter and
- * checker share the same polynomial and seed, so they start aligned and every
- * mismatch is a true bit error.  No printing happens inside the timed regions.
+ * Run the PRBS -> BPSK -> AWGN -> slice -> compare chain for nbits, timing the
+ * five stages separately.  No printing happens inside the timed regions.
  */
 static modem_result_t modem_run_chain(prbs_poly_t poly, uint16_t seed,
                                       float snr_db, uint32_t nbits) {
-    prbs_t       tx;
-    prbs_check_t chk;
-    awgn_prng_t  rng;
+    prbs_t      tx;
+    awgn_prng_t rng;
 
     prbs_init(&tx, poly, seed);
-    prbs_check_init(&chk, poly, seed);
     awgn_prng_seed(&rng, seed);
 
     /* Enable and zero the DWT cycle counter (same pattern as spi_perf.c). */
@@ -212,42 +216,58 @@ static modem_result_t modem_run_chain(prbs_poly_t poly, uint16_t seed,
     DWT->CYCCNT = 0;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
-    uint32_t mod_cycles = 0, channel_cycles = 0, demod_cycles = 0;
+    uint32_t gen_cycles = 0, mod_cycles = 0, channel_cycles = 0,
+             demod_cycles = 0, check_cycles = 0;
+    uint64_t errors = 0;
 
     uint32_t remaining = nbits;
     while (remaining > 0u) {
         uint32_t n = (remaining < MODEM_BLOCK) ? remaining : MODEM_BLOCK;
 
-        /* Stage 1 — modulation: bits -> BPSK symbols. */
+        /* Stage 0 — gen: PRBS bit stream. */
         uint32_t t0 = dwt_now();
-        for (uint32_t i = 0; i < n; i++) {
-            g_sym_block[i] = bpsk_map(prbs_next_bit(&tx));
-        }
+        prbs_next_bits(&tx, g_tx_block, n);
+
+        /* Stage 1 — mod: bits -> BPSK symbols. */
         uint32_t t1 = dwt_now();
+        bpsk_map_block(g_tx_block, g_sym_block, n);
 
         /* Stage 2 — channel: add AWGN over the whole block. */
-        channel_awgn_apply(g_sym_block, n, snr_db, &rng);
         uint32_t t2 = dwt_now();
+        channel_awgn_apply(g_sym_block, n, snr_db, &rng);
 
-        /* Stage 3 — demodulation: slice + BER check. */
-        for (uint32_t i = 0; i < n; i++) {
-            prbs_check_bit(&chk, bpsk_slice(g_sym_block[i]));
-        }
+        /* Stage 3 — demod: slice noisy symbols -> rx bits. */
         uint32_t t3 = dwt_now();
+        bpsk_slice_block(g_sym_block, g_rx_block, n);
 
-        mod_cycles     += t1 - t0;
-        channel_cycles += t2 - t1;
-        demod_cycles   += t3 - t2;
+        /* Stage 4 — check: compare rx bits against the tx bits. */
+        uint32_t t4 = dwt_now();
+        uint32_t block_errors = 0;
+        for (uint32_t i = 0; i < n; i++) {
+            if (g_rx_block[i] != g_tx_block[i]) {
+                block_errors++;
+            }
+        }
+        uint32_t t5 = dwt_now();
+
+        gen_cycles     += t1 - t0;
+        mod_cycles     += t2 - t1;
+        channel_cycles += t3 - t2;
+        demod_cycles   += t4 - t3;
+        check_cycles   += t5 - t4;
+        errors         += block_errors;
         remaining      -= n;
     }
 
     modem_result_t r;
-    r.bits           = chk.total;
-    r.errors         = chk.errors;
+    r.bits           = nbits;
+    r.errors         = errors;
     r.theory         = channel_awgn_theory_ber(snr_db);
+    r.gen_cycles     = gen_cycles;
     r.mod_cycles     = mod_cycles;
     r.channel_cycles = channel_cycles;
     r.demod_cycles   = demod_cycles;
+    r.check_cycles   = check_cycles;
     return r;
 }
 
@@ -297,9 +317,10 @@ static int cmd_modem_run(const char* args) {
 
     modem_result_t r = modem_run_chain(MODEM_POLY, MODEM_SEED, snr_db, nbits);
 
-    uint32_t total_cycles = r.mod_cycles + r.channel_cycles + r.demod_cycles;
-    double   ber     = (r.bits > 0u) ? (double)r.errors / (double)r.bits : 0.0;
-    double   nbf     = (r.bits > 0u) ? (double)r.bits : 1.0;
+    uint32_t total_cycles = r.gen_cycles + r.mod_cycles + r.channel_cycles +
+                            r.demod_cycles + r.check_cycles;
+    double   ber = (r.bits > 0u) ? (double)r.errors / (double)r.bits : 0.0;
+    double   nbf = (r.bits > 0u) ? (double)r.bits : 1.0;
 
     printf("Eb/N0=%.2f dB  bits=%lu  errors=%lu\n",
            (double)snr_db, (unsigned long)r.bits, (unsigned long)r.errors);
@@ -307,12 +328,16 @@ static int cmd_modem_run(const char* args) {
     printf("  total : cycles=%lu  Mcycles=%.3f  cyc/bit=%.1f\n",
            (unsigned long)total_cycles, (double)total_cycles / 1.0e6,
            (double)total_cycles / nbf);
+    printf("  gen   : cycles=%lu  cyc/bit=%.1f\n",
+           (unsigned long)r.gen_cycles, (double)r.gen_cycles / nbf);
     printf("  mod   : cycles=%lu  cyc/bit=%.1f\n",
            (unsigned long)r.mod_cycles, (double)r.mod_cycles / nbf);
     printf("  chan  : cycles=%lu  cyc/bit=%.1f\n",
            (unsigned long)r.channel_cycles, (double)r.channel_cycles / nbf);
     printf("  demod : cycles=%lu  cyc/bit=%.1f\n",
            (unsigned long)r.demod_cycles, (double)r.demod_cycles / nbf);
+    printf("  check : cycles=%lu  cyc/bit=%.1f\n",
+           (unsigned long)r.check_cycles, (double)r.check_cycles / nbf);
     return 0;
 }
 
@@ -347,19 +372,20 @@ static int cmd_modem_sweep(const char* args) {
         return 1;
     }
 
-    printf("Eb/N0(dB) |  errors |       BER  |    theory  | cyc/bit: mod /chan /demod\n");
-    printf("----------+---------+------------+------------+--------------------------\n");
+    printf("Eb/N0(dB) |  errors |       BER  |    theory  | tot cyc/bit\n");
+    printf("----------+---------+------------+------------+------------\n");
     printf_dma_flush();
 
     /* Add a small epsilon so the inclusive endpoint isn't lost to rounding. */
     for (float snr = lo; snr <= hi + step * 0.001f; snr += step) {
         modem_result_t r = modem_run_chain(MODEM_POLY, MODEM_SEED, snr, nbits);
-        double nbf     = (r.bits > 0u) ? (double)r.bits : 1.0;
-        double ber     = (r.bits > 0u) ? (double)r.errors / (double)r.bits : 0.0;
-        printf("  %6.2f  | %7lu | %.3e | %.3e | %6.1f /%6.1f /%6.1f\n",
+        double nbf = (r.bits > 0u) ? (double)r.bits : 1.0;
+        double ber = (r.bits > 0u) ? (double)r.errors / (double)r.bits : 0.0;
+        uint32_t total = r.gen_cycles + r.mod_cycles + r.channel_cycles +
+                         r.demod_cycles + r.check_cycles;
+        printf("  %6.2f  | %7lu | %.3e | %.3e | %10.1f\n",
                (double)snr, (unsigned long)r.errors, ber, r.theory,
-               (double)r.mod_cycles / nbf, (double)r.channel_cycles / nbf,
-               (double)r.demod_cycles / nbf);
+               (double)total / nbf);
         printf_dma_flush();
     }
     return 0;
