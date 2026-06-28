@@ -1142,11 +1142,12 @@ void test_modem_bpsk_ber_awgn(void)
 #define MODEM_SHAPE_SPAN          8u
 /*
  * Shaped cyc/bit is dominated by the two RRC FIR passes (33 taps over SPS x the
- * samples) plus the AWGN at sample rate.  Measured headroom is set generously;
- * the tight gate is the baseline JSON cycles +/- tolerance, like the unshaped
- * test.  Sized after a first CI capture confirms the real number.
+ * samples) plus the AWGN at sample rate.  CI measured ~5483 cyc/bit; 8000 keeps
+ * a coarse "did something blow up" guard with clear headroom above the baseline
+ * JSON's +15% upper band (~6300).  The tight gate is the baseline cycles +/-
+ * tolerance, not this number — same split as the unshaped budget.
  */
-#define MODEM_SHAPE_CYC_PER_BIT_BUDGET 6000u
+#define MODEM_SHAPE_CYC_PER_BIT_BUDGET 8000u
 
 static q15_t modem_shape_samp[MODEM_BER_BLOCK * MODEM_SHAPE_SPS];
 static rrc_t modem_shape_tx;

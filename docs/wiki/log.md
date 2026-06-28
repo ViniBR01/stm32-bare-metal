@@ -23,13 +23,15 @@ oversampled waveforms end to end.
   shaped. On-device gate = factor-2 BER band around theory AND cyc/bit under a
   (generous) shaped budget. Emits `modem_shaped_ber_snr6` (gated) plus seven
   report-only `modem_shaped_cyc_*` per-stage lines.
-- `tests/baselines/performance.json`: added the `modem_shaped_*` keys with
-  `null` cycles/ber_ppm — the runner reports them without gating until the first
-  CI HIL capture populates them (same bootstrap as `modem_bpsk_ber_snr6`). The
-  existing unshaped entries are untouched.
+- `tests/baselines/performance.json`: added the `modem_shaped_*` keys, seeded
+  from the PR #208 CI HIL run — measured BER 2610 ppm (vs theory 2388, identical
+  to the host model), total 548.3M cycles (~5483 cyc/bit, ~12x the unshaped 441),
+  dominated by the two FIR passes (shape 1940 + match 1930 cyc/kbit) and AWGN at
+  4x sample rate (1535). `modem_shaped_ber_snr6` is runner-gated; the per-stage
+  `modem_shaped_cyc_*` lines are report-only. The unshaped entries are untouched.
 - Build: `modem_sim` links `$(DSP_LIB)`; `cli_simple` under `HIL_TEST=1` links
-  it too. Host model (exact app algorithm) confirms noiseless BER=0 and
-  theory-tracking BER (6 dB → ~2610 ppm vs 2388 theory).
+  it too. On-device BER matches the host model bit-for-bit, confirming the
+  fixed-point chain is identical on host and target.
 
 ## [2026-06-28] milestone | RRC pulse shaping + matched filter (q15 waveforms) (#196)
 
