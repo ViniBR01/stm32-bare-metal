@@ -1083,18 +1083,28 @@ void test_modem_bpsk_ber_awgn(void)
      * (ber_ppm + total cycles); the five per-stage lines are report-only
      * (null baselines) so the breakdown shows up in CI / JUnit without gating.
      * Per-stage value is cyc/1000-bits for sub-cyc/bit resolution.
+     *
+     * Flush after every line: six TEST: lines back-to-back overrun the
+     * printf_dma buffer, which truncated/merged the demod+check lines in the
+     * serial capture otherwise.
      */
     TEST_OUTPUT_RESULT("modem_bpsk_ber_snr6", pass, cycles, "ber_ppm", ber_ppm);
+    printf_dma_flush();
     TEST_OUTPUT_RESULT("modem_cyc_gen",   1, gen_cyc,   "cyc_per_kbit",
                        (uint32_t)((uint64_t)gen_cyc   * 1000u / total));
+    printf_dma_flush();
     TEST_OUTPUT_RESULT("modem_cyc_mod",   1, mod_cyc,   "cyc_per_kbit",
                        (uint32_t)((uint64_t)mod_cyc   * 1000u / total));
+    printf_dma_flush();
     TEST_OUTPUT_RESULT("modem_cyc_chan",  1, chan_cyc,  "cyc_per_kbit",
                        (uint32_t)((uint64_t)chan_cyc  * 1000u / total));
+    printf_dma_flush();
     TEST_OUTPUT_RESULT("modem_cyc_demod", 1, demod_cyc, "cyc_per_kbit",
                        (uint32_t)((uint64_t)demod_cyc * 1000u / total));
+    printf_dma_flush();
     TEST_OUTPUT_RESULT("modem_cyc_check", 1, check_cyc, "cyc_per_kbit",
                        (uint32_t)((uint64_t)check_cyc * 1000u / total));
+    printf_dma_flush();
 
     printf("  [modem] BER=%.3e theory=%.3e cyc/bit=%lu\n",
            (double)ber_ppm / 1.0e6, theory, (unsigned long)cyc_per_bit);
