@@ -64,5 +64,15 @@
   "modem_cyc_mod":   { "cyc_per_kbit": 8009,   "cycles": 800978,   "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: BPSK map." },
   "modem_cyc_chan":  { "cyc_per_kbit": 407181, "cycles": 40718116, "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: AWGN channel (Box-Muller dominates)." },
   "modem_cyc_demod": { "cyc_per_kbit": 8013,  "cycles": 801398,  "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: BPSK slice." },
-  "modem_cyc_check": { "cyc_per_kbit": 10033, "cycles": 1003342, "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: rx-vs-tx compare." }
+  "modem_cyc_check": { "cyc_per_kbit": 10033, "cycles": 1003342, "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: rx-vs-tx compare." },
+
+  "_comment_modem_shaped": "Plan 002 B0.4b/#207 software BPSK modem with RRC pulse shaping (b=0.35, sps=4, span=8) over software AWGN at sample rate, PRBS9 seed=1 snr=6dB 100000 bits, staged (gen/mod/shape/channel/match/demod/check). The matched filter is information-lossless, so BER still tracks the unshaped theory (~2388 ppm); the host model gives ~2610 ppm, well inside the firmware factor-2 self-gate. cyc/bit is higher than the unshaped path (two 33-tap FIR passes over sps x the samples + AWGN at sample rate). cycles/ber_ppm are null until the first CI HIL run on the ci board populates them, exactly like modem_bpsk_ber_snr6 was seeded; until then the runner reports them without gating (the firmware still asserts the factor-2 BER band and the cyc/bit budget every run).",
+  "modem_shaped_ber_snr6":  { "ber_ppm": null, "cycles": null, "tolerance_percent": 15, "last_updated": "2026-06-28", "notes": "Gated once populated from CI; firmware asserts factor-2 BER band + cyc/bit budget every run." },
+  "modem_shaped_cyc_gen":   { "cyc_per_kbit": null, "cycles": null, "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: PRBS gen (shaped chain)." },
+  "modem_shaped_cyc_mod":   { "cyc_per_kbit": null, "cycles": null, "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: BPSK map (shaped chain)." },
+  "modem_shaped_cyc_shape": { "cyc_per_kbit": null, "cycles": null, "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: RRC TX pulse-shaping FIR (upsample + filter)." },
+  "modem_shaped_cyc_chan":  { "cyc_per_kbit": null, "cycles": null, "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: AWGN channel at sample rate (sps x samples)." },
+  "modem_shaped_cyc_match": { "cyc_per_kbit": null, "cycles": null, "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: RRC RX matched filter." },
+  "modem_shaped_cyc_demod": { "cyc_per_kbit": null, "cycles": null, "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: decimate at symbol instants + slice." },
+  "modem_shaped_cyc_check": { "cyc_per_kbit": null, "cycles": null, "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: rx-vs-reference-PRBS compare (shaped chain)." }
 }
