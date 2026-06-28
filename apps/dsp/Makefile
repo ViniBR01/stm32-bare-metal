@@ -57,7 +57,7 @@ endif
 #==============================================================================
 modem_sim_DEPS := $(STARTUP_OBJ) $(DRIVERS_LIB) $(LOG_C_LIB) $(PRINTF_LIB) \
                   $(UTILS_LIB) $(BL_HANDSHAKE_LIB) $(IMG_LIB) $(FLASH_LIB) \
-                  $(PRBS_LIB) $(MODEM_LIB) $(CHANNEL_LIB)
+                  $(PRBS_LIB) $(MODEM_LIB) $(CHANNEL_LIB) $(DSP_LIB)
 
 # Header lookup for the middleware libs (and bl_handshake/img/flash used by
 # the bootloader handshake in main()).

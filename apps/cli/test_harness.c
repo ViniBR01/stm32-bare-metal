@@ -51,6 +51,7 @@
 #include "bpsk.h"
 #include "awgn.h"
 #include "fixed.h"
+#include "rrc.h"
 
 /* ====================================================================
  * UART loopback test helpers
@@ -1123,6 +1124,174 @@ void test_modem_bpsk_ber_awgn(void)
 }
 
 /* ====================================================================
+ * Software BPSK modem with RRC pulse shaping — Tier 9b (Plan 002 B0.4b, #207)
+ *
+ * Same self-contained chain as test_modem_bpsk_ber_awgn, but the symbols are
+ * RRC-pulse-shaped to oversampled waveforms, run through AWGN at the sample
+ * rate, matched-filtered, and decimated at the symbol instants before slicing.
+ * The matched filter is information-lossless, so with unit-energy taps the BER
+ * still tracks the unshaped BPSK theory curve — that equivalence is the point
+ * of the test.  cyc/bit is much higher than the unshaped path (two FIR passes
+ * over SPS x the samples), so it carries its own budget.
+ *
+ * Mirrors apps/dsp/modem_sim.c modem_run_chain_shaped() (PRBS9, seed 1, 6 dB).
+ * ==================================================================== */
+
+#define MODEM_SHAPE_SPS           4u
+#define MODEM_SHAPE_BETA          0.35f
+#define MODEM_SHAPE_SPAN          8u
+/*
+ * Shaped cyc/bit is dominated by the two RRC FIR passes (33 taps over SPS x the
+ * samples) plus the AWGN at sample rate.  CI measured ~5483 cyc/bit; 8000 keeps
+ * a coarse "did something blow up" guard with clear headroom above the baseline
+ * JSON's +15% upper band (~6300).  The tight gate is the baseline cycles +/-
+ * tolerance, not this number — same split as the unshaped budget.
+ */
+#define MODEM_SHAPE_CYC_PER_BIT_BUDGET 8000u
+
+static q15_t modem_shape_samp[MODEM_BER_BLOCK * MODEM_SHAPE_SPS];
+static rrc_t modem_shape_tx;
+static rrc_t modem_shape_rx;
+
+void test_modem_bpsk_ber_awgn_shaped(void)
+{
+    prbs_t       tx;
+    prbs_check_t chk;
+    awgn_prng_t  rng;
+
+    prbs_init(&tx, PRBS9, MODEM_BER_SEED);
+    prbs_check_init(&chk, PRBS9, MODEM_BER_SEED);
+    awgn_prng_seed(&rng, MODEM_BER_SEED);
+
+    rrc_design(&modem_shape_tx, MODEM_SHAPE_BETA, MODEM_SHAPE_SPS, MODEM_SHAPE_SPAN);
+    rrc_design(&modem_shape_rx, MODEM_SHAPE_BETA, MODEM_SHAPE_SPS, MODEM_SHAPE_SPAN);
+
+    const uint32_t sps = MODEM_SHAPE_SPS;
+    const size_t   delay_samples = rrc_chain_delay(&modem_shape_tx);
+    const size_t   tail_syms = delay_samples / sps + 1u;
+    const uint32_t total_syms = MODEM_BER_NBITS + (uint32_t)tail_syms;
+
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+    uint32_t gen_cyc = 0, mod_cyc = 0, shape_cyc = 0, chan_cyc = 0,
+             match_cyc = 0, demod_cyc = 0, check_cyc = 0;
+    uint64_t errors = 0;
+
+    size_t   sample_base = 0;
+    size_t   next_peak   = delay_samples;
+    uint32_t produced    = 0;
+    uint32_t sym_done    = 0;
+
+    while (sym_done < total_syms) {
+        uint32_t n = total_syms - sym_done;
+        if (n > MODEM_BER_BLOCK) {
+            n = MODEM_BER_BLOCK;
+        }
+        uint32_t payload_n = 0;
+        if (sym_done < MODEM_BER_NBITS) {
+            payload_n = MODEM_BER_NBITS - sym_done;
+            if (payload_n > n) {
+                payload_n = n;
+            }
+        }
+
+        uint32_t t0 = DWT->CYCCNT;
+        if (payload_n > 0u) {
+            prbs_next_bits(&tx, modem_tx_block, payload_n);
+        }
+        uint32_t t1 = DWT->CYCCNT;
+        for (uint32_t i = 0; i < payload_n; i++) {
+            modem_sym_block[i] = bpsk_map(modem_tx_block[i]);
+        }
+        for (uint32_t i = payload_n; i < n; i++) {
+            modem_sym_block[i] = 0;
+        }
+        uint32_t t2 = DWT->CYCCNT;
+        rrc_tx_shape(&modem_shape_tx, modem_sym_block, n, modem_shape_samp);
+        uint32_t t3 = DWT->CYCCNT;
+        channel_awgn_apply(modem_shape_samp, (size_t)n * sps, MODEM_BER_SNR_DB, &rng);
+        uint32_t t4 = DWT->CYCCNT;
+        rrc_rx_match(&modem_shape_rx, modem_shape_samp, (size_t)n * sps, modem_shape_samp);
+        uint32_t t5 = DWT->CYCCNT;
+        uint32_t dec_n = 0;
+        for (uint32_t p = 0; p < n * sps; p++) {
+            if (sample_base + p == next_peak && (produced + dec_n) < MODEM_BER_NBITS) {
+                modem_rx_block[dec_n++] = bpsk_slice(modem_shape_samp[p]);
+                next_peak += sps;
+            }
+        }
+        uint32_t t6 = DWT->CYCCNT;
+        for (uint32_t i = 0; i < dec_n; i++) {
+            if (!prbs_check_bit(&chk, modem_rx_block[i])) {
+                errors++;
+            }
+        }
+        uint32_t t7 = DWT->CYCCNT;
+
+        gen_cyc   += t1 - t0;
+        mod_cyc   += t2 - t1;
+        shape_cyc += t3 - t2;
+        chan_cyc  += t4 - t3;
+        match_cyc += t5 - t4;
+        demod_cyc += t6 - t5;
+        check_cyc += t7 - t6;
+
+        produced    += dec_n;
+        sample_base += (size_t)n * sps;
+        sym_done    += n;
+    }
+
+    uint32_t cycles      = gen_cyc + mod_cyc + shape_cyc + chan_cyc +
+                           match_cyc + demod_cyc + check_cyc;
+    uint64_t total       = produced;   /* compared symbols (== NBITS once flushed) */
+    uint32_t ber_ppm     = (total > 0u) ? (uint32_t)((errors * 1000000ull) / total) : 0u;
+    double   theory      = channel_awgn_theory_ber(MODEM_BER_SNR_DB);
+    uint32_t theory_ppm  = (uint32_t)(theory * 1.0e6 + 0.5);
+    uint32_t cyc_per_bit = (total > 0u) ? (uint32_t)(cycles / total) : 0u;
+
+    int ber_ok = (theory_ppm > 0u) &&
+                 (ber_ppm >= theory_ppm / 2u) && (ber_ppm <= theory_ppm * 2u);
+    int cyc_ok = (cyc_per_bit <= MODEM_SHAPE_CYC_PER_BIT_BUDGET);
+    int pass   = ber_ok && cyc_ok;
+
+    /* Gated main line + report-only per-stage breakdown, flushed individually
+     * (see the unshaped test for why).  Per-stage value is cyc/1000-bits. */
+    TEST_OUTPUT_RESULT("modem_shaped_ber_snr6", pass, cycles, "ber_ppm", ber_ppm);
+    printf_dma_flush();
+    TEST_OUTPUT_RESULT("modem_shaped_cyc_gen",   1, gen_cyc,   "cyc_per_kbit",
+                       (uint32_t)((uint64_t)gen_cyc   * 1000u / total));
+    printf_dma_flush();
+    TEST_OUTPUT_RESULT("modem_shaped_cyc_mod",   1, mod_cyc,   "cyc_per_kbit",
+                       (uint32_t)((uint64_t)mod_cyc   * 1000u / total));
+    printf_dma_flush();
+    TEST_OUTPUT_RESULT("modem_shaped_cyc_shape", 1, shape_cyc, "cyc_per_kbit",
+                       (uint32_t)((uint64_t)shape_cyc * 1000u / total));
+    printf_dma_flush();
+    TEST_OUTPUT_RESULT("modem_shaped_cyc_chan",  1, chan_cyc,  "cyc_per_kbit",
+                       (uint32_t)((uint64_t)chan_cyc  * 1000u / total));
+    printf_dma_flush();
+    TEST_OUTPUT_RESULT("modem_shaped_cyc_match", 1, match_cyc, "cyc_per_kbit",
+                       (uint32_t)((uint64_t)match_cyc * 1000u / total));
+    printf_dma_flush();
+    TEST_OUTPUT_RESULT("modem_shaped_cyc_demod", 1, demod_cyc, "cyc_per_kbit",
+                       (uint32_t)((uint64_t)demod_cyc * 1000u / total));
+    printf_dma_flush();
+    TEST_OUTPUT_RESULT("modem_shaped_cyc_check", 1, check_cyc, "cyc_per_kbit",
+                       (uint32_t)((uint64_t)check_cyc * 1000u / total));
+    printf_dma_flush();
+
+    printf("  [modem/rrc] BER=%.3e theory=%.3e cyc/bit=%lu bits=%lu\n",
+           (double)ber_ppm / 1.0e6, theory, (unsigned long)cyc_per_bit,
+           (unsigned long)total);
+    printf_dma_flush();
+
+    TEST_ASSERT_TRUE_MESSAGE(ber_ok, "Shaped BPSK BER outside factor-2 band of theory");
+    TEST_ASSERT_TRUE_MESSAGE(cyc_ok, "Shaped BPSK modem cyc/bit over budget");
+}
+
+/* ====================================================================
  * Main test runner
  * ==================================================================== */
 
@@ -1362,6 +1531,13 @@ int run_unity_tests(void) {
     printf_dma_flush();
 
     RUN_TEST(test_modem_bpsk_ber_awgn);
+    printf_dma_flush();
+
+    /* Tier 9b: same chain with RRC pulse shaping + matched filter (#207). */
+    printf("\n--- Tier 9b: Software BPSK modem + RRC shaping ---\n");
+    printf_dma_flush();
+
+    RUN_TEST(test_modem_bpsk_ber_awgn_shaped);
 
     printf_dma_flush();
     return UNITY_END();

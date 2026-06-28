@@ -36,13 +36,14 @@
 #include "systick.h"
 #include "uart.h"
 
-/* Software modem core (Plan 002 B0.1/B0.2). */
+/* Software modem core (Plan 002 B0.1/B0.2; RRC pulse shaping B0.4). */
 #include "awgn.h"
 #include "bpsk.h"
 #include "fixed.h"
 #include "prbs.h"
+#include "rrc.h"
 
-/* "modem run --snr 5.5 --bits 1000000" is ~34 chars; 64 leaves headroom. */
+/* "modem run --snr 5.5 --bits 1000000 --shape" is ~42 chars; 64 leaves headroom. */
 #define MODEM_CMD_SIZE 64
 
 /* Defaults chosen so a bare `modem run` reproduces the issue's example. */
@@ -51,6 +52,16 @@
 #define MODEM_DEFAULT_SWEEP_BITS 50000u
 #define MODEM_SEED             1u
 #define MODEM_POLY             PRBS9
+
+/*
+ * RRC pulse-shaping config (Plan 002 B0.4b, issue #207), matching the lib/dsp
+ * defaults. The shaped chain is opt-in via the `--shape` flag so the default
+ * one-sample-per-symbol path — and its calibrated HIL baselines — stay
+ * unchanged.
+ */
+#define MODEM_SHAPE_BETA  0.35f
+#define MODEM_SHAPE_SPS   4u
+#define MODEM_SHAPE_SPAN  8u
 
 static cli_context_t g_cli;
 static char g_cmd_buffer[MODEM_CMD_SIZE];
@@ -168,10 +179,13 @@ typedef struct {
     uint64_t bits;
     uint64_t errors;
     double   theory;
+    uint8_t  shaped;          /* 1 if RRC pulse shaping was applied       */
     uint32_t gen_cycles;      /* PRBS bit-stream generation               */
     uint32_t mod_cycles;      /* bit -> symbol (BPSK map)                 */
-    uint32_t channel_cycles;  /* symbol -> noisy symbol (AWGN)            */
-    uint32_t demod_cycles;    /* noisy symbol -> rx bit (slice)           */
+    uint32_t shape_cycles;    /* symbols -> oversampled waveform (TX RRC) */
+    uint32_t channel_cycles;  /* samples -> noisy samples (AWGN)          */
+    uint32_t match_cycles;    /* matched filter (RX RRC)                  */
+    uint32_t demod_cycles;    /* sample at symbol instant -> rx bit       */
     uint32_t check_cycles;    /* rx bit vs tx bit -> error count          */
 } modem_result_t;
 
@@ -194,14 +208,27 @@ static uint8_t g_tx_block[MODEM_BLOCK];   /* generated tx bits (0/1)      */
 static q15_t   g_sym_block[MODEM_BLOCK];  /* BPSK symbols (then noisy)    */
 static uint8_t g_rx_block[MODEM_BLOCK];   /* sliced rx bits (0/1)         */
 
+/*
+ * Shaped-path scratch (only touched when --shape is given). The TX shaper turns
+ * each block of up to MODEM_BLOCK symbols into MODEM_BLOCK*SPS oversampled
+ * samples; the matched filter runs in place on that buffer. At SPS=4 this is
+ * 8 KB of .bss — acceptable on the 128 KB part and shared across all runs.
+ */
+static q15_t g_samp_block[MODEM_BLOCK * MODEM_SHAPE_SPS];
+static rrc_t g_tx_rrc;   /* TX pulse-shaping filter   */
+static rrc_t g_rx_rrc;   /* RX matched filter         */
+
 /* Read the DWT cycle counter (enabled once in modem_run_chain). */
 static inline uint32_t dwt_now(void) {
     return DWT->CYCCNT;
 }
 
 /*
- * Run the PRBS -> BPSK -> AWGN -> slice -> compare chain for nbits, timing the
- * five stages separately.  No printing happens inside the timed regions.
+ * Run the unshaped PRBS -> BPSK -> AWGN -> slice -> compare chain for nbits,
+ * timing the five stages separately.  One symbol is one sample (no pulse
+ * shaping).  No printing happens inside the timed regions.  This is the default
+ * path; its cycle/BER numbers feed the calibrated B0.3 HIL baselines, so it is
+ * left byte-for-byte as it was.
  */
 static modem_result_t modem_run_chain(prbs_poly_t poly, uint16_t seed,
                                       float snr_db, uint32_t nbits) {
@@ -263,9 +290,148 @@ static modem_result_t modem_run_chain(prbs_poly_t poly, uint16_t seed,
     r.bits           = nbits;
     r.errors         = errors;
     r.theory         = channel_awgn_theory_ber(snr_db);
+    r.shaped         = 0u;
     r.gen_cycles     = gen_cycles;
     r.mod_cycles     = mod_cycles;
+    r.shape_cycles   = 0u;
     r.channel_cycles = channel_cycles;
+    r.match_cycles   = 0u;
+    r.demod_cycles   = demod_cycles;
+    r.check_cycles   = check_cycles;
+    return r;
+}
+
+/*
+ * Run the shaped chain for nbits: PRBS -> BPSK -> RRC TX shape -> AWGN (at
+ * sample rate) -> RRC matched filter -> decimate at symbol instants -> slice ->
+ * compare.  Seven stages are timed separately (gen/mod/shape/channel/match/
+ * demod/check).  The AWGN seam is unchanged — it just sees SPS x more samples.
+ *
+ * Symbol k peaks in the matched-filter output at absolute sample index
+ * k*SPS + chain_delay, so we sample there.  A reference PRBS (seeded identically
+ * to the transmitter) is advanced once per decimated symbol to count errors,
+ * which keeps transmitter and checker aligned across the filter delay without a
+ * symbol FIFO (the same technique tests/lib/dsp/test_rrc.c uses).  Each payload
+ * symbol is followed through the filters by trailing zero symbols so the last
+ * one flushes out and is decided.  No printing inside the timed regions.
+ */
+static modem_result_t modem_run_chain_shaped(prbs_poly_t poly, uint16_t seed,
+                                             float snr_db, uint32_t nbits) {
+    prbs_t       tx;
+    prbs_check_t chk;
+    awgn_prng_t  rng;
+
+    prbs_init(&tx, poly, seed);
+    prbs_check_init(&chk, poly, seed);
+    awgn_prng_seed(&rng, seed);
+
+    rrc_design(&g_tx_rrc, MODEM_SHAPE_BETA, MODEM_SHAPE_SPS, MODEM_SHAPE_SPAN);
+    rrc_design(&g_rx_rrc, MODEM_SHAPE_BETA, MODEM_SHAPE_SPS, MODEM_SHAPE_SPAN);
+
+    const uint32_t sps = MODEM_SHAPE_SPS;
+    const size_t   delay_samples = rrc_chain_delay(&g_tx_rrc);
+
+    /* Pad with one chain delay (rounded up to whole symbols) plus one symbol so
+     * the final payload symbol flushes through both filters to the decimator. */
+    size_t tail_syms   = delay_samples / sps + 1u;
+    uint32_t total_syms = nbits + (uint32_t)tail_syms;
+
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+    uint32_t gen_cycles = 0, mod_cycles = 0, shape_cycles = 0, channel_cycles = 0,
+             match_cycles = 0, demod_cycles = 0, check_cycles = 0;
+    uint64_t errors = 0;
+
+    size_t sample_base = 0;                 /* abs index of g_samp_block[0]      */
+    size_t next_peak   = delay_samples;     /* abs sample index of next symbol   */
+    uint32_t produced  = 0;                 /* decimated payload symbols so far  */
+
+    uint32_t sym_done = 0;
+    while (sym_done < total_syms) {
+        uint32_t n = total_syms - sym_done;
+        if (n > MODEM_BLOCK) {
+            n = MODEM_BLOCK;
+        }
+        uint32_t payload_n = 0;
+        if (sym_done < nbits) {
+            payload_n = nbits - sym_done;
+            if (payload_n > n) {
+                payload_n = n;
+            }
+        }
+
+        /* Stage 0 — gen: PRBS bits for the payload symbols in this block. */
+        uint32_t t0 = dwt_now();
+        if (payload_n > 0u) {
+            prbs_next_bits(&tx, g_tx_block, payload_n);
+        }
+
+        /* Stage 1 — mod: payload bits -> symbols; tail symbols are zero. */
+        uint32_t t1 = dwt_now();
+        for (uint32_t i = 0; i < payload_n; i++) {
+            g_sym_block[i] = bpsk_map(g_tx_block[i]);
+        }
+        for (uint32_t i = payload_n; i < n; i++) {
+            g_sym_block[i] = 0;
+        }
+
+        /* Stage 2 — shape: n symbols -> n*SPS oversampled samples (TX RRC). */
+        uint32_t t2 = dwt_now();
+        rrc_tx_shape(&g_tx_rrc, g_sym_block, n, g_samp_block);
+
+        /* Stage 3 — channel: AWGN over the whole oversampled block. */
+        uint32_t t3 = dwt_now();
+        channel_awgn_apply(g_samp_block, (size_t)n * sps, snr_db, &rng);
+
+        /* Stage 4 — match: RX matched filter, in place. */
+        uint32_t t4 = dwt_now();
+        rrc_rx_match(&g_rx_rrc, g_samp_block, (size_t)n * sps, g_samp_block);
+
+        /* Stage 5 — demod: slice the matched-filter output at symbol instants. */
+        uint32_t t5 = dwt_now();
+        uint32_t dec_n = 0;
+        for (uint32_t p = 0; p < n * sps; p++) {
+            size_t abs = sample_base + p;
+            if (abs == next_peak && (produced + dec_n) < nbits) {
+                g_rx_block[dec_n++] = bpsk_slice(g_samp_block[p]);
+                next_peak += sps;
+            }
+        }
+
+        /* Stage 6 — check: compare decimated rx bits against the reference. */
+        uint32_t t6 = dwt_now();
+        for (uint32_t i = 0; i < dec_n; i++) {
+            if (!prbs_check_bit(&chk, g_rx_block[i])) {
+                errors++;
+            }
+        }
+        uint32_t t7 = dwt_now();
+
+        gen_cycles     += t1 - t0;
+        mod_cycles     += t2 - t1;
+        shape_cycles   += t3 - t2;
+        channel_cycles += t4 - t3;
+        match_cycles   += t5 - t4;
+        demod_cycles   += t6 - t5;
+        check_cycles   += t7 - t6;
+
+        produced    += dec_n;
+        sample_base += (size_t)n * sps;
+        sym_done    += n;
+    }
+
+    modem_result_t r;
+    r.bits           = produced;   /* compared symbols (== nbits once flushed)  */
+    r.errors         = errors;
+    r.theory         = channel_awgn_theory_ber(snr_db);
+    r.shaped         = 1u;
+    r.gen_cycles     = gen_cycles;
+    r.mod_cycles     = mod_cycles;
+    r.shape_cycles   = shape_cycles;
+    r.channel_cycles = channel_cycles;
+    r.match_cycles   = match_cycles;
     r.demod_cycles   = demod_cycles;
     r.check_cycles   = check_cycles;
     return r;
@@ -277,8 +443,9 @@ static modem_result_t modem_run_chain(prbs_poly_t poly, uint16_t seed,
 
 static void print_run_usage(void) {
     printf("Usage:\n");
-    printf("  modem run [--mod bpsk] [--snr <dB>] [--bits <N>]\n");
-    printf("  modem sweep --snr <lo>:<hi>:<step> [--bits <N>]\n");
+    printf("  modem run [--mod bpsk] [--snr <dB>] [--bits <N>] [--shape]\n");
+    printf("  modem sweep --snr <lo>:<hi>:<step> [--bits <N>] [--shape]\n");
+    printf("  --shape: RRC pulse shaping (b=0.35, sps=4, span=8) at sample rate\n");
 }
 
 /* Confirm an optional "--mod" value is bpsk (the only modulation in B0). */
@@ -289,6 +456,25 @@ static int mod_is_ok(const char* args) {
     }
     return (m[0] == 'b' && m[1] == 'p' && m[2] == 's' && m[3] == 'k' &&
             (m[4] == '\0' || m[4] == ' '));
+}
+
+/* "--shape" is a valueless toggle: present -> shaped chain, absent -> default. */
+static int shape_requested(const char* args) {
+    return find_flag(args, "--shape") != NULL;
+}
+
+/* Dispatch to the shaped or unshaped chain based on the --shape toggle. */
+static modem_result_t modem_run_dispatch(float snr_db, uint32_t nbits, int shaped) {
+    if (shaped) {
+        return modem_run_chain_shaped(MODEM_POLY, MODEM_SEED, snr_db, nbits);
+    }
+    return modem_run_chain(MODEM_POLY, MODEM_SEED, snr_db, nbits);
+}
+
+/* Sum of all timed stages (shaped stages are zero on the unshaped path). */
+static uint32_t modem_total_cycles(const modem_result_t* r) {
+    return r->gen_cycles + r->mod_cycles + r->shape_cycles + r->channel_cycles +
+           r->match_cycles + r->demod_cycles + r->check_cycles;
 }
 
 static int cmd_modem_run(const char* args) {
@@ -315,15 +501,16 @@ static int cmd_modem_run(const char* args) {
         return 1;
     }
 
-    modem_result_t r = modem_run_chain(MODEM_POLY, MODEM_SEED, snr_db, nbits);
+    int shaped = shape_requested(args);
+    modem_result_t r = modem_run_dispatch(snr_db, nbits, shaped);
 
-    uint32_t total_cycles = r.gen_cycles + r.mod_cycles + r.channel_cycles +
-                            r.demod_cycles + r.check_cycles;
+    uint32_t total_cycles = modem_total_cycles(&r);
     double   ber = (r.bits > 0u) ? (double)r.errors / (double)r.bits : 0.0;
     double   nbf = (r.bits > 0u) ? (double)r.bits : 1.0;
 
-    printf("Eb/N0=%.2f dB  bits=%lu  errors=%lu\n",
-           (double)snr_db, (unsigned long)r.bits, (unsigned long)r.errors);
+    printf("Eb/N0=%.2f dB  bits=%lu  errors=%lu  shaping=%s\n",
+           (double)snr_db, (unsigned long)r.bits, (unsigned long)r.errors,
+           shaped ? "rrc" : "off");
     printf("  BER=%.3e  theory=%.3e\n", ber, r.theory);
     printf("  total : cycles=%lu  Mcycles=%.3f  cyc/bit=%.1f\n",
            (unsigned long)total_cycles, (double)total_cycles / 1.0e6,
@@ -332,8 +519,16 @@ static int cmd_modem_run(const char* args) {
            (unsigned long)r.gen_cycles, (double)r.gen_cycles / nbf);
     printf("  mod   : cycles=%lu  cyc/bit=%.1f\n",
            (unsigned long)r.mod_cycles, (double)r.mod_cycles / nbf);
+    if (shaped) {
+        printf("  shape : cycles=%lu  cyc/bit=%.1f\n",
+               (unsigned long)r.shape_cycles, (double)r.shape_cycles / nbf);
+    }
     printf("  chan  : cycles=%lu  cyc/bit=%.1f\n",
            (unsigned long)r.channel_cycles, (double)r.channel_cycles / nbf);
+    if (shaped) {
+        printf("  match : cycles=%lu  cyc/bit=%.1f\n",
+               (unsigned long)r.match_cycles, (double)r.match_cycles / nbf);
+    }
     printf("  demod : cycles=%lu  cyc/bit=%.1f\n",
            (unsigned long)r.demod_cycles, (double)r.demod_cycles / nbf);
     printf("  check : cycles=%lu  cyc/bit=%.1f\n",
@@ -372,17 +567,19 @@ static int cmd_modem_sweep(const char* args) {
         return 1;
     }
 
-    printf("Eb/N0(dB) |  errors |       BER  |    theory  | tot cyc/bit\n");
+    int shaped = shape_requested(args);
+
+    printf("Eb/N0(dB) |  errors |       BER  |    theory  | tot cyc/bit  (shaping=%s)\n",
+           shaped ? "rrc" : "off");
     printf("----------+---------+------------+------------+------------\n");
     printf_dma_flush();
 
     /* Add a small epsilon so the inclusive endpoint isn't lost to rounding. */
     for (float snr = lo; snr <= hi + step * 0.001f; snr += step) {
-        modem_result_t r = modem_run_chain(MODEM_POLY, MODEM_SEED, snr, nbits);
+        modem_result_t r = modem_run_dispatch(snr, nbits, shaped);
         double nbf = (r.bits > 0u) ? (double)r.bits : 1.0;
         double ber = (r.bits > 0u) ? (double)r.errors / (double)r.bits : 0.0;
-        uint32_t total = r.gen_cycles + r.mod_cycles + r.channel_cycles +
-                         r.demod_cycles + r.check_cycles;
+        uint32_t total = modem_total_cycles(&r);
         printf("  %6.2f  | %7lu | %.3e | %.3e | %10.1f\n",
                (double)snr, (unsigned long)r.errors, ber, r.theory,
                (double)total / nbf);

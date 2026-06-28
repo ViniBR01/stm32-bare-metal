@@ -4,6 +4,35 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-06-28] milestone | Wire RRC shaping into modem_sim: --shape flag + HIL Tier 9b (#207)
+
+Follow-up to B0.4 (#196): the RRC core now runs inside the on-board modem demo
+behind an opt-in flag, so the simulated transmission chain can produce real
+oversampled waveforms end to end.
+
+- `apps/dsp/modem_sim.c`: new `modem_run_chain_shaped()` —
+  PRBS → BPSK → `rrc_tx_shape` (×SPS) → AWGN @ sample rate → `rrc_rx_match` →
+  decimate at `k*SPS + rrc_chain_delay` → slice → compare, timed across seven
+  stages (gen/mod/shape/channel/match/demod/check). A reference PRBS advanced
+  once per decimated symbol keeps tx/checker aligned across the filter delay
+  without a symbol FIFO. `modem run`/`modem sweep` gain a valueless `--shape`
+  toggle (β=0.35, sps=4, span=8); without it the original one-sample-per-symbol
+  path is byte-for-byte unchanged, preserving the B0.3 baselines.
+- HIL **Tier 9b** in `apps/cli/test_harness.c`
+  (`test_modem_bpsk_ber_awgn_shaped`): same PRBS9/seed1/6 dB/100k-bit run, RRC
+  shaped. On-device gate = factor-2 BER band around theory AND cyc/bit under a
+  (generous) shaped budget. Emits `modem_shaped_ber_snr6` (gated) plus seven
+  report-only `modem_shaped_cyc_*` per-stage lines.
+- `tests/baselines/performance.json`: added the `modem_shaped_*` keys, seeded
+  from the PR #208 CI HIL run — measured BER 2610 ppm (vs theory 2388, identical
+  to the host model), total 548.3M cycles (~5483 cyc/bit, ~12x the unshaped 441),
+  dominated by the two FIR passes (shape 1940 + match 1930 cyc/kbit) and AWGN at
+  4x sample rate (1535). `modem_shaped_ber_snr6` is runner-gated; the per-stage
+  `modem_shaped_cyc_*` lines are report-only. The unshaped entries are untouched.
+- Build: `modem_sim` links `$(DSP_LIB)`; `cli_simple` under `HIL_TEST=1` links
+  it too. On-device BER matches the host model bit-for-bit, confirming the
+  fixed-point chain is identical on host and target.
+
 ## [2026-06-28] milestone | RRC pulse shaping + matched filter (q15 waveforms) (#196)
 
 Plan 002 sub-track B0.4 — the modem moves from one-sample-per-symbol to real
