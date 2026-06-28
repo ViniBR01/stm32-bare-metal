@@ -4,6 +4,32 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-06-28] milestone | RRC pulse shaping + matched filter (q15 waveforms) (#196)
+
+Plan 002 sub-track B0.4 — the modem moves from one-sample-per-symbol to real
+oversampled waveforms. `lib/dsp` gains a root-raised-cosine FIR; the cascade of
+TX shaping and the RX matched filter is a raised cosine, so the chain is
+ISI-free at the Nyquist (symbol) instants.
+
+- New `lib/dsp/{inc/rrc.h,src/rrc.c}` — `rrc_design(beta, sps, span)` builds a
+  unit-energy (Σh²=1) q15 RRC into a self-contained instance; `rrc_push` is a
+  streaming q15 FIR (64-bit accumulator, round+saturate); `rrc_tx_shape`
+  upsamples symbols by zero-stuffing and filters; `rrc_rx_match` is the matched
+  filter; `rrc_chain_delay` gives the symbol-instant decimation offset.
+  Defaults: β=0.35, SPS=4, span=8 (33 taps). lib/dsp was header-only before, so
+  it now builds `libdsp.a` (`DSP_LIB`) and is in `lib/Makefile` SUBDIRS.
+- Unit energy is the design hinge: with ±1.0 symbols the matched-filter output
+  at the symbol instant keeps Eb=1, so the existing AWGN channel and Eb/N0→σ
+  mapping run unchanged at sample rate and BER still tracks the BPSK theory
+  curve (the matched filter is information-lossless).
+- Golden-reference host tests (`tests/lib/dsp/test_rrc.c`, 7 tests):
+  C taps match the float64 Python reference (`vectors/gen_rrc_vectors.py` →
+  `vectors/rrc_golden.h`) within ±2 LSB; cascade is ISI-free at symbol-spaced
+  lags; full PRBS→shape→AWGN→match→decimate→slice chain gives BER=0 with no
+  noise and tracks theory (0/2/4/6 dB) with noise.
+- Scope is the `lib/dsp` DSP core + golden tests; the `modem_sim` firmware
+  measurement chain and its calibrated HIL baselines (B0.3) are left untouched.
+
 ## [2026-06-26] milestone | Software BPSK modem on hardware: modem_sim CLI app + HIL Tier 9 (#195)
 
 Plan 002 sub-track B0.3 — wired the merged software modem libs (`lib/prbs`,
