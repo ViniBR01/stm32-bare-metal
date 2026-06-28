@@ -1004,35 +1004,71 @@ void test_stop_mode_enter_and_wake(void)
  */
 #define MODEM_CYC_PER_BIT_BUDGET  1500u
 
+/*
+ * Block buffers for the staged chain (see modem_run_chain in
+ * apps/dsp/modem_sim.c — the test mirrors it so the CI breakdown matches the
+ * interactive app).  4 KB of .bss (1+2+1), only present in HIL builds.
+ */
+#define MODEM_BER_BLOCK 1024u
+static uint8_t modem_tx_block[MODEM_BER_BLOCK];
+static q15_t   modem_sym_block[MODEM_BER_BLOCK];
+static uint8_t modem_rx_block[MODEM_BER_BLOCK];
+
 void test_modem_bpsk_ber_awgn(void)
 {
-    prbs_t       tx;
-    prbs_check_t chk;
-    awgn_prng_t  rng;
+    prbs_t      tx;
+    awgn_prng_t rng;
 
     prbs_init(&tx, PRBS9, MODEM_BER_SEED);
-    prbs_check_init(&chk, PRBS9, MODEM_BER_SEED);
     awgn_prng_seed(&rng, MODEM_BER_SEED);
 
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CYCCNT = 0;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
-    for (uint32_t i = 0; i < MODEM_BER_NBITS; i++) {
-        uint8_t bit = prbs_next_bit(&tx);
-        q15_t   sym = bpsk_map(bit);
-        channel_awgn_apply(&sym, 1, MODEM_BER_SNR_DB, &rng);
-        prbs_check_bit(&chk, bpsk_slice(sym));
+    /*
+     * Five separately-timed stages, accumulated across blocks.  Errors are
+     * counted by comparing the sliced rx bits against the generated tx bits,
+     * so the check stage measures a real comparison rather than a second PRBS
+     * regeneration.  Mirrors apps/dsp/modem_sim.c modem_run_chain().
+     */
+    uint32_t gen_cyc = 0, mod_cyc = 0, chan_cyc = 0, demod_cyc = 0, check_cyc = 0;
+    uint64_t errors = 0;
+
+    uint32_t remaining = MODEM_BER_NBITS;
+    while (remaining > 0u) {
+        uint32_t n = (remaining < MODEM_BER_BLOCK) ? remaining : MODEM_BER_BLOCK;
+
+        uint32_t t0 = DWT->CYCCNT;
+        prbs_next_bits(&tx, modem_tx_block, n);
+        uint32_t t1 = DWT->CYCCNT;
+        bpsk_map_block(modem_tx_block, modem_sym_block, n);
+        uint32_t t2 = DWT->CYCCNT;
+        channel_awgn_apply(modem_sym_block, n, MODEM_BER_SNR_DB, &rng);
+        uint32_t t3 = DWT->CYCCNT;
+        bpsk_slice_block(modem_sym_block, modem_rx_block, n);
+        uint32_t t4 = DWT->CYCCNT;
+        for (uint32_t i = 0; i < n; i++) {
+            if (modem_rx_block[i] != modem_tx_block[i]) {
+                errors++;
+            }
+        }
+        uint32_t t5 = DWT->CYCCNT;
+
+        gen_cyc   += t1 - t0;
+        mod_cyc   += t2 - t1;
+        chan_cyc  += t3 - t2;
+        demod_cyc += t4 - t3;
+        check_cyc += t5 - t4;
+        remaining -= n;
     }
 
-    uint32_t cycles      = DWT->CYCCNT;
-    uint64_t total       = chk.total;
-    uint64_t errors      = chk.errors;
-    uint32_t ber_ppm     = (total > 0u)
-                             ? (uint32_t)((errors * 1000000ull) / total) : 0u;
+    uint32_t cycles      = gen_cyc + mod_cyc + chan_cyc + demod_cyc + check_cyc;
+    uint64_t total       = MODEM_BER_NBITS;
+    uint32_t ber_ppm     = (uint32_t)((errors * 1000000ull) / total);
     double   theory      = channel_awgn_theory_ber(MODEM_BER_SNR_DB);
     uint32_t theory_ppm  = (uint32_t)(theory * 1.0e6 + 0.5);
-    uint32_t cyc_per_bit = (total > 0u) ? (uint32_t)(cycles / total) : 0u;
+    uint32_t cyc_per_bit = (uint32_t)(cycles / total);
 
     /* Factor-of-two correctness band around theory. */
     int ber_ok = (theory_ppm > 0u) &&
@@ -1040,13 +1076,36 @@ void test_modem_bpsk_ber_awgn(void)
     int cyc_ok = (cyc_per_bit <= MODEM_CYC_PER_BIT_BUDGET);
     int pass   = ber_ok && cyc_ok;
 
-    /* Emit the machine-parseable line BEFORE the asserts: Unity longjmps out
-     * of the test on the first failure, so the metric must already be printed
-     * for the runner to record cycles/ber_ppm even on a fail. */
+    /*
+     * Emit the machine-parseable lines BEFORE the asserts: Unity longjmps out
+     * of the test on the first failure, so the metrics must already be printed
+     * for the runner to record them even on a fail.  The main line is gated
+     * (ber_ppm + total cycles); the five per-stage lines are report-only
+     * (null baselines) so the breakdown shows up in CI / JUnit without gating.
+     * Per-stage value is cyc/1000-bits for sub-cyc/bit resolution.
+     */
     TEST_OUTPUT_RESULT("modem_bpsk_ber_snr6", pass, cycles, "ber_ppm", ber_ppm);
+    TEST_OUTPUT_RESULT("modem_cyc_gen",   1, gen_cyc,   "cyc_per_kbit",
+                       (uint32_t)((uint64_t)gen_cyc   * 1000u / total));
+    TEST_OUTPUT_RESULT("modem_cyc_mod",   1, mod_cyc,   "cyc_per_kbit",
+                       (uint32_t)((uint64_t)mod_cyc   * 1000u / total));
+    TEST_OUTPUT_RESULT("modem_cyc_chan",  1, chan_cyc,  "cyc_per_kbit",
+                       (uint32_t)((uint64_t)chan_cyc  * 1000u / total));
+    TEST_OUTPUT_RESULT("modem_cyc_demod", 1, demod_cyc, "cyc_per_kbit",
+                       (uint32_t)((uint64_t)demod_cyc * 1000u / total));
+    TEST_OUTPUT_RESULT("modem_cyc_check", 1, check_cyc, "cyc_per_kbit",
+                       (uint32_t)((uint64_t)check_cyc * 1000u / total));
 
     printf("  [modem] BER=%.3e theory=%.3e cyc/bit=%lu\n",
            (double)ber_ppm / 1.0e6, theory, (unsigned long)cyc_per_bit);
+    /* Per-stage cost in cyc per 1000 bits: the non-channel stages are well
+     * under 1 cyc/bit, so kbit resolution keeps them from rounding to 0. */
+    printf("  [modem] cyc/kbit gen=%lu mod=%lu chan=%lu demod=%lu check=%lu\n",
+           (unsigned long)((uint64_t)gen_cyc   * 1000u / total),
+           (unsigned long)((uint64_t)mod_cyc   * 1000u / total),
+           (unsigned long)((uint64_t)chan_cyc  * 1000u / total),
+           (unsigned long)((uint64_t)demod_cyc * 1000u / total),
+           (unsigned long)((uint64_t)check_cyc * 1000u / total));
     printf_dma_flush();
 
     TEST_ASSERT_TRUE_MESSAGE(ber_ok, "BPSK BER outside factor-2 band of theory");
