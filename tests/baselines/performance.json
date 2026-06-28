@@ -63,6 +63,6 @@
   "modem_cyc_gen":   { "cyc_per_kbit": 8010,   "cycles": 801080,   "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: PRBS gen." },
   "modem_cyc_mod":   { "cyc_per_kbit": 8009,   "cycles": 800978,   "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: BPSK map." },
   "modem_cyc_chan":  { "cyc_per_kbit": 407181, "cycles": 40718116, "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: AWGN channel (Box-Muller dominates)." },
-  "modem_cyc_demod": { "cyc_per_kbit": null, "cycles": null, "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: BPSK slice. Truncated in first capture; populate from next CI run." },
-  "modem_cyc_check": { "cyc_per_kbit": null, "cycles": null, "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: rx-vs-tx compare. Truncated in first capture; populate from next CI run." }
+  "modem_cyc_demod": { "cyc_per_kbit": 8013,  "cycles": 801398,  "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: BPSK slice." },
+  "modem_cyc_check": { "cyc_per_kbit": 10033, "cycles": 1003342, "tolerance_percent": 20, "last_updated": "2026-06-28", "notes": "Report-only: rx-vs-tx compare." }
 }
