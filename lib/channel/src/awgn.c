@@ -101,3 +101,21 @@ void channel_awgn_apply(q15_t *samples, size_t n, float ebn0_db, awgn_prng_t *rn
         samples[i] = q15_sat(noisy);
     }
 }
+
+void channel_awgn_apply_cq15(cq15_t *samples, size_t n, float ebn0_db, awgn_prng_t *rng)
+{
+    if (samples == NULL || rng == NULL) {
+        return;
+    }
+
+    /* Same per-axis sigma as the real channel; applied independently to I and Q. */
+    float sigma = channel_awgn_sigma(ebn0_db);
+    float scale = sigma * 32768.0f;
+
+    for (size_t i = 0; i < n; i++) {
+        q31_t ni = (q31_t)samples[i].re + (q31_t)lrintf(awgn_prng_gauss(rng) * scale);
+        q31_t nq = (q31_t)samples[i].im + (q31_t)lrintf(awgn_prng_gauss(rng) * scale);
+        samples[i].re = q15_sat(ni);
+        samples[i].im = q15_sat(nq);
+    }
+}

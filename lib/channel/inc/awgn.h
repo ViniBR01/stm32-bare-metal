@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "fixed.h"
+#include "complexq15.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -71,6 +72,18 @@ double channel_awgn_theory_ber(float ebn0_db);
  * each noisy sample is saturated into the q15 range.
  */
 void channel_awgn_apply(q15_t *samples, size_t n, float ebn0_db, awgn_prng_t *rng);
+
+/*
+ * Complex-baseband AWGN (Plan 002 B0.5): add independent Gaussian noise to the
+ * in-phase and quadrature components of each cq15 sample, in place. Each axis
+ * gets the SAME per-axis sigma as the real channel (channel_awgn_sigma), so the
+ * total noise power is double the real model — but a receiver that de-rotates
+ * onto the in-phase axis before slicing sees the same real-axis Eb/N0, so the
+ * recovered BER still tracks channel_awgn_theory_ber(). (A de-rotation bug
+ * shows up as a ~3 dB penalty, a useful built-in sanity signal.) Draws two
+ * Gaussian samples per element from the shared deterministic PRNG.
+ */
+void channel_awgn_apply_cq15(cq15_t *samples, size_t n, float ebn0_db, awgn_prng_t *rng);
 
 #ifdef __cplusplus
 }
