@@ -12,18 +12,26 @@ CFLAGS  = -Wall -Wextra -Wno-unknown-pragmas -Wno-unknown-warning-option \
 
 UNITY_SRC   = ../../../3rd_party/unity/src/unity.c
 AWGN_SRC    = ../../../lib/channel/src/awgn.c
+IMPAIR_SRC  = ../../../lib/channel/src/impair.c
 BPSK_SRC    = ../../../lib/modem/src/bpsk.c
 PRBS_SRC    = ../../../lib/prbs/src/prbs.c
+SINCOS_SRC  = ../../../lib/dsp/src/sincos.c
+NCO_SRC     = ../../../lib/dsp/src/nco.c
 
 .PHONY: all run clean
 
-all: test_awgn.out
+all: test_awgn.out test_impair.out
 
 run: all
 	./test_awgn.out
+	./test_impair.out
 
 test_awgn.out: test_awgn.c $(AWGN_SRC) $(BPSK_SRC) $(PRBS_SRC) $(UNITY_SRC)
 	$(CC) $(CFLAGS) $^ -o $@ -lm
+
+# Impairments pull in the NCO/sincos (lib/dsp) and the cq15 AWGN variant.
+test_impair.out: test_impair.c $(IMPAIR_SRC) $(AWGN_SRC) $(SINCOS_SRC) $(NCO_SRC) $(UNITY_SRC)
+	$(CC) $(CFLAGS) -I../../../lib/dsp/src $^ -o $@ -lm
 
 clean:
 	rm -f *.out *.gcda *.gcno
