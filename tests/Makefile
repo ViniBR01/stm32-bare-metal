@@ -1,4 +1,4 @@
-SUBDIRS = string_utils cli gpio exti rcc timer uart systick flash iwdg crc lowpower lib/skeleton lib/crypto lib/img lib/flash lib/framing lib/dsp lib/prbs lib/modem lib/channel tools/sign_roundtrip
+SUBDIRS = string_utils cli gpio exti rcc timer uart systick flash iwdg crc lowpower lib/skeleton lib/crypto lib/img lib/flash lib/framing lib/dsp lib/prbs lib/modem lib/channel lib/sync tools/sign_roundtrip
 
 COVERAGE_INFO = coverage.info
 COVERAGE_FILT = coverage-filtered.info
@@ -96,6 +96,10 @@ run: all
 	@echo "Running lib/channel tests"
 	@echo "========================================"
 	@$(MAKE) -C lib/channel run
+	@echo "========================================"
+	@echo "Running lib/sync tests"
+	@echo "========================================"
+	@$(MAKE) -C lib/sync run
 	@echo "========================================"
 	@echo "Running tools/sign_roundtrip tests"
 	@echo "========================================"

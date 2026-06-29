@@ -4,7 +4,34 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
-## [2026-06-28] milestone | Complex baseband primitives + impaired channel (Plan 002 B0.5, PR 1/3) (#197)
+## [2026-06-28] milestone | RX recovery loops: lib/sync (AGC, M&M, Costas, Barker) (Plan 002 B0.5, PR 2/3) (#197)
+
+Second of three PRs for B0.5. Adds the receiver synchronisation loops that lock
+to the impairments PR 1 can inject. New `lib/sync` middleware library, pure C,
+host-testable; no CLI/firmware-app/baseline changes yet (that's PR 3).
+
+- `lib/sync/{agc,barker,timing_mm,costas}` — each a small struct + init + step:
+  - **AGC** (`agc.{h,c}`): slow scalar-gain LMS loop driving |x| toward a
+    reference; float gain, q15 signal.
+  - **Barker-13** (`barker.{h,c}`): sliding magnitude-squared correlation against
+    the canonical length-13 sequence for frame sync; the in-phase correlation
+    sign resolves the BPSK 180-degree polarity ambiguity.
+  - **M&M timing** (`timing_mm.{h,c}`): Mueller-and-Muller symbol-timing recovery
+    at SPS samples/symbol with linear interpolation; emits one symbol per period
+    locked to the symbol instant. TED `e = a[k-1]*y_I[k] - a[k]*y_I[k-1]`.
+  - **Costas** (`costas.{h,c}`): decision-directed BPSK phase/CFO recovery,
+    error `sign(y_I)*y_Q`, PI loop filter driving the lib/dsp NCO.
+- Loop state/gains are float (scalar control math); only the signal stays q15.
+  Reuses `cq15_t`/NCO/sincos from lib/dsp (PR 1) and `bpsk_slice` from lib/modem.
+- Build wiring: new `SYNC_LIB` in `Makefile.common`, `sync` added to
+  `lib/Makefile` and `tests/Makefile` SUBDIRS.
+- Host tests (`tests/lib/sync/`): per-loop lock tests from known offsets
+  (`test_agc`, `test_barker`, `test_timing_mm`, `test_costas`) plus the headline
+  `test_recover_e2e` — full chain (matched filter -> AGC -> M&M -> Costas ->
+  Barker) recovering a Barker+PRBS frame under combined timing(0.4)+CFO+phase,
+  BER=0 noiseless and within ~4x theory at 6 dB. Tuning note captured in
+  costas.h: the decision-directed loop needs conservative gains (alpha~0.02,
+  beta~0.0005) to hold lock under noise; aggressive gains cycle-slip.
 
 First of three PRs for B0.5 (synchronisation & impairments). Lays the complex
 DSP foundation the RX recovery loops (PR 2) and the impaired modem chain (PR 3)
