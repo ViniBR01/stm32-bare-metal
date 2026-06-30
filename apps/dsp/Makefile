@@ -57,12 +57,14 @@ endif
 #==============================================================================
 modem_sim_DEPS := $(STARTUP_OBJ) $(DRIVERS_LIB) $(LOG_C_LIB) $(PRINTF_LIB) \
                   $(UTILS_LIB) $(BL_HANDSHAKE_LIB) $(IMG_LIB) $(FLASH_LIB) \
-                  $(PRBS_LIB) $(MODEM_LIB) $(CHANNEL_LIB) $(DSP_LIB)
+                  $(PRBS_LIB) $(MODEM_LIB) $(CHANNEL_LIB) $(DSP_LIB) $(SYNC_LIB)
 
 # Header lookup for the middleware libs (and bl_handshake/img/flash used by
-# the bootloader handshake in main()).
+# the bootloader handshake in main()). lib/sync supplies the B0.5 RX recovery
+# loops wired into the --sync chain.
 DSP_LIB_INCS := -I$(LIB_DIR)/prbs/inc -I$(LIB_DIR)/modem/inc \
                 -I$(LIB_DIR)/channel/inc -I$(LIB_DIR)/dsp/inc \
+                -I$(LIB_DIR)/sync/inc \
                 -I$(LIB_DIR)/bl_handshake/inc -I$(LIB_DIR)/img/inc \
                 -I$(LIB_DIR)/flash/inc
 

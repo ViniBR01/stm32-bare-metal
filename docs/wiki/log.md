@@ -4,6 +4,43 @@ Chronological record of significant changes. Newest entries at the top.
 Format: `## [YYYY-MM-DD] <type> | <title> (<PR/Issue>)`
 Types: `merge`, `decision`, `milestone`, `infra`
 
+## [2026-06-30] milestone | Impaired modem chain + recovery in modem_sim: --sync flag + HIL Tier 9c (Plan 002 B0.5, PR 3/3) (#197)
+
+Third and final PR for B0.5. Wires the PR-1 impairments and PR-2 `lib/sync`
+recovery loops into the on-board `modem_sim` demo and the HIL suite, behind an
+opt-in `--sync` flag — closing the sub-track's validation: **RX locks and
+recovers bits under combined timing + CFO + phase offset, with BER degradation
+vs ideal-sync bounded and documented.** No change to the default unshaped/shaped
+paths or their calibrated baselines.
+
+- `apps/dsp/modem_sim.c`: new `modem_run_chain_sync()` — Barker-13-framed PRBS9
+  → BPSK → RRC shape → impairment channel (fractional timing + CFO + phase) →
+  complex-baseband AWGN → matched filter (per I/Q) → AGC → M&M timing → Costas
+  phase → Barker frame sync/polarity → slice → compare. Runs symbol-by-symbol
+  (the loops are sequential); timed as gen / channel (shape+impair+AWGN) / demod
+  (the whole RX pipeline) / check. The on-board twin of
+  `tests/lib/sync/test_recover_e2e.c`.
+- CLI: `modem run`/`modem sweep` gain a valueless `--sync` toggle (mutually
+  exclusive with `--shape`, which `--sync` subsumes). Impairment magnitudes
+  default to timing 0.4 / CFO 2e-4 / phase ~33° and are overridable per-axis via
+  `--timing/--cfo/--phase` (and zeroable via `--no-timing/--no-cfo/--no-phase`)
+  so each impairment's individual BER/lock cost can be observed. `run` prints
+  frame-lock status + symbol; `sweep` adds a lock column. `--bits` is clamped to
+  16000 on this path (the recovered/payload buffers are bounded .bss).
+- HIL: `apps/cli/test_harness.c` Tier 9c (`test_modem_bpsk_recover_sync`) — same
+  combined-offset frame at PRBS9/seed1/6 dB/8000 bits. On-device gate = frame
+  lock AND recovered BER ≤ 4× ideal-sync theory AND cyc/bit under a coarse
+  budget. Emits `modem_sync_recover_snr6` (gated) + report-only
+  `modem_sync_lock_sym`.
+- `tests/baselines/performance.json`: `modem_sync_*` entries with null
+  cycles/ber_ppm (report-only until the first CI HIL capture populates them —
+  same bootstrap as `modem_shaped_*`).
+- Build: `modem_sim` links `$(SYNC_LIB)`; `cli_simple` under `HIL_TEST=1` links
+  it too.
+
+Host model of the exact app algorithm: frame locks @sym 20, recovered BER 2878
+ppm vs theory 2388 (~1.2×, well inside the 4× bound); noiseless BER = 0.
+
 ## [2026-06-28] milestone | RX recovery loops: lib/sync (AGC, M&M, Costas, Barker) (Plan 002 B0.5, PR 2/3) (#197)
 
 Second of three PRs for B0.5. Adds the receiver synchronisation loops that lock

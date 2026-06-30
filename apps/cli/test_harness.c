@@ -53,6 +53,16 @@
 #include "fixed.h"
 #include "rrc.h"
 
+/* Plan 002 B0.5 — impairments + RX recovery loops (Tier 9c, #197). */
+#include "complexq15.h"
+#include "sincos.h"
+#include "nco.h"
+#include "impair.h"
+#include "agc.h"
+#include "timing_mm.h"
+#include "costas.h"
+#include "barker.h"
+
 /* ====================================================================
  * UART loopback test helpers
  *
@@ -1292,6 +1302,172 @@ void test_modem_bpsk_ber_awgn_shaped(void)
 }
 
 /* ====================================================================
+ * Software BPSK modem with impairments + RX recovery — Tier 9c
+ * (Plan 002 B0.5, #197)
+ *
+ * The headline B0.5 validation on real hardware: a Barker-13-framed PRBS frame
+ * is RRC-shaped, passed through the impairment channel (fractional timing + CFO
+ * + static phase) and complex-baseband AWGN, then run through the full receiver
+ *
+ *   matched filter -> AGC -> M&M timing -> Costas phase -> Barker frame/polarity
+ *   -> slice -> compare
+ *
+ * Mirrors apps/dsp/modem_sim.c modem_run_chain_sync() and the host twin
+ * tests/lib/sync/test_recover_e2e.c (PRBS9, seed 1, combined timing 0.4 + CFO
+ * 2e-4 + phase ~33 deg). Asserts: (a) the preamble locks, (b) post-sync BER is
+ * within a bounded multiple of the ideal-sync theory, and (c) cyc/bit is under a
+ * coarse budget. The recovery loops are sequential, so this runs symbol-by-symbol
+ * over a smaller frame than the bulk BER tiers (host model: lock @sym 20,
+ * 6 dB BER ~2.88e-3 vs theory 2.39e-3).
+ * ==================================================================== */
+
+#define MODEM_SYNC_BITS           8000u
+#define MODEM_SYNC_SNR_DB         6.0f
+#define MODEM_SYNC_TIMING_MU_F    0.4f
+#define MODEM_SYNC_CFO_CYCLES     2.0e-4f
+#define MODEM_SYNC_PHASE_RAD      0.5759587f   /* ~33 deg */
+/* Bounded degradation vs ideal-sync: recovery + linear-interp penalty keep the
+ * combined-offset BER within ~4x theory (the host e2e test uses the same bound). */
+#define MODEM_SYNC_BER_BOUND_MULT 4.0
+/* Sequential per-symbol RX through four loops + two matched filters is far
+ * heavier per bit than the bulk paths; this coarse guard just catches a blow-up,
+ * the baseline JSON carries the tight gate. */
+#define MODEM_SYNC_CYC_PER_BIT_BUDGET 60000u
+
+static uint8_t  modem_sync_payload[MODEM_SYNC_BITS];
+static uint8_t  modem_sync_rec[MODEM_SYNC_BITS + 64];
+static rrc_t    modem_sync_tx;
+static rrc_t    modem_sync_rxi;
+static rrc_t    modem_sync_rxq;
+
+void test_modem_bpsk_recover_sync(void)
+{
+    const uint32_t sps = MODEM_SHAPE_SPS;
+
+    rrc_design(&modem_sync_tx,  MODEM_SHAPE_BETA, (uint8_t)sps, MODEM_SHAPE_SPAN);
+    rrc_design(&modem_sync_rxi, MODEM_SHAPE_BETA, (uint8_t)sps, MODEM_SHAPE_SPAN);
+    rrc_design(&modem_sync_rxq, MODEM_SHAPE_BETA, (uint8_t)sps, MODEM_SHAPE_SPAN);
+
+    channel_impair_cfg_t cfg = {
+        nco_phase_from_cycles(MODEM_SYNC_CFO_CYCLES),
+        nco_phase_from_rad(MODEM_SYNC_PHASE_RAD),
+        (q15_t)(MODEM_SYNC_TIMING_MU_F * 32768.0f),
+    };
+    channel_impair_state_t imp;
+    channel_impair_init(&imp, &cfg);
+
+    awgn_prng_t rng;
+    awgn_prng_seed(&rng, MODEM_BER_SEED);
+
+    agc_t agc;       agc_init(&agc, 0.7f, 0.005f, 1.0f);
+    timing_mm_t mm;  timing_mm_init(&mm, (uint8_t)sps, 0.004f);
+    costas_t cos;    costas_init(&cos, 0.02f, 0.0005f);
+    barker_t bar;
+    double  esym = 0.7 * 32768.0;
+    int64_t thr  = (int64_t)((0.55 * 13.0 * esym) * (0.55 * 13.0 * esym));
+    barker_init(&bar, thr);
+
+    prbs_t txbits;
+    prbs_init(&txbits, PRBS9, MODEM_BER_SEED);
+    for (uint32_t i = 0; i < MODEM_SYNC_BITS; i++) {
+        modem_sync_payload[i] = prbs_next_bit(&txbits);
+    }
+
+    const uint32_t nsyms = BARKER13_LEN + MODEM_SYNC_BITS;
+    int      locked = 0, polarity = 1;
+    int32_t  lock_sym = -1;
+    uint32_t nrec = 0;
+
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    uint32_t t_start = DWT->CYCCNT;
+
+    q15_t  txsamp[MODEM_SHAPE_SPS];
+    cq15_t imp_out[MODEM_SHAPE_SPS];
+
+    for (uint32_t k = 0; k < nsyms; k++) {
+        q15_t sym;
+        if (k < (uint32_t)BARKER13_LEN) {
+            sym = BARKER13[k] > 0 ? bpsk_map(1) : bpsk_map(0);
+        } else {
+            sym = bpsk_map(modem_sync_payload[k - BARKER13_LEN]);
+        }
+
+        rrc_tx_shape(&modem_sync_tx, &sym, 1, txsamp);
+        channel_impair_apply(&imp, &cfg, txsamp, imp_out, sps);
+        channel_awgn_apply_cq15(imp_out, sps, MODEM_SYNC_SNR_DB, &rng);
+
+        for (uint32_t p = 0; p < sps; p++) {
+            cq15_t mf = cq15_make(rrc_push(&modem_sync_rxi, imp_out[p].re),
+                                  rrc_push(&modem_sync_rxq, imp_out[p].im));
+            cq15_t g = agc_apply(&agc, mf);
+            cq15_t sym_out;
+            if (!timing_mm_push(&mm, g, &sym_out)) {
+                continue;
+            }
+            cq15_t y = costas_step(&cos, sym_out);
+            if (!locked) {
+                int32_t corr_re;
+                if (barker_push(&bar, y, &corr_re, NULL)) {
+                    locked   = 1;
+                    lock_sym = (int32_t)k;
+                    polarity = (corr_re >= 0) ? 1 : -1;
+                }
+            } else if (nrec < (uint32_t)(sizeof(modem_sync_rec))) {
+                q15_t corrected = (polarity >= 0) ? y.re : (q15_t)(-y.re);
+                modem_sync_rec[nrec++] = bpsk_slice(corrected);
+            }
+        }
+    }
+    uint32_t cycles = DWT->CYCCNT - t_start;
+
+    /* Align over the matched-filter group delay, count errors at best alignment. */
+    uint64_t best_err = nrec;
+    uint64_t total    = (nrec > 0u) ? 1u : 0u;
+    for (uint32_t D = 0; D < 25u && D < nrec; D++) {
+        uint64_t err = 0, cnt = 0;
+        for (uint32_t i = 0; i + D < nrec && i < MODEM_SYNC_BITS; i++) {
+            if (modem_sync_rec[i + D] != modem_sync_payload[i]) {
+                err++;
+            }
+            cnt++;
+        }
+        if (cnt > 0u && err < best_err) {
+            best_err = err;
+            total    = cnt;
+        }
+    }
+
+    double   ber         = (total > 0u) ? (double)best_err / (double)total : 1.0;
+    uint32_t ber_ppm     = (uint32_t)(ber * 1.0e6 + 0.5);
+    double   theory      = channel_awgn_theory_ber(MODEM_SYNC_SNR_DB);
+    uint32_t cyc_per_bit = (total > 0u) ? (uint32_t)((uint64_t)cycles / total) : 0u;
+
+    int lock_ok = locked && (total > 0u);
+    int ber_ok  = lock_ok && (ber <= MODEM_SYNC_BER_BOUND_MULT * theory + 1.0e-3);
+    int cyc_ok  = (cyc_per_bit <= MODEM_SYNC_CYC_PER_BIT_BUDGET);
+    int pass    = lock_ok && ber_ok && cyc_ok;
+
+    TEST_OUTPUT_RESULT("modem_sync_recover_snr6", pass, cycles, "ber_ppm", ber_ppm);
+    printf_dma_flush();
+    /* Report-only: frame-lock symbol index (proves the preamble was found). */
+    TEST_OUTPUT_RESULT("modem_sync_lock_sym", lock_ok, (uint32_t)(lock_sym + 1),
+                       "locked", locked ? 1u : 0u);
+    printf_dma_flush();
+
+    printf("  [modem/sync] lock=%s@%ld BER=%.3e theory=%.3e (<=%.0fx) cyc/bit=%lu bits=%lu\n",
+           locked ? "yes" : "NO", (long)lock_sym, ber, theory,
+           MODEM_SYNC_BER_BOUND_MULT, (unsigned long)cyc_per_bit,
+           (unsigned long)total);
+    printf_dma_flush();
+
+    TEST_ASSERT_TRUE_MESSAGE(lock_ok, "Barker frame sync did not lock");
+    TEST_ASSERT_TRUE_MESSAGE(ber_ok, "Recovered BER outside bound vs ideal-sync theory");
+    TEST_ASSERT_TRUE_MESSAGE(cyc_ok, "Sync recovery cyc/bit over budget");
+}
+
+/* ====================================================================
  * Main test runner
  * ==================================================================== */
 
@@ -1538,6 +1714,13 @@ int run_unity_tests(void) {
     printf_dma_flush();
 
     RUN_TEST(test_modem_bpsk_ber_awgn_shaped);
+    printf_dma_flush();
+
+    /* Tier 9c: impaired channel + RX recovery loops (#197, Plan 002 B0.5). */
+    printf("\n--- Tier 9c: Software BPSK modem + impairments/recovery ---\n");
+    printf_dma_flush();
+
+    RUN_TEST(test_modem_bpsk_recover_sync);
 
     printf_dma_flush();
     return UNITY_END();
