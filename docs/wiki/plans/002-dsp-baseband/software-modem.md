@@ -139,7 +139,13 @@ a perf baseline JSON committed under `tests/baselines/`.
 **Validation:** Nyquist-ISI-free property holds in test; BER with pulse shaping (no noise) is 0; with
 noise, still tracks theory (matched filter is information-lossless).
 
-### Phase B0.5 — Synchronisation & impairments
+### Phase B0.5 — Synchronisation & impairments ✅ landed (#197)
+
+Shipped as three stacked PRs: (1) complex baseband primitives + impaired channel
+(`cq15_t`, sincos LUT, NCO, `lib/channel/impair`), (2) `lib/sync` RX recovery
+loops (AGC, M&M timing, Costas, Barker-13), (3) integration into `modem_sim`
+behind a `--sync` flag + HIL Tier 9c. The combined-offset frame locks and
+recovers at ~1.2× theory BER (6 dB), within the documented 4× ideal-sync bound.
 
 **Scope**
 - Channel gains optional **timing offset, carrier frequency offset, phase offset** (still all software).

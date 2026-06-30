@@ -72,8 +72,8 @@ CLI_LIB_INCS := -I$(LIB_DIR)/bl_handshake/inc -I$(LIB_DIR)/img/inc -I$(LIB_DIR)/
 # only under HIL_TEST so the production cli_simple image stays free of the
 # libm-heavy float path.
 ifeq ($(HIL_TEST),1)
-  cli_simple_DEPS += $(UNITY_ARM_LIB) $(PRBS_LIB) $(MODEM_LIB) $(CHANNEL_LIB) $(DSP_LIB)
-  CLI_LIB_INCS += -I$(LIB_DIR)/prbs/inc -I$(LIB_DIR)/modem/inc -I$(LIB_DIR)/channel/inc -I$(LIB_DIR)/dsp/inc
+  cli_simple_DEPS += $(UNITY_ARM_LIB) $(PRBS_LIB) $(MODEM_LIB) $(CHANNEL_LIB) $(DSP_LIB) $(SYNC_LIB)
+  CLI_LIB_INCS += -I$(LIB_DIR)/prbs/inc -I$(LIB_DIR)/modem/inc -I$(LIB_DIR)/channel/inc -I$(LIB_DIR)/dsp/inc -I$(LIB_DIR)/sync/inc
 endif
 
 #==============================================================================
